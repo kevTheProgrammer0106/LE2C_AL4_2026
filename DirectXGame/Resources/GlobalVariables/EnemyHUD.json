@@ -1,0 +1,9 @@
+{
+    "EnemyHUD": {
+        "ArrowSize": 24,
+        "EnemyCountThreshold": 5,
+        "HeadOffsetY": 1.2000000476837158,
+        "IconSize": 28,
+        "ScreenEdgeMargin": 32.0
+    }
+}

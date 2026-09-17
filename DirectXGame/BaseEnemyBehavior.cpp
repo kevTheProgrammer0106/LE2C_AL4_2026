@@ -1,0 +1,475 @@
+#include "BaseEnemyBehavior.h"
+#include "BaseEnemy.h"
+#include "GameScene.h"
+#include "GlobalVariables.h"
+#include "MapChipField.h"
+#include "Player.h"
+
+using namespace KamataEngine;
+
+namespace {
+constexpr const char* kGroupName = "BaseEnemyBehavior";
+}
+
+void BaseEnemyBehavior::RegisterGlobalVariables() {
+	GlobalVariables* gv = GlobalVariables::GetInstance();
+	gv->CreateGroup(kGroupName);
+
+	gv->AddItem(kGroupName, "xIdleDurationMin", kIdleDurationMin);
+	gv->AddItem(kGroupName, "xIdleDurationMax", kIdleDurationMax);
+	gv->AddItem(kGroupName, "xRoamWalkDurationMin", kRoamWalkDurationMin);
+	gv->AddItem(kGroupName, "xRoamWalkDurationMax", kRoamWalkDurationMax);
+	gv->AddItem(kGroupName, "xChaseTimeoutDuration", kChaseTimeoutDuration);
+	gv->AddItem(kGroupName, "xAlertRadius", kAlertRadius);
+	gv->AddItem(kGroupName, "xSeparationRadius", kSeparationRadius);
+	gv->AddItem(kGroupName, "xSeparationStrength", kSeparationStrength);
+	gv->AddItem(kGroupName, "xFloorLevelTolerance", kFloorLevelTolerance);
+	gv->AddItem(kGroupName, "xKnockbackDuration", static_cast<int32_t>(kKnockbackDuration)); // [NEW]
+	gv->AddItem(kGroupName, "xKnockbackSpeedScale", kKnockbackSpeedScale);                   // [NEW]
+}
+
+void BaseEnemyBehavior::ApplyGlobalVariables() {
+	GlobalVariables* gv = GlobalVariables::GetInstance();
+
+	kIdleDurationMin = gv->GetFloatValue(kGroupName, "xIdleDurationMin");
+	kIdleDurationMax = gv->GetFloatValue(kGroupName, "xIdleDurationMax");
+	kRoamWalkDurationMin = gv->GetFloatValue(kGroupName, "xRoamWalkDurationMin");
+	kRoamWalkDurationMax = gv->GetFloatValue(kGroupName, "xRoamWalkDurationMax");
+	kChaseTimeoutDuration = gv->GetFloatValue(kGroupName, "xChaseTimeoutDuration");
+	kAlertRadius = gv->GetFloatValue(kGroupName, "xAlertRadius");
+	kSeparationRadius = gv->GetFloatValue(kGroupName, "xSeparationRadius");
+	kSeparationStrength = gv->GetFloatValue(kGroupName, "xSeparationStrength");
+	kFloorLevelTolerance = gv->GetFloatValue(kGroupName, "xFloorLevelTolerance");
+	kKnockbackDuration = static_cast<uint32_t>(gv->GetIntValue(kGroupName, "xKnockbackDuration")); // [NEW]
+	kKnockbackSpeedScale = gv->GetFloatValue(kGroupName, "xKnockbackSpeedScale");                  // [NEW]
+}
+
+void BaseEnemyBehavior::Initialize() {
+	sRandom_.Initialize();
+	chaseTimeoutTimer_ = kChaseTimeoutDuration;
+	hasLastKnownPosition_ = false;
+	flankPreference_ = GetDefaultFlankPreference();
+	behavior_ = Behavior::kIdle;
+	BehaviorIdleInitialize();
+}
+
+PathFindingAlgorithm::PathCostProfile BaseEnemyBehavior::BuildPathCostProfile() const {
+	PathFindingAlgorithm::PathCostProfile profile = PathFindingAlgorithm::GetDefaultPathCostProfile();
+	switch (flankPreference_) {
+	case FlankPreference::kPreferFlanking:
+		std::reverse(profile.pathNodeCosts.begin(), profile.pathNodeCosts.end());
+		break;
+	case FlankPreference::kNeutral:
+		profile.pathNodeCosts.fill(1.0f);
+		break;
+	default:
+		break;
+	}
+	return profile;
+}
+
+void BaseEnemyBehavior::UpdateVisionAndChaseRequest() {
+	if (!owner_.isDead_ && behavior_ != Behavior::kDeath && behaviorRequest_ != Behavior::kDeath) {
+		Vector3 eyePos = owner_.GetWorldPosition() + Vector3(0.0f, kVisionEyeHeight, 0.0f);
+		Vector3 baseFacingDir = owner_.isRight() ? Vector3(1.0f, 0.0f, 0.0f) : Vector3(-1.0f, 0.0f, 0.0f);
+		Vector3 facingDir = baseFacingDir;
+
+		if (owner_.gameScene_ && owner_.gameScene_->GetPlayer()) {
+			Vector3 toPlayer = owner_.gameScene_->GetPlayer()->GetWorldPosition() - eyePos;
+			float horizontalDist = std::sqrtf(toPlayer.x * toPlayer.x + toPlayer.y * toPlayer.y);
+			if (horizontalDist > 0.0001f) {
+				Vector3 toPlayerDir = toPlayer / horizontalDist;
+				float forwardSign = toPlayerDir.x * baseFacingDir.x;
+				if (forwardSign >= 0.0f)
+					facingDir = toPlayerDir;
+			}
+		}
+
+		if (owner_.gameScene_) {
+			visionSensor_.CheckPlayerSpotted(eyePos, facingDir, owner_.gameScene_->GetPlayer());
+
+			if (visionSensor_.IsPlayerSpotted()) {
+				chaseTimeoutTimer_ = 0.0f;
+				if (owner_.gameScene_->GetPlayer()) {
+					lastKnownPlayerPos_ = owner_.gameScene_->GetPlayer()->GetWorldPosition();
+					hasLastKnownPosition_ = true;
+				}
+				if (!hasBroadcastAlertThisSighting_) {
+					hasBroadcastAlertThisSighting_ = true;
+					owner_.gameScene_->AlertNearbyEnemies(&owner_, lastKnownPlayerPos_, kAlertRadius);
+				}
+			} else {
+				chaseTimeoutTimer_ += 1.0f / 60.0f;
+				hasBroadcastAlertThisSighting_ = false;
+				if ((kEndlessChase || persistentAwareness_) && hasLastKnownPosition_ && owner_.gameScene_->GetPlayer()) {
+					lastKnownPlayerPos_ = owner_.gameScene_->GetPlayer()->GetWorldPosition();
+				}
+			}
+		} else {
+			chaseTimeoutTimer_ += 1.0f / 60.0f;
+			hasBroadcastAlertThisSighting_ = false;
+		}
+
+		bool shouldChase = IsChasing();
+		if (shouldChase) {
+			if (!IsEngaged() && (behavior_ != Behavior::kRoot || behaviorRequest_ == Behavior::kRoam || behaviorRequest_ == Behavior::kIdle)) {
+				behaviorRequest_ = Behavior::kRoot;
+			}
+		} else if (behavior_ == Behavior::kRoot && behaviorRequest_ == Behavior::kUnknown) {
+			behaviorRequest_ = Behavior::kIdle;
+		}
+	}
+}
+
+void BaseEnemyBehavior::ResolveBehaviorRequest() {
+	if (behaviorRequest_ != Behavior::kUnknown) {
+		behavior_ = behaviorRequest_;
+		InitializeBehaviorState(behavior_);
+		behaviorRequest_ = Behavior::kUnknown;
+	}
+}
+
+void BaseEnemyBehavior::UpdateCurrentBehavior() { UpdateBehaviorState(); }
+
+void BaseEnemyBehavior::InitializeBehaviorState(Behavior behavior) {
+	switch (behavior) {
+	case Behavior::kRoot:
+		BehaviorRootInitialize();
+		break;
+	case Behavior::kKnockback:
+		BehaviorKnockbackInitialize();
+		break; // [NEW]
+	case Behavior::kIdle:
+	default:
+		BehaviorIdleInitialize();
+		break;
+	case Behavior::kRoam:
+		BehaviorRoamInitialize();
+		break;
+	case Behavior::kDeath:
+		BehaviorDieInitialize();
+		break;
+	}
+}
+
+void BaseEnemyBehavior::UpdateBehaviorState() {
+	switch (behavior_) {
+	case Behavior::kRoot:
+		BehaviorRootUpdate();
+		RunPhysicsAndCollisionUpdate();
+		break;
+	case Behavior::kKnockback:
+		BehaviorKnockbackUpdate();
+		RunPhysicsAndCollisionUpdate();
+		break; // [NEW]
+	case Behavior::kIdle:
+	default:
+		BehaviorIdleUpdate();
+		RunPhysicsAndCollisionUpdate();
+		break;
+	case Behavior::kRoam:
+		BehaviorRoamUpdate();
+		RunPhysicsAndCollisionUpdate();
+		break;
+	case Behavior::kDeath:
+		BehaviorDieUpdate();
+		break;
+	}
+}
+
+bool BaseEnemyBehavior::IsChasing() const {
+	if (kEndlessChase || persistentAwareness_)
+		return visionSensor_.IsPlayerSpotted() || hasLastKnownPosition_;
+	return visionSensor_.IsPlayerSpotted() || (chaseTimeoutTimer_ < kChaseTimeoutDuration);
+}
+bool BaseEnemyBehavior::IsPlayerOnSameFloor() const {
+	if (!owner_.gameScene_ || !owner_.gameScene_->GetPlayer())
+		return false;
+	float deltaY = std::abs(owner_.gameScene_->GetPlayer()->GetWorldPosition().y - owner_.GetWorldPosition().y);
+	return deltaY <= kFloorLevelTolerance;
+}
+
+void BaseEnemyBehavior::ReceiveAlert(const Vector3& alertedPosition) {
+	if (owner_.isDead_ || behavior_ == Behavior::kDeath)
+		return;
+	if (visionSensor_.IsPlayerSpotted())
+		return;
+	chaseTimeoutTimer_ = 0.0f;
+	lastKnownPlayerPos_ = alertedPosition;
+	hasLastKnownPosition_ = true;
+}
+
+void BaseEnemyBehavior::ApplySeparationFromOtherEnemies() {
+	if (!owner_.gameScene_)
+		return;
+
+	Vector3 myPos = owner_.GetWorldPosition();
+	float pushX = 0.0f;
+
+	for (const std::unique_ptr<BaseEnemy>& other : owner_.gameScene_->GetEnemies()) {
+		BaseEnemy* otherEnemy = other.get();
+		if (!otherEnemy || otherEnemy == &owner_ || otherEnemy->IsDead())
+			continue;
+
+		Vector3 otherPos = otherEnemy->GetWorldPosition();
+		if (std::abs(myPos.y - otherPos.y) > owner_.kHeight)
+			continue;
+
+		float dx = myPos.x - otherPos.x;
+		float distance = std::abs(dx);
+		if (distance < 0.0001f) {
+			dx = (&owner_ < otherEnemy) ? -0.01f : 0.01f;
+			distance = 0.01f;
+		}
+		if (distance < kSeparationRadius) {
+			float t = 1.0f - (distance / kSeparationRadius);
+			float direction = (dx > 0.0f) ? 1.0f : -1.0f;
+			pushX += direction * kSeparationStrength * t;
+		}
+	}
+
+	if (pushX == 0.0f)
+		return;
+	owner_.velocity_.x += pushX;
+	float maxSeparatedSpeed = owner_.kChaseSpeed + kSeparationStrength;
+	owner_.velocity_.x = std::clamp(owner_.velocity_.x, -maxSeparatedSpeed, maxSeparatedSpeed);
+}
+
+void BaseEnemyBehavior::IdleFacingUpdate() {
+	idleScanTimer_ += 1.0f / 60.0f;
+	if (idleScanTimer_ < kIdleScanInterval)
+		return;
+	idleScanTimer_ = 0.0f;
+	BaseEnemy::LRDirection newDirection = (owner_.lrDirection_ == BaseEnemy::LRDirection::kRight) ? BaseEnemy::LRDirection::kLeft : BaseEnemy::LRDirection::kRight;
+	owner_.FaceDirection(newDirection);
+}
+
+void BaseEnemyBehavior::OwnerFaceDirection(int direction) { owner_.FaceDirection(static_cast<BaseEnemy::LRDirection>(direction)); }
+void BaseEnemyBehavior::OwnerSetFirearmMode(int mode) { owner_.firearmMode_ = static_cast<BaseEnemy::FirearmMode>(mode); }
+
+void BaseEnemyBehavior::BehaviorRootInitialize() {}
+void BaseEnemyBehavior::BehaviorRootUpdate() { owner_.pathfindingModule_->Update(); }
+
+void BaseEnemyBehavior::BehaviorIdleInitialize() {
+	owner_.velocity_.x = 0.0f;
+	idleTimer_ = 0.0f;
+	idleDuration_ = sRandom_.GetRandValue(kIdleDurationMin, kIdleDurationMax);
+}
+void BaseEnemyBehavior::BehaviorIdleUpdate() {
+	owner_.velocity_.x = 0.0f;
+	IdleFacingUpdate();
+	idleTimer_ += 1.0f / 60.0f;
+	if (idleTimer_ >= idleDuration_)
+		behaviorRequest_ = Behavior::kRoam;
+}
+
+void BaseEnemyBehavior::BehaviorRoamInitialize() {
+	roamTimer_ = 0.0f;
+	roamWalkDuration_ = sRandom_.GetRandValue(kRoamWalkDurationMin, kRoamWalkDurationMax);
+	int candidate = (sRandom_.GetRandValue(0.0f, 1.0f) < 0.5f) ? static_cast<int>(BaseEnemy::LRDirection::kLeft) : static_cast<int>(BaseEnemy::LRDirection::kRight);
+	if (!IsGroundAheadClear(candidate) && !HasReachableLedgeAhead(candidate)) {
+		candidate = (candidate == static_cast<int>(BaseEnemy::LRDirection::kLeft)) ? static_cast<int>(BaseEnemy::LRDirection::kRight) : static_cast<int>(BaseEnemy::LRDirection::kLeft);
+	}
+	roamDirection_ = candidate;
+}
+void BaseEnemyBehavior::BehaviorRoamUpdate() {
+	if (owner_.hitWallThisFrame_) {
+		owner_.velocity_.x = 0.0f;
+		behaviorRequest_ = Behavior::kIdle;
+		return;
+	}
+	if (!IsGroundAheadClear(roamDirection_)) {
+		if (!TryJumpIfLedgeAhead(roamDirection_)) {
+			owner_.velocity_.x = 0.0f;
+			behaviorRequest_ = Behavior::kIdle;
+			return;
+		}
+	}
+
+	float speedFactor = 1.0f;
+	if (owner_.mapChipField_) {
+		Vector3 footPos = owner_.worldTransform_.translation_ + Vector3(0.0f, -(owner_.kHeight / 2.0f) - 0.05f, 0.0f);
+		if (owner_.mapChipField_->IsSlowAtPosition(footPos))
+			speedFactor = MapChipField::kSlowSpeedFactor;
+	}
+
+	BaseEnemy::LRDirection roamLR = static_cast<BaseEnemy::LRDirection>(roamDirection_);
+	owner_.velocity_.x = (roamLR == BaseEnemy::LRDirection::kLeft) ? -owner_.kWalkSpeed * speedFactor : owner_.kWalkSpeed * speedFactor;
+	owner_.FaceDirection(roamLR);
+
+	roamTimer_ += 1.0f / 60.0f;
+	if (roamTimer_ >= roamWalkDuration_) {
+		owner_.velocity_.x = 0.0f;
+		behaviorRequest_ = Behavior::kIdle;
+	}
+}
+
+// [NEW] Knockback
+void BaseEnemyBehavior::BehaviorKnockbackInitialize() {
+	knockbackParameter_ = 0;
+	owner_.velocity_ = {knockbackDirection_.x * (knockbackPower_ * kKnockbackSpeedScale), knockbackDirection_.y * (knockbackPower_ * kKnockbackSpeedScale) + 0.15f, 0.0f};
+	owner_.onGround_ = false;
+}
+void BaseEnemyBehavior::BehaviorKnockbackUpdate() {
+	++knockbackParameter_;
+	owner_.velocity_ += Vector3(0, -BaseEnemy::kGravityAcceleration, 0);
+	owner_.velocity_.y = std::max(owner_.velocity_.y, -BaseEnemy::kLimitFallSpeed);
+	if (knockbackParameter_ >= kKnockbackDuration) {
+		behaviorRequest_ = Behavior::kRoot;
+	}
+}
+
+void BaseEnemyBehavior::BehaviorDieInitialize() {
+	deathParameter_ = 0;
+	hasSpawnedDrop_ = false;
+	deathBounceCount_ = 0;
+	owner_.velocity_ = {
+	    owner_.pendingHitDirection_.x * (owner_.pendingImpactPower_ * kDeathFlingSpeedScale) + 0.0f,
+	    owner_.pendingHitDirection_.y * (owner_.pendingImpactPower_ * kDeathFlingSpeedScale) + kDeathFlingUpBoost,
+	    owner_.pendingHitDirection_.z * (owner_.pendingImpactPower_ * kDeathFlingSpeedScale) + 0.0f};
+	deathSpinSpeed_ = sRandom_.GetRandValue(-kDeathMaxSpin, kDeathMaxSpin);
+	owner_.onGround_ = false;
+}
+
+void BaseEnemyBehavior::BehaviorDieUpdate() {
+	++deathParameter_;
+
+	// [FIX] stop rolling once settled, ease into a flat "lying down" pose instead of freezing mid-tumble
+	bool settled = (deathBounceCount_ >= kDeathMaxBounces) || (owner_.velocity_.x == 0.0f && owner_.velocity_.y == 0.0f && deathBounceCount_ > 0);
+
+	if (!settled) {
+		owner_.worldTransform_.rotation_.x += deathSpinSpeed_ * 0.6f;
+		owner_.worldTransform_.rotation_.z += deathSpinSpeed_;
+	} else {
+		float targetX = std::numbers::pi_v<float> / 2.0f;
+		owner_.worldTransform_.rotation_.x = EaseOut(owner_.worldTransform_.rotation_.x, targetX, 0.15f);
+		float nearestFlatZ = std::round(owner_.worldTransform_.rotation_.z / std::numbers::pi_v<float>) * std::numbers::pi_v<float>;
+		owner_.worldTransform_.rotation_.z = EaseOut(owner_.worldTransform_.rotation_.z, nearestFlatZ, 0.15f);
+	}
+
+	owner_.velocity_.y -= BaseEnemy::kGravityAcceleration;
+	owner_.velocity_.y = std::max(owner_.velocity_.y, -kDeathMaxFallSpeed);
+
+	Vector3 nextPos = owner_.worldTransform_.translation_ + owner_.velocity_;
+
+	bool hitGround = false;
+	if (owner_.mapChipField_) {
+		Vector3 groundCheck = nextPos - Vector3(0.0f, BaseEnemy::kHeight * 0.5f, 0.0f);
+		hitGround = owner_.mapChipField_->IsSolidAtPosition(groundCheck, true);
+	}
+
+	if (hitGround && owner_.velocity_.y <= 0.0f) {
+		owner_.velocity_.y = -owner_.velocity_.y * kDeathBounceDamping;
+		owner_.velocity_.x *= kDeathFriction;
+		++deathBounceCount_;
+		if (deathBounceCount_ >= kDeathMaxBounces || std::abs(owner_.velocity_.y) < 0.02f) {
+			owner_.velocity_ = {};
+		}
+	} else {
+		owner_.worldTransform_.translation_ = nextPos;
+	}
+
+	if (static_cast<uint32_t>(deathParameter_) >= kDeathDuration) {
+		if (!hasSpawnedDrop_) {
+			owner_.SpawnDropItem();
+			hasSpawnedDrop_ = true;
+		}
+		if (owner_.gameScene_) {
+			owner_.gameScene_->CreateEnemyDeathParticles(owner_.GetWorldPosition()); // [NEW]
+		}
+		owner_.isDead_ = true;
+	}
+}
+
+#pragma region PathNavigator 先読み判定
+bool BaseEnemyBehavior::ScanWallAhead(int direction, float maxLookAhead, float maxHeight, float& outDistance, float& outHeight) const {
+	if (!owner_.mapChipField_)
+		return false;
+	bool directionIsRight = (direction == static_cast<int>(BaseEnemy::LRDirection::kRight));
+	Vector3 footPos = owner_.worldTransform_.translation_ + Vector3(0.0f, -(owner_.kHeight / 2.0f), 0.0f);
+	PathDetector::ScanParams params;
+	params.stepDistance = 0.1f;
+	params.maxDistance = maxLookAhead;
+	params.bodyHeight = maxHeight;
+	std::vector<PathDetector::Segment> segments = pathSensor_.Scan(footPos, directionIsRight, params);
+	return PathDetector::FirstWallInfo(segments, outDistance, outHeight);
+}
+bool BaseEnemyBehavior::ScanGapAhead(int direction, float maxLookAhead, float& outGapDistance) const {
+	if (!owner_.mapChipField_)
+		return false;
+	bool directionIsRight = (direction == static_cast<int>(BaseEnemy::LRDirection::kRight));
+	Vector3 footPos = owner_.worldTransform_.translation_ + Vector3(0.0f, -(owner_.kHeight / 2.0f), 0.0f);
+	PathDetector::ScanParams params;
+	params.stepDistance = kLedgeCheckAheadDistance * 0.5f;
+	params.maxDistance = maxLookAhead;
+	params.bodyHeight = owner_.kHeight;
+	params.groundProbeDown = kLedgeCheckDownOffset;
+	std::vector<PathDetector::Segment> segments = pathSensor_.Scan(footPos, directionIsRight, params);
+	return PathDetector::FirstGapInfo(segments, outGapDistance);
+}
+bool BaseEnemyBehavior::IsGroundAheadClear(int direction) const {
+	if (!owner_.mapChipField_)
+		return true;
+	bool directionIsRight = (direction == static_cast<int>(BaseEnemy::LRDirection::kRight));
+	Vector3 footPos = owner_.worldTransform_.translation_ + Vector3(0.0f, -(owner_.kHeight / 2.0f), 0.0f);
+	PathDetector::ScanParams params;
+	params.stepDistance = kLedgeCheckAheadDistance;
+	params.maxDistance = kLedgeCheckAheadDistance;
+	params.bodyHeight = owner_.kHeight;
+	params.groundProbeDown = kLedgeCheckDownOffset;
+	std::vector<PathDetector::Segment> segments = pathSensor_.Scan(footPos, directionIsRight, params);
+	if (segments.empty())
+		return true;
+	return segments.front().hasGroundBelow;
+}
+bool BaseEnemyBehavior::CanJumpOverWall(int direction) const {
+	if (!owner_.mapChipField_)
+		return false;
+	float maxJumpHeight = (owner_.kJumpAcceleration * owner_.kJumpAcceleration) / (2.0f * owner_.kGravityAcceleration) + kJumpHeightMargin;
+	float wallDistance = 0.0f;
+	float wallHeight = 0.0f;
+	if (!ScanWallAhead(direction, owner_.kWidth / 2.0f + 0.1f, maxJumpHeight + 0.1f, wallDistance, wallHeight))
+		return false;
+	return wallHeight <= maxJumpHeight;
+}
+bool BaseEnemyBehavior::HasReachableLedgeAhead(int direction) const {
+	if (!owner_.mapChipField_)
+		return false;
+	float maxJumpHeight = (owner_.kJumpAcceleration * owner_.kJumpAcceleration) / (2.0f * owner_.kGravityAcceleration) + kJumpHeightMargin;
+	float airTime = (2.0f * owner_.kJumpAcceleration) / owner_.kGravityAcceleration;
+	float travelSpeed = (behavior_ == Behavior::kRoot) ? owner_.kChaseSpeed : owner_.kWalkSpeed;
+	float maxJumpDistance = travelSpeed * airTime;
+	bool directionIsRight = (direction == static_cast<int>(BaseEnemy::LRDirection::kRight));
+	Vector3 footPos = owner_.worldTransform_.translation_ + Vector3(0.0f, -(owner_.kHeight / 2.0f), 0.0f);
+	PathDetector::ScanParams params;
+	params.stepDistance = kLedgeCheckAheadDistance * 0.5f;
+	params.maxDistance = std::min(kMaxCrossableGapDistance, maxJumpDistance + kLedgeCheckAheadDistance);
+	params.bodyHeight = maxJumpHeight + 0.1f;
+	params.groundProbeDown = kLedgeCheckDownOffset;
+	std::vector<PathDetector::Segment> segments = pathSensor_.Scan(footPos, directionIsRight, params);
+	if (segments.empty())
+		return false;
+	if (segments.front().hasGroundBelow)
+		return false;
+	for (const PathDetector::Segment& segment : segments) {
+		if (segment.isWall)
+			return segment.wallTopHeight <= maxJumpHeight && segment.distance <= maxJumpDistance;
+		if (segment.hasGroundBelow)
+			return segment.distance <= maxJumpDistance;
+	}
+	return false;
+}
+bool BaseEnemyBehavior::TryJumpIfLedgeAhead(int direction) {
+	if (!owner_.onGround_)
+		return false;
+	if (!HasReachableLedgeAhead(direction))
+		return false;
+	owner_.velocity_ += Vector3(0.0f, owner_.kJumpAcceleration, 0.0f);
+	return true;
+}
+#pragma endregion
+
+Vector3& BaseEnemyBehavior::OwnerVelocity() { return owner_.velocity_; }
+const Vector3& BaseEnemyBehavior::OwnerVelocity() const { return owner_.velocity_; }
+void BaseEnemyBehavior::RunPhysicsAndCollisionUpdate() { owner_.PhysicsAndCollisionUpdate(); }
+GameScene* BaseEnemyBehavior::OwnerGameScene() const { return owner_.gameScene_; }

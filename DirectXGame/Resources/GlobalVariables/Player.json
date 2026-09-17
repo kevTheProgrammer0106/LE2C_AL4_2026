@@ -1,0 +1,78 @@
+{
+    "Player": {
+        "Acceleration": 0.05000000074505806,
+        "Attenuation": 0.10000000149011612,
+        "AttenuationCeilling": 0.20000000298023224,
+        "AttenuationLanding": 0.20000000298023224,
+        "AttenuationWall": 0.20000000298023224,
+        "Blank": 0.009999999776482582,
+        "BlockAttackerKnockbackScale": 2.5,
+        "BodyOffsetRotation": [
+            0.0,
+            0.0,
+            0.0
+        ],
+        "BodyOffsetScale": [
+            1.0,
+            1.0,
+            1.0
+        ],
+        "BodyOffsetTranslation": [
+            0.0,
+            0.0,
+            0.0
+        ],
+        "FirearmOffsetRotation": [
+            0.0,
+            0.0,
+            0.0
+        ],
+        "FirearmOffsetScale": [
+            1.0,
+            1.0,
+            1.0
+        ],
+        "FirearmOffsetTranslation": [
+            0.0,
+            0.0,
+            0.0
+        ],
+        "GravityAcceleration": 0.05000000074505806,
+        "HatOffsetRotation": [
+            0.0,
+            0.0,
+            0.0
+        ],
+        "HatOffsetScale": [
+            1.0,
+            1.0,
+            1.0
+        ],
+        "HatOffsetTranslation": [
+            0.0,
+            0.0,
+            0.0
+        ],
+        "HeadOffsetRotation": [
+            0.15000000596046448,
+            0.0,
+            0.0
+        ],
+        "HeadOffsetScale": [
+            1.0,
+            1.0,
+            1.0
+        ],
+        "HeadOffsetTranslation": [
+            -0.05000000074505806,
+            0.7200000286102295,
+            0.0
+        ],
+        "Height": 1.600000023841858,
+        "JumpAcceleration": 0.75,
+        "LimitFallSpeed": 0.5,
+        "LimitRunSpeed": 0.25,
+        "TimeTurn": 0.30000001192092896,
+        "Width": 0.800000011920929
+    }
+}

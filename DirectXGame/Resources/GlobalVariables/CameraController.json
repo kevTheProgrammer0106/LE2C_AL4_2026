@@ -1,0 +1,6 @@
+{
+    "CameraController": {
+        "InterpolationRate": 0.10000000149011612,
+        "VelocityBias": 30.0
+    }
+}

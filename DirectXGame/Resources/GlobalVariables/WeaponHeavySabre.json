@@ -1,0 +1,23 @@
+{
+    "WeaponHeavySabre": {
+        "HalfDepthMax": 0.8999999761581421,
+        "HalfDepthMin": 0.8999999761581421,
+        "HalfHeightMax": 0.8999999761581421,
+        "HalfHeightMin": 0.8999999761581421,
+        "HalfWidthMax": 0.8999999761581421,
+        "HalfWidthMin": 0.8999999761581421,
+        "HolsterOffsetRotation": [
+            0.0,
+            3.0,
+            0.6000000238418579
+        ],
+        "HolsterOffsetTranslation": [
+            0.20000000298023224,
+            -0.10000000149011612,
+            0.44999998807907104
+        ],
+        "LungeDamage": 25,
+        "LungeImpactPower": 2.200000047683716,
+        "LungeReach": 4.5
+    }
+}

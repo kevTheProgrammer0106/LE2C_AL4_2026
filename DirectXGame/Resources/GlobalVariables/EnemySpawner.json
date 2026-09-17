@@ -1,0 +1,5 @@
+{
+    "EnemySpawner": {
+        "SpawnActivateDistance": 1000.0
+    }
+}

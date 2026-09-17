@@ -1,0 +1,12 @@
+{
+    "BaseMelee": {
+        "BaseImpactPower": 1.0,
+        "ComboDamageEnemy0": 10,
+        "ComboDamageEnemy1": 10,
+        "ComboDamageEnemy2": 20,
+        "ComboDamagePlayer0": 45,
+        "ComboDamagePlayer1": 45,
+        "ComboDamagePlayer2": 75,
+        "ImpactPowerStep": 0.4000000059604645
+    }
+}

@@ -1,0 +1,16 @@
+{
+    "PlayerBehavior": {
+        "DeathBounceDamping": 0.44999998807907104,
+        "DeathDuration": 100,
+        "DeathFlingSpeedScale": 0.2199999988079071,
+        "DeathFlingUpBoost": 0.30000001192092896,
+        "DeathFriction": 0.25,
+        "DeathMaxBounces": 3,
+        "DeathMaxFallSpeed": 0.75,
+        "HitEffectOffset": 1.0,
+        "HitKnockbackSpeedScale": 0.10000000149011612,
+        "KnockBackDuration": 25,
+        "KnockBackSpeedX": 0.5,
+        "KnockBackSpeedY": 0.3499999940395355
+    }
+}

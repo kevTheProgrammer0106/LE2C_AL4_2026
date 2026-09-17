@@ -1,0 +1,10 @@
+{
+    "ArenaManager": {
+        "CameraOffset": [
+            0.0,
+            0.0,
+            -30.0
+        ],
+        "WaveWaitDuration": 3.0
+    }
+}
