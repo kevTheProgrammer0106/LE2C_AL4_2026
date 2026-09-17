@@ -89,8 +89,6 @@ public:
 	bool isFinished() const { return finished_; }
 	bool isReloadRequested() const { return reloadRequested_; }   // Retry (checkpoint-aware)
 	bool isRestartRequested() const { return restartRequested_; } // Restart (from scratch)
-	bool isCursorAimRequested() const { return cursorTexAimRequested_; };
-	bool isCursorArrowRequested() const { return cursorTexArrowRequested_; };
 
 	void debugMenu();
 
@@ -413,7 +411,4 @@ private:
 	uint32_t sfxGateOpenHandle_ = 0;
 	uint32_t sfxGoalReachedHandle_ = 0;
 	uint32_t sfxItemPickupHandle_ = 0;
-
-	bool cursorTexArrowRequested_ = false;
-	bool cursorTexAimRequested_ = true;
 };
