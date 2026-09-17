@@ -45,7 +45,8 @@ private:
 	NextDestination nextDestination_ = NextDestination::kNone;
 
 	InputManager menuInput_;
-	uint32_t buttonTex_ = 0;
+	uint32_t buttonTex_[2] = {0, 0};
+	uint32_t cursorTex_ = 0;
 	InputManager::ButtonID startButton_ = InputManager::kInvalidButton;
 	InputManager::ButtonID levelSelectButton_ = InputManager::kInvalidButton;
 

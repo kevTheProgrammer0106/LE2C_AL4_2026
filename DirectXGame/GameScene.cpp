@@ -350,8 +350,9 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 		//platformTexVariants_[kSubIDConcrete] = TextureManager::Load("./Resources/platform/concreteBlock.png");
 		//platformTexVariants_[kSubIDRubber] = TextureManager::Load("./Resources/platform/rubberBlock.png");
 	}
-	aimDecal = TextureManager::Load("./Resources/UserInterface/directionAim.png");
-	cursor_.Initialize(aimDecal, &camera_);
+	cursorTex_[0] = TextureManager::Load("./Resources/UserInterface/directionAim.png");
+	cursorTex_[1] = TextureManager::Load("./Resources/UserInterface/directionArrow.png");
+	cursor_.Initialize(cursorTex_, 2, &camera_);
 	healthBarBackgroundTex_ = TextureManager::Load("./Resources/white1x1.png");
 	healthBarFillTex_ = TextureManager::Load("./Resources/white1x1.png");
 	playerHealthUI_.Initialize(healthBarBackgroundTex_, healthBarFillTex_);
@@ -424,22 +425,25 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 }
 
 void GameScene::InitializePauseMenu() {
-	pauseButtonTex_ = TextureManager::Load("./Resources/UserInterface/directionArrow.png");
-	pauseMenuInput_.Initialize(pauseButtonTex_, &camera_);
+	pauseButtonTex_[0] = TextureManager::Load("./Resources/UserInterface/buttonPlay.png");
+	pauseButtonTex_[1] = TextureManager::Load("./Resources/UserInterface/buttonRetry.png");
+	pauseButtonTex_[2] = TextureManager::Load("./Resources/UserInterface/buttonBack.png");
 
-	constexpr float kButtonWidth = 320.0f;
-	constexpr float kButtonHeight = 80.0f;
+	pauseMenuInput_.Initialize(pauseButtonTex_, 3, &camera_);
+
+	constexpr float kButtonWidth = 220.0f;
+	constexpr float kButtonHeight = 160.0f;
 	constexpr float kSpacing = 100.0f;
 	float centerX = static_cast<float>(WinApp::kWindowWidth) / 2.0f - kButtonWidth / 2.0f;
 	float startY = static_cast<float>(WinApp::kWindowHeight) / 2.0f - kSpacing;
 
-	pauseResumeButton_ = pauseMenuInput_.AddButton(pauseButtonTex_, centerX, startY, kButtonWidth, kButtonHeight, "Resume");
+	pauseResumeButton_ = pauseMenuInput_.AddButton(pauseButtonTex_[0], centerX, startY, kButtonWidth, kButtonHeight, "Resume");
 	pauseMenuInput_.SetButtonOnClick(pauseResumeButton_, [this]() { phase_ = phaseBeforePause_; });
 
-	pauseRetryButton_ = pauseMenuInput_.AddButton(pauseButtonTex_, centerX, startY + kSpacing, kButtonWidth, kButtonHeight, "Retry");
+	pauseRetryButton_ = pauseMenuInput_.AddButton(pauseButtonTex_[1], centerX, startY + kSpacing, kButtonWidth, kButtonHeight, "Retry");
 	pauseMenuInput_.SetButtonOnClick(pauseRetryButton_, [this]() { reloadRequested_ = true; });
 
-	pauseMainMenuButton_ = pauseMenuInput_.AddButton(pauseButtonTex_, centerX, startY + kSpacing * 2.0f, kButtonWidth, kButtonHeight, "Main Menu");
+	pauseMainMenuButton_ = pauseMenuInput_.AddButton(pauseButtonTex_[2], centerX, startY + kSpacing * 2.0f, kButtonWidth, kButtonHeight, "Main Menu");
 	pauseMenuInput_.SetButtonOnClick(pauseMainMenuButton_, [this]() {
 		pendingReturnToMenu_ = true;
 		fade_->Start(Fade::Status::FadeOut, 1.0f);
@@ -447,22 +451,26 @@ void GameScene::InitializePauseMenu() {
 }
 
 void GameScene::InitializeRetryMenu() {
-	retryMenuInput_.Initialize(pauseButtonTex_, &camera_);
+	retryButtonTex_[0] = TextureManager::Load("./Resources/UserInterface/buttonRetry.png");
+	retryButtonTex_[1] = TextureManager::Load("./Resources/UserInterface/buttonRestart.png");
+	retryButtonTex_[2] = TextureManager::Load("./Resources/UserInterface/buttonBack.png");
 
-	constexpr float kButtonWidth = 320.0f;
-	constexpr float kButtonHeight = 80.0f;
+	retryMenuInput_.Initialize(pauseButtonTex_, 3, &camera_);
+
+	constexpr float kButtonWidth = 220.0f;
+	constexpr float kButtonHeight = 160.0f;
 	constexpr float kSpacing = 100.0f;
 	float centerX = static_cast<float>(WinApp::kWindowWidth) / 2.0f - kButtonWidth / 2.0f;
 	float startY = static_cast<float>(WinApp::kWindowHeight) / 2.0f - kSpacing * 0.5f;
 
 	std::string retryLabel = stageManager_->HasCheckpoint() ? "Retry (Checkpoint)" : "Retry";
-	retryButton_ = retryMenuInput_.AddButton(pauseButtonTex_, centerX, startY, kButtonWidth, kButtonHeight, retryLabel);
+	retryButton_ = retryMenuInput_.AddButton(retryButtonTex_[0], centerX, startY, kButtonWidth, kButtonHeight, retryLabel);
 	retryMenuInput_.SetButtonOnClick(retryButton_, [this]() { reloadRequested_ = true; });
 
-	restartButton_ = retryMenuInput_.AddButton(pauseButtonTex_, centerX, startY + kSpacing, kButtonWidth, kButtonHeight, "Restart");
+	restartButton_ = retryMenuInput_.AddButton(retryButtonTex_[1], centerX, startY + kSpacing, kButtonWidth, kButtonHeight, "Restart");
 	retryMenuInput_.SetButtonOnClick(restartButton_, [this]() { restartRequested_ = true; });
 
-	retryMainMenuButton_ = retryMenuInput_.AddButton(pauseButtonTex_, centerX, startY + kSpacing * 2.0f, kButtonWidth, kButtonHeight, "Main Menu");
+	retryMainMenuButton_ = retryMenuInput_.AddButton(retryButtonTex_[2], centerX, startY + kSpacing * 2.0f, kButtonWidth, kButtonHeight, "Main Menu");
 	retryMenuInput_.SetButtonOnClick(retryMainMenuButton_, [this]() {
 		pendingReturnToMenu_ = true;
 		fade_->Start(Fade::Status::FadeOut, 1.0f);
@@ -489,7 +497,10 @@ void GameScene::InitializeInGamePauseButton() {
 }
 
 void GameScene::InitializeVictoryMenu() {
-	victoryMenuInput_.Initialize(pauseButtonTex_, &camera_);
+	victoryButtonTex_[0] = TextureManager::Load("./Resources/UserInterface/buttonRestart.png");
+	victoryButtonTex_[1] = TextureManager::Load("./Resources/UserInterface/buttonBack.png");
+
+	victoryMenuInput_.Initialize(victoryButtonTex_, 2, &camera_);
 	victoryMenuInput_.SetButtonGroupAlpha(0.0f);
 
 	// dim backdrop behind the buttons, faded in lockstep with the buttons below
@@ -497,16 +508,16 @@ void GameScene::InitializeVictoryMenu() {
 	victoryOverlay_->SetSize({static_cast<float>(WinApp::kWindowWidth), static_cast<float>(WinApp::kWindowHeight)});
 	victoryOverlay_->SetColor({0.0f, 0.0f, 0.0f, 0.0f});
 
-	constexpr float kButtonWidth = 320.0f;
-	constexpr float kButtonHeight = 80.0f;
+	constexpr float kButtonWidth = 220.0f;
+	constexpr float kButtonHeight = 160.0f;
 	constexpr float kSpacing = 100.0f;
 	float centerX = static_cast<float>(WinApp::kWindowWidth) / 2.0f - kButtonWidth / 2.0f;
 	float startY = static_cast<float>(WinApp::kWindowHeight) / 2.0f - kSpacing * 0.5f;
 
-	victoryRestartButton_ = victoryMenuInput_.AddButton(pauseButtonTex_, centerX, startY, kButtonWidth, kButtonHeight, "Play Again");
+	victoryRestartButton_ = victoryMenuInput_.AddButton(victoryButtonTex_[0], centerX, startY, kButtonWidth, kButtonHeight, "Play Again");
 	victoryMenuInput_.SetButtonOnClick(victoryRestartButton_, [this]() { restartRequested_ = true; });
 
-	victoryMainMenuButton_ = victoryMenuInput_.AddButton(pauseButtonTex_, centerX, startY + kSpacing, kButtonWidth, kButtonHeight, "Back to Menu");
+	victoryMainMenuButton_ = victoryMenuInput_.AddButton(victoryButtonTex_[1], centerX, startY + kSpacing, kButtonWidth, kButtonHeight, "Back to Menu");
 	victoryMenuInput_.SetButtonOnClick(victoryMainMenuButton_, [this]() {
 		pendingReturnToMenu_ = true;
 		fade_->Start(Fade::Status::FadeOut, 1.0f);
@@ -1018,6 +1029,7 @@ void GameScene::GenerateBackgroundChunkTileMap(uint32_t chunkX, uint32_t chunkY)
 }
 
 void GameScene::Update() {
+	cursor_.UpdateCursor();
 
 	if (loadingCoverActive_ && loadingCover_) {
 		loadingCover_->Update();
@@ -1054,6 +1066,10 @@ void GameScene::Update() {
 	debugMenu();
 
 	cursor_.Update();
+	if (phase_ != Phase::kDeath)
+	{
+		cursor_.UpdateCursor();
+	}
 	if (Input::GetInstance()->TriggerKey(DIK_ESCAPE)) {
 		if (phase_ == Phase::kPlay) {
 			phaseBeforePause_ = phase_;
@@ -1394,7 +1410,6 @@ void GameScene::Draw() {
 	// }
 #endif
 
-	cursor_.Draw();
 	enemyHUD_.Draw();
 	interactionPrompt_.Draw();
 
@@ -1423,9 +1438,12 @@ void GameScene::Draw() {
 	}
 
 	if (phase_ == Phase::kPlay) {
+		cursor_.SetCursorTexture(cursorTex_[0]);
 		DrawInGamePauseButton();
+	} else {
+		cursor_.SetCursorTexture(cursorTex_[1]);
 	}
-
+	cursor_.Draw();
 	if (fade_) {
 		fade_->Draw();
 	}

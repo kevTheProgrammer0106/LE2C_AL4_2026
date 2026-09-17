@@ -36,7 +36,7 @@ private:
 	float bobTimer_ = 0.0f;
 
 	static inline float kScreenAnchorX = 640.0f;
-	static inline float kScreenAnchorY = 620.0f;
+	static inline float kScreenAnchorY = 400.0f;
 	static inline float kBobAmplitude = 3.0f;
 	static inline float kBobSpeed = 3.0f;
 };

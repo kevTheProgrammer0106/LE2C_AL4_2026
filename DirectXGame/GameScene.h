@@ -89,6 +89,8 @@ public:
 	bool isFinished() const { return finished_; }
 	bool isReloadRequested() const { return reloadRequested_; }   // Retry (checkpoint-aware)
 	bool isRestartRequested() const { return restartRequested_; } // Restart (from scratch)
+	bool isCursorAimRequested() const { return cursorTexAimRequested_; };
+	bool isCursorArrowRequested() const { return cursorTexArrowRequested_; };
 
 	void debugMenu();
 
@@ -226,7 +228,7 @@ private:
 	//uint32_t blockHalfDownHandle = 0;
 	//std::unique_ptr<KamataEngine::Model> blockHalfDownModel = nullptr;
 
-	uint32_t aimDecal = 0;
+	uint32_t cursorTex_[2] = {0, 0};
 
 	std::unique_ptr<MapChipField> mapChipField_ = nullptr;
 	std::vector<std::vector<BlockInstance>> worldTransformBlocks_;
@@ -253,7 +255,9 @@ private:
 	bool pendingReturnToMenu_ = false;
 
 	Phase phaseBeforePause_ = Phase::kPlay;
-	uint32_t pauseButtonTex_ = 0;
+	uint32_t pauseButtonTex_[3] = {0, 0, 0};
+	uint32_t retryButtonTex_[3] = {0, 0, 0};
+	uint32_t victoryButtonTex_[2] = {0, 0};
 
 	InputManager pauseMenuInput_;
 	InputManager::ButtonID pauseResumeButton_ = InputManager::kInvalidButton;
@@ -318,7 +322,7 @@ private:
 	uint32_t gateTex_ = 0;
 
 	std::vector<std::unique_ptr<DroppableItem>> droppableItems_;
-	std::vector<DroppableItem*> pendingPickups_; // [NEW] deferred pickup — fixes iterator invalidation bug
+	std::vector<DroppableItem*> pendingPickups_; 
 
 	struct EnemySpawnPoint {
 		KamataEngine::Vector3 position;
@@ -409,4 +413,7 @@ private:
 	uint32_t sfxGateOpenHandle_ = 0;
 	uint32_t sfxGoalReachedHandle_ = 0;
 	uint32_t sfxItemPickupHandle_ = 0;
+
+	bool cursorTexArrowRequested_ = false;
+	bool cursorTexAimRequested_ = true;
 };

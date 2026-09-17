@@ -14,15 +14,16 @@ void TitleScene::Initialize() {
 
 	camera_.Initialize();
 
-	buttonTex_ = TextureManager::Load("./Resources/UserInterface/directionArrow.png");
-	menuInput_.Initialize(buttonTex_, &camera_);
+	buttonTex_[0] = TextureManager::Load("./Resources/UserInterface/buttonPlay.png");
+	buttonTex_[1] = TextureManager::Load("./Resources/UserInterface/buttonLevelSelect.png");
+	menuInput_.Initialize(buttonTex_, 2, &camera_);
 	menuInput_.SetButtonGroupAlpha(0.0f); // 画面フェードイン完了後にボタンをフェードインさせるので、最初は非表示にしておく
 
-	constexpr float kButtonWidth = 320.0f;
-	constexpr float kButtonHeight = 80.0f;
+	constexpr float kButtonWidth = 220.0f;
+	constexpr float kButtonHeight = 160.0f;
 	float centerX = static_cast<float>(WinApp::kWindowWidth) / 2.0f - kButtonWidth / 2.0f;
 
-	startButton_ = menuInput_.AddButton(buttonTex_, centerX, 320.0f, kButtonWidth, kButtonHeight, "Start");
+	startButton_ = menuInput_.AddButton(buttonTex_[0], centerX, 320.0f, kButtonWidth, kButtonHeight, "Start");
 	menuInput_.SetButtonOnClick(startButton_, [this]() {
 		// Playへの遷移: 画面フェードのみ(既存動作のまま)。メニューBGMもここでフェードアウトさせる。
 		musicManager_.StopMenuMusic();
@@ -31,7 +32,7 @@ void TitleScene::Initialize() {
 		fade_->Start(Fade::Status::FadeOut, 1.0f);
 	});
 
-	levelSelectButton_ = menuInput_.AddButton(buttonTex_, centerX, 420.0f, kButtonWidth, kButtonHeight, "Level Select");
+	levelSelectButton_ = menuInput_.AddButton(buttonTex_[1], centerX, 420.0f, kButtonWidth, kButtonHeight, "Level Select");
 	menuInput_.SetButtonOnClick(levelSelectButton_, [this]() {
 		// Level Selectシーンへの遷移: 画面フェードは行わず、ボタンだけ素早くフェードアウトする
 		musicManager_.StopMenuMusic();
@@ -44,9 +45,14 @@ void TitleScene::Initialize() {
 	// 一度Playへ入ってメニューへ戻ってきた際もここで再度呼べばゼロから鳴らし直せる。
 	menuMusicSoundDataHandle_ = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/YellowMarch.wav");
 	musicManager_.InitializeMenuTrack(menuMusicSoundDataHandle_);
+
+	cursorTex_ = TextureManager::Load("./Resources/UserInterface/directionArrow.png");
+
+	menuInput_.SetCursorTexture(cursorTex_);
 }
 
 void TitleScene::Update() {
+	menuInput_.UpdateCursor();
 	musicManager_.Update();
 
 	switch (phase_) {

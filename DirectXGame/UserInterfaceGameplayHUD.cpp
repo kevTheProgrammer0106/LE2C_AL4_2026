@@ -4,7 +4,7 @@ using namespace KamataEngine;
 
 void InteractionPrompt::Initialize(uint32_t iconTextureHandle) {
 	BaseSprite::Initialize(iconTextureHandle, {kScreenAnchorX, kScreenAnchorY});
-	SetSize({48.0f, 48.0f});
+	SetSize({200.0f, 200.0f});
 	isVisible_ = false;
 }
 

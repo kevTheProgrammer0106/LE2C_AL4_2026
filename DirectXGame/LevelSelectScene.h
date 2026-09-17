@@ -43,6 +43,7 @@ private:
 	InputManager menuInput_;
 	uint32_t buttonTex_[3] = {0, 0, 0};
 	uint32_t buttonBackTex_ = 0;
+	uint32_t cursorTex_ = 0;
 	std::vector<InputManager::ButtonID> stageButtons_;
 	InputManager::ButtonID backButton_ = InputManager::kInvalidButton;
 

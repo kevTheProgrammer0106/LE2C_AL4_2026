@@ -24,8 +24,8 @@ void LevelSelectScene::Initialize(StageManager* stageManager) {
 	menuInput_.Initialize(buttonTex_, 3, &camera_);
 	menuInput_.SetButtonGroupAlpha(0.0f);
 
-	constexpr float kButtonWidth = 160;
-	constexpr float kButtonHeight = 160;
+	constexpr float kButtonWidth = 220.0f;
+	constexpr float kButtonHeight = 160.0f;
 	constexpr float kButtonSpacing = 90.0f;
 
 	float centerX = static_cast<float>(WinApp::kWindowWidth) / 2.0f - kButtonWidth / 2.0f;
@@ -57,16 +57,21 @@ void LevelSelectScene::Initialize(StageManager* stageManager) {
 	float backY = startY + static_cast<float>(stageButtons_.size()) * kButtonSpacing + 40.0f;
 
 	// BackはLevel1のテクスチャを流用。
-	backButton_ = menuInput_.AddButton(static_cast<size_t>(0), centerX, backY, kButtonWidth, kButtonHeight, "Back");
+	backButton_ = menuInput_.AddButton(buttonBackTex_, centerX, backY, kButtonWidth, kButtonHeight, "Back");
 
 	menuInput_.SetButtonOnClick(backButton_, [this]() {
 		returningToMenu_ = true;
 		phase_ = Phase::kButtonFadeOut;
 		menuInput_.StartButtonFade(false, kButtonFadeDuration);
 	});
+
+	cursorTex_ = TextureManager::Load("./Resources/UserInterface/directionArrow.png");
+	menuInput_.SetCursorTexture(cursorTex_);
 }
 
 void LevelSelectScene::Update() {
+	menuInput_.UpdateCursor();
+
 	switch (phase_) {
 	case Phase::kFadeIn:
 		fade_->Update();

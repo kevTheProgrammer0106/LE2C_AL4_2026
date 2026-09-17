@@ -14,6 +14,8 @@ public:
 	void Initialize(const uint32_t* textures, size_t textureCount, KamataEngine::Camera* camera);
 
 	void Update();
+	void UpdateCursor();
+
 	void Draw();
 
 	struct ButtonAABB {
@@ -55,6 +57,12 @@ public:
 	float GetButtonFadeAlpha() const { return buttonFadeAlpha_; }
 	void SetButtonGroupAlpha(float alpha) { buttonFadeAlpha_ = alpha; }
 
+	void SetCursorTexture(uint32_t textureHandle) {
+		if (cursorSprite_) {
+			cursorSprite_->SetTextureHandle(textureHandle);
+		}
+	}
+
 private:
 	struct Button {
 		ButtonID id = kInvalidButton;
@@ -84,7 +92,7 @@ private:
 	KamataEngine::WorldTransform worldTransform_;
 	KamataEngine::Camera* camera_ = nullptr;
 
-	std::unique_ptr<KamataEngine::Sprite> aimSprite_ = nullptr;
+	std::unique_ptr<KamataEngine::Sprite> cursorSprite_ = nullptr;
 
 	KamataEngine::Vector2 mouseMovement_;
 

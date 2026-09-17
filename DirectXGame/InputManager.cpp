@@ -16,9 +16,9 @@ void InputManager::Initialize(uint32_t tex, KamataEngine::Camera* camera) {
 
 	Vector2 targetPos = {worldTransform_.translation_.x, worldTransform_.translation_.y};
 
-	aimSprite_.reset(Sprite::Create(tex, targetPos));
-	aimSprite_->SetAnchorPoint({0.5f, 0.5f});
-	aimSprite_->SetSize({32.0f, 32.0f});
+	cursorSprite_.reset(Sprite::Create(tex, targetPos));
+	cursorSprite_->SetAnchorPoint({0.5f, 0.5f});
+	cursorSprite_->SetSize({32.0f, 32.0f});
 
 	if (clickSoundDataHandle_ == 0) {
 		clickSoundDataHandle_ = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
@@ -47,19 +47,27 @@ void InputManager::Initialize(const uint32_t* textures, size_t textureCount, Kam
 
 	Vector2 targetPos = {worldTransform_.translation_.x, worldTransform_.translation_.y};
 
-	aimSprite_.reset(Sprite::Create(cursorTexture, targetPos));
-	aimSprite_->SetAnchorPoint({0.5f, 0.5f});
-	aimSprite_->SetSize({32.0f, 32.0f});
+	cursorSprite_.reset(Sprite::Create(cursorTexture, targetPos));
+	cursorSprite_->SetAnchorPoint({0.5f, 0.5f});
+	cursorSprite_->SetSize({32.0f, 32.0f});
 
 	if (clickSoundDataHandle_ == 0) {
 		clickSoundDataHandle_ = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
 	}
 }
 
-void InputManager::Update() {
+/// <summary>
+///  Used in kPlay, hides default cursor for custom one
+/// </summary>
+void InputManager::UpdateCursor()
+{
 	// Disables default cursor. do not remove for a while
-	//ShowCursor(false);
+	ShowCursor(false);
+	Vector2 targetPos = {worldTransform_.translation_.x, worldTransform_.translation_.y};
+	cursorSprite_->SetPosition(targetPos);
+}
 
+void InputManager::Update() {
 	mouseMovement_ = Input::GetInstance()->GetMousePosition();
 
 	float mouseX = static_cast<float>(mouseMovement_.x);
@@ -69,20 +77,18 @@ void InputManager::Update() {
 
 	WorldTransformUpdate(worldTransform_);
 
-	Vector2 targetPos = {worldTransform_.translation_.x, worldTransform_.translation_.y};
-	aimSprite_->SetPosition(targetPos);
-#ifdef _DEBUG
-	ImGui::Begin("Cursor");
-	ImGui::DragFloat3("translate", &worldTransform_.translation_.x);
-	ImGui::End();
-#endif
-
 	// PushKey/TriggerKeyと同じ命名規則(Player.cpp等で確認済み)に合わせ、
 	// マウスも IsPushMouse(押され続けている間ずっとtrue) / IsTriggerMouse(押した瞬間だけtrue) の
 	// ペアがある前提で使う。ホールド判定にはIsPushMouseが必須。
 	bool mouseDown = Input::GetInstance()->IsPressMouse(0);
 	bool mouseTriggeredDown = Input::GetInstance()->IsTriggerMouse(0);
 	UpdateButtons(mouseX, mouseY, mouseDown, mouseTriggeredDown);
+
+	#ifdef _DEBUG
+	ImGui::Begin("Cursor");
+	ImGui::DragFloat3("translate", &worldTransform_.translation_.x);
+	ImGui::End();
+#endif
 }
 
 void InputManager::Draw() {
@@ -94,7 +100,7 @@ void InputManager::Draw() {
 			button.sprite->Draw();
 		}
 	}
-	aimSprite_->Draw();
+	cursorSprite_->Draw();
 	Sprite::PostDraw();
 }
 
