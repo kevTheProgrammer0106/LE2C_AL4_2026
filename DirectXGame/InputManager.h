@@ -1,110 +1,71 @@
 #pragma once
 
-#include "Global.h"
-#include <functional>
-#include <string>
-#include <vector>
+#define NOMINMAX
 
+#include "Global.h"
+#include <KamataEngine.h>
+
+/// <summary>
+/// 実際の入力を扱う唯一のクラス。KamataEngine::Inputへの直接アクセスはここに集約し、
+/// Player/敵/UIMenuなど他のシステムは全てこのクラス経由で入力状態を問い合わせる。
+/// ボタンAABB・カーソルスプライト・フェードといったUI要素は一切扱わない(それはUIMenuの役目)。
+/// 毎フレーム先頭で1回だけUpdate()を呼び、そのフレーム中の問い合わせは全てキャッシュされた値を返す。
+/// </summary>
 class InputManager {
 public:
-	// 既存の単一テクスチャ用。今までのUIはこのまま使える。
-	void Initialize(uint32_t tex, KamataEngine::Camera* camera);
-
-	// 複数テクスチャ用。ボタンごとに使用するテクスチャを選択できる。
-	void Initialize(const uint32_t* textures, size_t textureCount, KamataEngine::Camera* camera);
+	static InputManager* GetInstance();
 
 	void Update();
-	void UpdateCursor();
 
-	void Draw();
+	// --- 移動 ---
+	bool IsMoveLeftHeld() const { return moveLeftHeld_; }
+	bool IsMoveRightHeld() const { return moveRightHeld_; }
+	// -1.0 / 0.0 / 1.0 (左右同時押しは0)
+	float GetMoveAxisX() const;
 
-	struct ButtonAABB {
-		float left = 0.0f;
-		float top = 0.0f;
-		float right = 0.0f;
-		float bottom = 0.0f;
-	};
+	// --- ジャンプ ---
+	bool IsJumpHeld() const { return jumpHeld_; }           // 接地中に押され続けていればジャンプ(既存仕様)
+	bool IsJumpTriggered() const { return jumpTriggered_; } // メニュー等の「決定」に使う単発トリガー
 
-	using ButtonID = int32_t;
-	static constexpr ButtonID kInvalidButton = -1;
+	// --- アクション ---
+	bool IsWeaponSwitchTriggered() const { return weaponSwitchTriggered_; }
+	bool IsPauseTriggered() const { return pauseTriggered_; }
+	bool IsInteractTriggered() const { return interactTriggered_; }
+	bool IsAttackUpHeld() const { return attackUpHeld_; }
+	bool IsAttackDownHeld() const { return attackDownHeld_; }
 
-	// 既存の単一テクスチャ用
-	ButtonID AddButton(uint32_t textureHandle, float x, float y, float width, float height, const std::string& label = "");
-
-	// 複数テクスチャ用。textureIndexで使用するテクスチャを指定する。
-	ButtonID AddButton(size_t textureIndex, float x, float y, float width, float height, const std::string& label = "");
-
-	void ClearButtons();
-
-	void SetButtonPosition(ButtonID id, float x, float y);
-	void SetButtonSize(ButtonID id, float width, float height);
-	void SetButtonVisible(ButtonID id, bool visible);
-	void SetButtonEnabled(ButtonID id, bool enabled);
-	void SetButtonTexture(ButtonID id, uint32_t textureHandle);
-	void SetButtonOnClick(ButtonID id, std::function<void()> onClick);
-
-	bool IsButtonClicked(ButtonID id) const;
-	bool IsButtonHeld(ButtonID id) const;
-	float GetButtonHoldTime(ButtonID id) const;
-	bool IsButtonHovered(ButtonID id) const;
-
-	void SetClickSoundVolume(float volume) { clickSoundVolume_ = volume; }
-	void SetClickSoundHandle(uint32_t soundDataHandle) { clickSoundDataHandle_ = soundDataHandle; }
-
-	void StartButtonFade(bool fadeIn, float duration);
-	void UpdateButtonFade();
-	bool IsButtonFadeFinished() const { return buttonFadeStatus_ == ButtonFadeStatus::kNone || buttonFadeTimer_ >= buttonFadeDuration_; }
-	float GetButtonFadeAlpha() const { return buttonFadeAlpha_; }
-	void SetButtonGroupAlpha(float alpha) { buttonFadeAlpha_ = alpha; }
-
-	void SetCursorTexture(uint32_t textureHandle) {
-		if (cursorSprite_) {
-			cursorSprite_->SetTextureHandle(textureHandle);
-		}
-	}
+	// --- マウス ---
+	int GetMouseX() const { return mouseX_; }
+	int GetMouseY() const { return mouseY_; }
+	bool IsPrimaryTriggered() const { return primaryMouseTriggered_; } // 左クリック(トリガー)
+	bool IsPrimaryHeld() const { return primaryMouseHeld_; }           // 左クリック(ホールド)
+	bool IsBlockHeld() const { return secondaryMouseHeld_; }           // 右クリック(ホールド) = ガード
+	bool IsSecondaryTriggered() const { return secondaryMouseTriggered_; }
 
 private:
-	struct Button {
-		ButtonID id = kInvalidButton;
-		ButtonAABB aabb{};
-		std::unique_ptr<KamataEngine::Sprite> sprite;
-		std::string label;
-		bool visible = true;
-		bool enabled = true;
+	InputManager() = default;
+	~InputManager() = default;
+	InputManager(const InputManager&) = delete;
+	InputManager& operator=(const InputManager&) = delete;
 
-		bool isHovered = false;
-		bool isHeld = false;
-		bool wasClickedThisFrame = false;
-		float holdTimer = 0.0f;
-		bool pressStartedInside = false;
+	bool moveLeftHeld_ = false;
+	bool moveRightHeld_ = false;
 
-		std::function<void()> onClick;
-	};
+	bool jumpHeld_ = false;
+	bool jumpTriggered_ = false;
 
-	Button* FindButton(ButtonID id);
-	const Button* FindButton(ButtonID id) const;
-	static bool IsInsideAABB(const ButtonAABB& aabb, float x, float y);
-	void UpdateButtons(float mouseX, float mouseY, bool mouseDown, bool mouseTriggeredDown);
-
-	std::vector<Button> buttons_;
-	ButtonID nextButtonID_ = 0;
-
-	KamataEngine::WorldTransform worldTransform_;
-	KamataEngine::Camera* camera_ = nullptr;
-
-	std::unique_ptr<KamataEngine::Sprite> cursorSprite_ = nullptr;
+	bool weaponSwitchTriggered_ = false;
+	bool pauseTriggered_ = false;
+	bool interactTriggered_ = false;
+	bool attackUpHeld_ = false;
+	bool attackDownHeld_ = false;
 
 	KamataEngine::Vector2 mouseMovement_;
+	int mouseX_ = 0;
+	int mouseY_ = 0;
 
-	// 複数ボタン用のテクスチャ一覧
-	std::vector<uint32_t> buttonTextures_;
-
-	enum class ButtonFadeStatus { kNone, kFadeIn, kFadeOut };
-	ButtonFadeStatus buttonFadeStatus_ = ButtonFadeStatus::kNone;
-	float buttonFadeDuration_ = 0.0f;
-	float buttonFadeTimer_ = 0.0f;
-	float buttonFadeAlpha_ = 1.0f;
-
-	uint32_t clickSoundDataHandle_ = 0;
-	float clickSoundVolume_ = 1.0f;
+	bool primaryMouseTriggered_ = false;
+	bool primaryMouseHeld_ = false;
+	bool secondaryMouseHeld_ = false;
+	bool secondaryMouseTriggered_ = false;
 };

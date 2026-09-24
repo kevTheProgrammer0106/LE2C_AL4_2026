@@ -2,6 +2,7 @@
 
 #include "Fade.h"
 #include "InputManager.h"
+#include "UIMenu.h"
 #include "KamataEngine.h"
 
 class StageManager;
@@ -40,12 +41,15 @@ private:
 
 	StageManager* stageManager_ = nullptr;
 
-	InputManager menuInput_;
+
+	UIMenu menuInput_;
+
 	uint32_t buttonTex_[3] = {0, 0, 0};
 	uint32_t buttonBackTex_ = 0;
 	uint32_t cursorTex_ = 0;
-	std::vector<InputManager::ButtonID> stageButtons_;
-	InputManager::ButtonID backButton_ = InputManager::kInvalidButton;
+
+	std::vector<UIMenu::ButtonID> stageButtons_;
+	UIMenu::ButtonID backButton_ = UIMenu::kInvalidButton;
 
 	// ボタンフェードの速さ(画面フェードより素早く)
 	static inline float kButtonFadeDuration = 0.25f;

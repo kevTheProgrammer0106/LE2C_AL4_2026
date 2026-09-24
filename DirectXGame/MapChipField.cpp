@@ -46,61 +46,59 @@ TileInfo MapChipField::GetTileInfo(uint32_t xIndex, uint32_t yIndex) {
 
 	switch (type) {
 	case MapChipType::kBlock:
-		info.width = 2.0f;
-		info.height = 2.0f;
+		info.width = kBlockWidth;
+		info.height = kBlockHeight;
 		info.offset = {0.0f, 0.0f, 0.0f};
 		info.isSolid = true;
 		info.isOneWay = false;
 		return info;
 	case MapChipType::kBlockHalfUp:
-		info.width = 2.0f;
-		info.height = 1.0f;
-		info.offset = {0.0f, 0.5f, 0.0f};
+		info.width = kBlockWidth;
+		info.height = kBlockHeight * 0.5f;
+		info.offset = {0.0f, kBlockHeight * 0.25f, 0.0f};
 		info.isSolid = true;
 		return info;
 	case MapChipType::kBlockHalfDown:
-		info.width = 2.0f;
-		info.height = 1.0f;
-		info.offset = {0.0f, -0.5f, 0.0f};
+		info.width = kBlockWidth;
+		info.height = kBlockHeight * 0.5f;
+		info.offset = {0.0f, -kBlockHeight * 0.25f, 0.0f};
 		info.isSolid = true;
 		return info;
 	case MapChipType::kPlatform:
-		info.width = 2.0f;
-		info.height = 0.5f;
+		info.width = kBlockWidth;
+		info.height = kBlockHeight * 0.25f; // was 0.5f at block size 2.0
 		info.offset = {0.0f, 0.0f, 0.0f};
 		info.isSolid = true;
 		info.isOneWay = true;
 		return info;
 	case MapChipType::kSlowBlock:
-		info.width = 2.0f;
-		info.height = 2.0f;
+		info.width = kBlockWidth;
+		info.height = kBlockHeight;
 		info.offset = {0.0f, 0.0f, 0.0f};
 		info.isSolid = true;
 		info.isOneWay = false;
 		info.isSlow = true;
 		return info;
 	case MapChipType::kSwitch:
-		info.width = 1.6f;
-		info.height = 0.6f;
-		info.offset = {0.0f, -0.7f, 0.0f};
+		info.width = kBlockWidth * 0.8f;                   // was 1.6f at block size 2.0
+		info.height = kBlockHeight * 0.3f;                 // was 0.6f at block size 2.0
+		info.offset = {0.0f, -kBlockHeight * 0.35f, 0.0f}; // was -0.7f at block size 2.0
 		info.isSolid = false;
 		return info;
 	case MapChipType::kBarrier:
-		info.width = 2.0f;
-		info.height = 2.0f;
+		info.width = kBlockWidth;
+		info.height = kBlockHeight;
 		info.offset = {0.0f, 0.0f, 0.0f};
 		info.isSolid = true;
 		info.isOneWay = false;
 		return info;
 	case MapChipType::kKillBlock:
-		info.width = 2.0f;
-		info.height = 2.0f;
+		info.width = kBlockWidth;
+		info.height = kBlockHeight;
 		info.offset = {0.0f, 0.0f, 0.0f};
 		info.isSolid = false;
 		return info;
 	default:
-		// kBlank/kPlayer/kEnemy/kGoal/kPathNode/kJumpNode/kGateXxx/kArenaTrigger/kEnemySpawner/kCheckpoint:
-		// no collision, no texture — pure data markers
 		return info;
 	}
 }

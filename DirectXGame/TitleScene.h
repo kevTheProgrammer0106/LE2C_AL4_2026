@@ -4,6 +4,7 @@
 #include "InputManager.h"
 #include "KamataEngine.h"
 #include "MusicManager.h"
+#include "UIMenu.h"
 
 /// <summary>
 /// タイトルシーン(メインメニュー)
@@ -44,11 +45,12 @@ private:
 
 	NextDestination nextDestination_ = NextDestination::kNone;
 
-	InputManager menuInput_;
+	UIMenu menuInput_;
 	uint32_t buttonTex_[2] = {0, 0};
 	uint32_t cursorTex_ = 0;
-	InputManager::ButtonID startButton_ = InputManager::kInvalidButton;
-	InputManager::ButtonID levelSelectButton_ = InputManager::kInvalidButton;
+
+	UIMenu::ButtonID startButton_ = UIMenu::kInvalidButton;
+	UIMenu::ButtonID levelSelectButton_ = UIMenu::kInvalidButton;
 
 	// ボタンフェードの速さ(画面フェードより素早く)
 	static inline float kButtonFadeDuration = 0.25f;

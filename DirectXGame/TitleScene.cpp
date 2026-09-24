@@ -1,4 +1,5 @@
 #include "TitleScene.h"
+#include "InputManager.h"
 #include "MusicManager.h"
 
 using namespace KamataEngine;
@@ -73,10 +74,9 @@ void TitleScene::Update() {
 		}
 		break;
 
-	case Phase::kMain:
+case Phase::kMain:
 		menuInput_.Update();
-		// SPACEキーでも(デバッグ/コントローラー無しの簡易操作用に)ゲーム開始できるようにしておく
-		if (Input::GetInstance()->TriggerKey(DIK_SPACE)) {
+		if (InputManager::GetInstance()->IsJumpTriggered()) {
 			musicManager_.StopMenuMusic();
 			nextDestination_ = NextDestination::kGamePlay;
 			phase_ = Phase::kFadeOut;

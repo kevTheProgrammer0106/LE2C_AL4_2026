@@ -3,6 +3,7 @@
 
 #include "GameScene.h"
 #include "GlobalVariables.h"
+#include "InputManager.h"
 #include "LevelSelectScene.h"
 #include "StageManager.h"
 #include "TitleScene.h"
@@ -14,6 +15,8 @@ StageManager* stageManager = nullptr;
 
 #include <fstream>
 #include <sstream>
+#include <cstdlib>
+#include <ctime>
 
 void LoadDebugSettings() {
 	const std::string filePath = "DebugSettings.ini";
@@ -149,7 +152,7 @@ void DrawScene() {
 
 int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	using namespace KamataEngine;
-
+	std::srand(static_cast<unsigned int>(std::time(nullptr)));
 	KamataEngine::Initialize(L"歩兵ハリー");
 
 	DirectXCommon* dxCommonPtr = DirectXCommon::GetInstance();
@@ -172,6 +175,8 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	while (true) {
 		if (KamataEngine::Update())
 			break;
+
+		InputManager::GetInstance()->Update();
 
 		imguiManager->Begin();
 

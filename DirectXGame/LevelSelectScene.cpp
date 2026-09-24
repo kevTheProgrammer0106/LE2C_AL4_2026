@@ -1,4 +1,5 @@
 #include "LevelSelectScene.h"
+#include "InputManager.h"
 #include "StageManager.h"
 
 using namespace KamataEngine;
@@ -40,7 +41,7 @@ void LevelSelectScene::Initialize(StageManager* stageManager) {
 		float y = startY + static_cast<float>(stageIndex) * kButtonSpacing;
 
 		// ステージ番号に対応するテクスチャを使用する。
-		InputManager::ButtonID id = menuInput_.AddButton(static_cast<size_t>(stageIndex), centerX, y, kButtonWidth, kButtonHeight, data.name);
+		UIMenu::ButtonID id = menuInput_.AddButton(static_cast<size_t>(stageIndex), centerX, y, kButtonWidth, kButtonHeight, data.name);
 
 		int32_t capturedIndex = stageIndex;
 
@@ -90,10 +91,9 @@ void LevelSelectScene::Update() {
 		}
 		break;
 
-	case Phase::kMain:
+case Phase::kMain:
 		menuInput_.Update();
-		if (Input::GetInstance()->TriggerKey(DIK_ESCAPE)) {
-			// タイトルへの遷移: 画面フェードは行わず、ボタンだけ素早くフェードアウトする
+		if (InputManager::GetInstance()->IsPauseTriggered()) {
 			returningToMenu_ = true;
 			phase_ = Phase::kButtonFadeOut;
 			menuInput_.StartButtonFade(false, kButtonFadeDuration);

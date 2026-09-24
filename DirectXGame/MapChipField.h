@@ -113,8 +113,8 @@ public:
 	bool IsSlowAtPosition(const KamataEngine::Vector3& position);
 
 private:
-	static inline const float kBlockWidth = 2.0f;
-	static inline const float kBlockHeight = 2.0f;
+	static inline const float kBlockWidth = 1.0f;
+	static inline const float kBlockHeight = 1.0f;
 
 	uint32_t totalBlockVertical_ = kChunkBlockSize;
 	uint32_t totalBlockHorizontal_ = kChunkBlockSize;

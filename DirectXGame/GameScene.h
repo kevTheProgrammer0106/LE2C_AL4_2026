@@ -12,10 +12,10 @@
 
 #include "EnemyHUD.h"
 #include "Goal.h"
+#include "HealthBlock.h"
 #include "InputManager.h"
 #include "SlidingGate.h"
 #include "SwitchBlock.h"
-#include "HealthBlock.h"
 
 #include "Player.h"
 
@@ -44,6 +44,7 @@
 #include "ArenaManager.h"
 #include "EnemySpawner.h"
 #include "MusicManager.h"
+#include "UIMenu.h"
 
 class StageManager;
 
@@ -116,7 +117,6 @@ public:
 	// --- Checkpoint ---
 	void SetCheckpoint(const KamataEngine::Vector3& position);
 
-
 	// ============================================================
 	// Hard-coded per-stage arena configuration.
 	// No external files: every field's arena spawn tables and camera
@@ -124,15 +124,15 @@ public:
 	// (stageIndex, arenaID/linkID) at load time.
 	// ============================================================
 	struct ArenaSpawnEntry {
-		uint8_t subIDSlot;   // matches the map-chip subID painted on the 'S' tile == which "wave" this is
-		uint8_t enemyType;   // 0 = Rifleman, 1 = Cuirassier, 2 = Fighter (0xFF = undeclared/inert custom slot)
-		float interval = 5.0f;                                     // seconds between spawns for this wave
+		uint8_t subIDSlot;     // matches the map-chip subID painted on the 'S' tile == which "wave" this is
+		uint8_t enemyType;     // 0 = Rifleman, 1 = Cuirassier, 2 = Fighter (0xFF = undeclared/inert custom slot)
+		float interval = 5.0f; // seconds between spawns for this wave
 		EnemySpawner::SpawnMode mode = EnemySpawner::SpawnMode::kLimited;
-		int32_t maxSpawnCount = 3;                                 // ignored when mode == kEndless
+		int32_t maxSpawnCount = 3; // ignored when mode == kEndless
 	};
 	struct ArenaFieldConfig {
-		int32_t stageIndex; // which stage this entry applies to
-		uint8_t arenaID;  // linkID of the arena (matches 'R'/'S' linkID)
+		int32_t stageIndex;                      // which stage this entry applies to
+		uint8_t arenaID;                         // linkID of the arena (matches 'R'/'S' linkID)
 		std::vector<ArenaSpawnEntry> spawnTable; // subID -> wave config, specific to this arena
 		bool hasCameraOffsetOverride = false;
 		KamataEngine::Vector3 cameraOffsetOverride{}; // overrides ArenaManager::kCameraOffset for this arena only
@@ -181,7 +181,7 @@ private:
 
 	std::vector<std::unique_ptr<BaseEnemy>> enemies_;
 
-	//std::unique_ptr<BaseEnemy> enemyTest;
+	// std::unique_ptr<BaseEnemy> enemyTest;
 	std::unique_ptr<KamataEngine::Model> modelEnemyBody_ = nullptr;
 	std::unique_ptr<KamataEngine::Model> modelEnemyHead_ = nullptr;
 	std::unique_ptr<KamataEngine::Model> modelEnemyHat_ = nullptr;
@@ -221,23 +221,22 @@ private:
 	std::unique_ptr<KamataEngine::Model> blockModel = nullptr;
 	uint32_t blockPlatformTextureHandle = 0;
 	std::unique_ptr<KamataEngine::Model> blockPlatformModel = nullptr;
-	//uint32_t blockHalfUpHandle = 0;
-	//std::unique_ptr<KamataEngine::Model> blockHalfUpModel = nullptr;
-	//uint32_t blockHalfDownHandle = 0;
-	//std::unique_ptr<KamataEngine::Model> blockHalfDownModel = nullptr;
+	// uint32_t blockHalfUpHandle = 0;
+	// std::unique_ptr<KamataEngine::Model> blockHalfUpModel = nullptr;
+	// uint32_t blockHalfDownHandle = 0;
+	// std::unique_ptr<KamataEngine::Model> blockHalfDownModel = nullptr;
 
 	uint32_t cursorTex_[2] = {0, 0};
 
 	std::unique_ptr<MapChipField> mapChipField_ = nullptr;
 	std::vector<std::vector<BlockInstance>> worldTransformBlocks_;
 
-	//uint32_t blockDebugTextureHandle = 0;
-	//std::unique_ptr<KamataEngine::Model> blockDebugModel = nullptr;
-
+	// uint32_t blockDebugTextureHandle = 0;
+	// std::unique_ptr<KamataEngine::Model> blockDebugModel = nullptr;
 
 	std::unordered_map<uint8_t, uint32_t> blockTexVariants_;
-	//std::unordered_map<uint8_t, uint32_t> blockHalfUpTexVariants_;
-	//std::unordered_map<uint8_t, uint32_t> blockHalfDownTexVariants_;
+	// std::unordered_map<uint8_t, uint32_t> blockHalfUpTexVariants_;
+	// std::unordered_map<uint8_t, uint32_t> blockHalfDownTexVariants_;
 	std::unordered_map<uint8_t, uint32_t> platformTexVariants_;
 
 	uint32_t ResolveBlockTexture(const std::unordered_map<uint8_t, uint32_t>& table, uint8_t subID, uint32_t defaultTex) {
@@ -246,7 +245,7 @@ private:
 	}
 
 	bool reloadRequested_ = false;
-	bool restartRequested_ = false; 
+	bool restartRequested_ = false;
 	StageManager* stageManager_ = nullptr;
 
 	bool returnToMenuRequested_ = false;
@@ -257,26 +256,26 @@ private:
 	uint32_t retryButtonTex_[3] = {0, 0, 0};
 	uint32_t victoryButtonTex_[2] = {0, 0};
 
-	InputManager pauseMenuInput_;
-	InputManager::ButtonID pauseResumeButton_ = InputManager::kInvalidButton;
-	InputManager::ButtonID pauseRetryButton_ = InputManager::kInvalidButton;
-	InputManager::ButtonID pauseMainMenuButton_ = InputManager::kInvalidButton;
+	UIMenu pauseMenuInput_;
+	UIMenu::ButtonID pauseResumeButton_ = UIMenu::kInvalidButton;
+	UIMenu::ButtonID pauseRetryButton_ = UIMenu::kInvalidButton;
+	UIMenu::ButtonID pauseMainMenuButton_ = UIMenu::kInvalidButton;
 
-	InputManager gameplayHUDInput_;
-	InputManager::ButtonID inGamePauseButton_ = InputManager::kInvalidButton;
+	UIMenu gameplayHUDInput_;
+	UIMenu::ButtonID inGamePauseButton_ = UIMenu::kInvalidButton;
 	uint32_t inGamePauseButtonTex_ = 0;
 	void InitializeInGamePauseButton();
 	void UpdateInGamePauseButton();
 	void DrawInGamePauseButton();
 
-	InputManager retryMenuInput_;
-	InputManager::ButtonID retryButton_ = InputManager::kInvalidButton;
-	InputManager::ButtonID restartButton_ = InputManager::kInvalidButton; 
-	InputManager::ButtonID retryMainMenuButton_ = InputManager::kInvalidButton;
+	UIMenu retryMenuInput_;
+	UIMenu::ButtonID retryButton_ = UIMenu::kInvalidButton;
+	UIMenu::ButtonID restartButton_ = UIMenu::kInvalidButton;
+	UIMenu::ButtonID retryMainMenuButton_ = UIMenu::kInvalidButton;
 
-	InputManager victoryMenuInput_;
-	InputManager::ButtonID victoryRestartButton_ = InputManager::kInvalidButton;
-	InputManager::ButtonID victoryMainMenuButton_ = InputManager::kInvalidButton;
+	UIMenu victoryMenuInput_;
+	UIMenu::ButtonID victoryRestartButton_ = UIMenu::kInvalidButton;
+	UIMenu::ButtonID victoryMainMenuButton_ = UIMenu::kInvalidButton;
 	std::unique_ptr<KamataEngine::Sprite> victoryOverlay_;
 
 	static inline float kButtonFadeDuration = 0.25f;
@@ -303,7 +302,7 @@ private:
 
 	std::vector<std::unique_ptr<BaseProjectile>> firearmProjectiles_;
 
-	InputManager cursor_;
+	UIMenu cursor_;
 
 	EnemyHUD enemyHUD_;
 	uint32_t enemyIconRiflemanTex_ = 0;
@@ -320,7 +319,7 @@ private:
 	uint32_t gateTex_ = 0;
 
 	std::vector<std::unique_ptr<DroppableItem>> droppableItems_;
-	std::vector<DroppableItem*> pendingPickups_; 
+	std::vector<DroppableItem*> pendingPickups_;
 
 	struct EnemySpawnPoint {
 		KamataEngine::Vector3 position;
@@ -336,7 +335,7 @@ private:
 
 	std::unique_ptr<MapChipField> backgroundMapChipField_ = nullptr;
 	std::vector<std::vector<BlockInstance>> worldTransformBackgroundBlocks_;
-	static inline float kBackgroundDepthOffset = 6.0f;
+	static inline float kBackgroundDepthOffset = 2.0f;
 	void GenerateBackgroundChunkTileMap(uint32_t chunkX, uint32_t chunkY);
 
 	uint32_t loadedTopChunkRow_ = MapChipField::kGroundChunkRow;
@@ -376,7 +375,6 @@ private:
 		uint8_t arenaID;
 	};
 	std::vector<ArenaCameraPoint> arenaCameraPoints_;
-
 
 	// --- Checkpoint ---
 	struct CheckpointTriggerPoint {

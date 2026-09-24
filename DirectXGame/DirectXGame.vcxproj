@@ -227,6 +227,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClCompile Include="StageManager.cpp" />
     <ClCompile Include="SwitchBlock.cpp" />
     <ClCompile Include="TitleScene.cpp" />
+    <ClCompile Include="UIMenu.cpp" />
     <ClCompile Include="UserInterfaceGameplayHUD.cpp" />
     <ClCompile Include="VisionSensor.cpp" />
     <ClCompile Include="WeaponHeavySabre.cpp" />
@@ -281,6 +282,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClInclude Include="StageManager.h" />
     <ClInclude Include="SwitchBlock.h" />
     <ClInclude Include="TitleScene.h" />
+    <ClInclude Include="UIMenu.h" />
     <ClInclude Include="UserInterfaceGameplayHUD.h" />
     <ClInclude Include="VisionSensor.h" />
     <ClInclude Include="WeaponHeavySabre.h" />

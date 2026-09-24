@@ -2,6 +2,7 @@
 
 #include "GameScene.h"
 #include "GlobalVariables.h"
+#include "InputManager.h"
 #include "StageManager.h"
 #include <fstream>
 
@@ -189,9 +190,9 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	modelEnemyBody_.reset(Model::CreateFromOBJ("riflemanBody", true));
 	modelEnemyHead_.reset(Model::CreateFromOBJ("riflemanHead", true));
 	modelEnemyHat_.reset(Model::CreateFromOBJ("riflemanHat", true));
-	enemyBodyTex_ = TextureManager::Load("./Resources/riflemanBody/enemyOutfit.png");
-	enemyHeadTex_ = TextureManager::Load("./Resources/riflemanHead/enemyOutfit.png");
-	enemyHatTex_ = TextureManager::Load("./Resources/riflemanHat/enemyOutfit.png");
+	enemyBodyTex_ = TextureManager::Load("./Resources/riflemanBody/riflemanTorso.png");
+	enemyHeadTex_ = TextureManager::Load("./Resources/riflemanHead/riflemanHead.png");
+	enemyHatTex_ = TextureManager::Load("./Resources/riflemanHat/riflemanShako.png");
 
 
 	deathParticles_ = std::make_unique<DeathParticles>();
@@ -302,10 +303,11 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 		musicManager_.Initialize(ingameMusicSoundDataHandle_, arenaMusicSoundDataHandle_);
 		musicManager_.StopMenuMusic(); 
 	}
+	blockTextureHandle = TextureManager::Load("./Resources/blockModel/grassBlock.png"); 
 	blockTexVariants_[0] = blockTextureHandle;
 	platformTexVariants_[0] = blockPlatformTextureHandle;
 
-	blockModel.reset(Model::CreateFromOBJ("block"));
+	blockModel.reset(Model::CreateFromOBJ("blockModel"));
 	blockPlatformTextureHandle = TextureManager::Load("./Resources/platform/block.png");
 	blockPlatformModel.reset(Model::CreateFromOBJ("platform"));
 
@@ -1023,11 +1025,16 @@ void GameScene::GenerateBackgroundChunkTileMap(uint32_t chunkX, uint32_t chunkY)
 			}
 			worldTransform->translation_ = backgroundMapChipField_->GetMapChipPositionByIndex(j, i);
 			worldTransform->translation_.z += kBackgroundDepthOffset;
-			worldTransformBackgroundBlocks_[i][j] = {worldTransform, blockModel.get(), blockTextureHandle};
+
+			WorldTransformUpdate(*worldTransform);
+
+			uint8_t subID = backgroundMapChipField_->GetMapChipSubIDByIndex(j, i);
+			uint32_t tex = ResolveBlockTexture(blockTexVariants_, subID, blockTextureHandle);
+
+			worldTransformBackgroundBlocks_[i][j] = {worldTransform, blockModel.get(), tex};
 		}
 	}
 }
-
 void GameScene::Update() {
 	cursor_.UpdateCursor();
 
@@ -1070,7 +1077,7 @@ void GameScene::Update() {
 	{
 		cursor_.UpdateCursor();
 	}
-	if (Input::GetInstance()->TriggerKey(DIK_ESCAPE)) {
+	if (InputManager::GetInstance()->IsPauseTriggered()) {
 		if (phase_ == Phase::kPlay) {
 			phaseBeforePause_ = phase_;
 			phase_ = Phase::kPause;
@@ -1111,6 +1118,40 @@ void GameScene::Update() {
 	UpdatePeriodicEnemySpawners();
 	UpdateHealthBlocks();
 	musicManager_.Update();
+#ifdef _DEBUG
+	if (isDebugCameraActive_) {
+		PrimitiveDrawer::GetInstance()->SetCamera(&debugCamera_->GetCamera());
+		// 座標軸表示を有効化
+		AxisIndicator::GetInstance()->SetVisible(true);
+		// 注視するカメラをセット
+		AxisIndicator::GetInstance()->SetTargetCamera(&debugCamera_->GetCamera());
+	} else {
+		PrimitiveDrawer::GetInstance()->SetCamera(&camera_);
+		// 座標軸表示を有効化
+		AxisIndicator::GetInstance()->SetVisible(true);
+		// 注視するカメラをセット
+		AxisIndicator::GetInstance()->SetTargetCamera(&camera_);
+	}
+	if (Input::GetInstance()->TriggerKey(DIK_P)) {
+		if (isDebugCameraActive_) {
+			// デバッグカメラを非アクティブ化
+			isDebugCameraActive_ = false;
+			cameraController_->Reset(); // カメラコントローラーをリセットしてプレイヤーに追従させる
+		} else {
+			isDebugCameraActive_ = true;
+		}
+	}
+	if (isDebugCameraActive_) {
+		debugCamera_->Update();
+		camera_.matView = debugCamera_->GetCamera().matView;
+		camera_.matProjection = debugCamera_->GetCamera().matProjection;
+		// ビュープロジェクション行列の転送
+		camera_.TransferMatrix();
+	} else {
+		// ビュープロジェクション行列の更新と転送
+		camera_.UpdateMatrix();
+	}
+#endif
 }
 
 void GameScene::CheckAllCollisions() {
@@ -1343,7 +1384,7 @@ void GameScene::Draw() {
 		for (auto& [model, instances] : byModelBg) {
 			model->PreDraw();
 			for (BlockInstance* b : instances)
-				model->Draw(*b->transform, camera_, b->textureHandle, &backgroundTint);
+				model->Draw(*b->transform, camera_, b->textureHandle);
 			model->PostDraw();
 		}
 	}

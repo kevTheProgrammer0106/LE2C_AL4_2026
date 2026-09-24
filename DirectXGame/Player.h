@@ -4,6 +4,7 @@
 #include "BlockDetector.h"
 #include "Global.h"
 #include "PlayerBehavior.h"
+#include "InputManager.h"
 
 #include "FirearmMusket.h"
 #include "ProjectileBall.h"
@@ -96,7 +97,7 @@ public:
 	WeaponMode GetWeaponMode() const { return weaponMode_; }
 	void SetWeaponMode(WeaponMode mode);
 
-	bool IsMovingHorizontally() const { return KamataEngine::Input::GetInstance()->PushKey(DIK_D) || KamataEngine::Input::GetInstance()->PushKey(DIK_A); }
+	bool IsMovingHorizontally() const { return InputManager::GetInstance()->IsMoveRightHeld() || InputManager::GetInstance()->IsMoveLeftHeld(); }
 	KamataEngine::Vector2 GetEffectiveAimDir() const;
 
 	friend class PlayerBehavior;

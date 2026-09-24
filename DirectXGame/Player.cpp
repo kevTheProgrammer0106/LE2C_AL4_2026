@@ -144,8 +144,8 @@ void Player::SetWeaponMode(WeaponMode mode) {
 		currentMelee_->SetWeaponState(weaponMode_ == WeaponMode::kMelee ? WeaponState::kEquipped : WeaponState::kHolstered);
 }
 Vector2 Player::ComputeMouseAimDir() const {
-	auto mouse = Input::GetInstance()->GetMousePosition();
-	Vector2 mouseScreen = {static_cast<float>(mouse.x), static_cast<float>(mouse.y)};
+	InputManager* input = InputManager::GetInstance();
+	Vector2 mouseScreen = {static_cast<float>(input->GetMouseX()), static_cast<float>(input->GetMouseY())};
 	Vector3 origin = GetWorldPosition();
 	Matrix4x4 matViewport = MakeViewportMatrix(0.0f, 0.0f, static_cast<float>(WinApp::kWindowWidth), static_cast<float>(WinApp::kWindowHeight), 0.0f, 1.0f);
 	Matrix4x4 matVPV = Multiply(camera_->matView, Multiply(camera_->matProjection, matViewport));
@@ -194,7 +194,7 @@ void Player::UpdateMovementState() {
 void Player::UseFirearm() {
 	if (!currentFirearm_ || weaponMode_ != WeaponMode::kFirearm)
 		return;
-	if (!Input::GetInstance()->IsTriggerMouse(0))
+	if (!InputManager::GetInstance()->IsPrimaryTriggered())
 		return;
 	if (!currentFirearm_->TryFire())
 		return;
@@ -205,7 +205,7 @@ void Player::UseFirearm() {
 	if (gameScene_) {
 		gameScene_->CreateFirearmProjectile(Owner::kPlayer, origin, aimDir);
 		Vector3 muzzlePos = origin;
-		gameScene_->CreateMuzzleFlash(muzzlePos); 
+		gameScene_->CreateMuzzleFlash(muzzlePos);
 		BaseFirearm::PlayFireSound();
 	}
 	currentFirearm_->TriggerRecoil(lrDirection_ == LRDirection::kRight);
@@ -213,12 +213,12 @@ void Player::UseFirearm() {
 void Player::UseMeleeWeapon() {
 	if (weaponMode_ != WeaponMode::kMelee)
 		return;
-	if (Input::GetInstance()->IsTriggerMouse(0)) {
+	if (InputManager::GetInstance()->IsPrimaryTriggered()) {
 		currentMelee_->SetWeaponState(WeaponState::kEquipped);
 		PlayerBehavior::AttackDirection direction = PlayerBehavior::AttackDirection::kSide;
-		if (Input::GetInstance()->PushKey(DIK_W))
+		if (InputManager::GetInstance()->IsAttackUpHeld())
 			direction = PlayerBehavior::AttackDirection::kUp;
-		else if (Input::GetInstance()->PushKey(DIK_S))
+		else if (InputManager::GetInstance()->IsAttackDownHeld())
 			direction = PlayerBehavior::AttackDirection::kDown;
 		behavior_.RequestAttack(direction);
 	}
@@ -228,12 +228,12 @@ void Player::Update() {
 	if (currentFirearm_)
 		currentFirearm_->TickRecoil();
 
-if (!controlLocked_) {
-		if (Input::GetInstance()->TriggerKey(DIK_Q)) {
+	if (!controlLocked_) {
+		if (InputManager::GetInstance()->IsWeaponSwitchTriggered()) {
 			SetWeaponMode(weaponMode_ == WeaponMode::kMelee ? WeaponMode::kFirearm : WeaponMode::kMelee);
-			PlaySfxHandle(sWeaponSwitchSoundHandle_); 
+			PlaySfxHandle(sWeaponSwitchSoundHandle_);
 		}
-		bool isBlockingNow = Input::GetInstance()->IsPressMouse(1);
+		bool isBlockingNow = InputManager::GetInstance()->IsBlockHeld();
 		if (isBlockingNow && !behavior_.IsAttacking()) {
 			Vector2 aimDir = ComputeMouseAimDir();
 			AimFacing aim = ComputeAimFacing(aimDir, lrDirection_ == LRDirection::kRight);
@@ -301,6 +301,8 @@ AABB Player::GetAABB() {
 	return aabb;
 }
 void Player::GroundMovement() {
+	InputManager* input = InputManager::GetInstance();
+
 	if (!onGround_) {
 		velocity_ += Vector3(0, -kGravityAcceleration, 0);
 		velocity_.y = std::max(velocity_.y, -kLimitFallSpeed);
@@ -311,9 +313,9 @@ void Player::GroundMovement() {
 		if (mapChipField_->IsSlowAtPosition(footPos))
 			speedFactor = MapChipField::kSlowSpeedFactor;
 	}
-	if (Input::GetInstance()->PushKey(DIK_D) || Input::GetInstance()->PushKey(DIK_A)) {
+	if (input->IsMoveRightHeld() || input->IsMoveLeftHeld()) {
 		Vector3 acceleration = {};
-		if (Input::GetInstance()->PushKey(DIK_D)) {
+		if (input->IsMoveRightHeld()) {
 			if (velocity_.x < 0.0f)
 				velocity_.x *= (1.0f - kAttenuation);
 			acceleration.x += kAcceleration * speedFactor;
@@ -322,7 +324,7 @@ void Player::GroundMovement() {
 				turnFirstRotationY_ = worldTransform_.rotation_.y;
 				turnTimer_ = kTimeTurn;
 			}
-		} else if (Input::GetInstance()->PushKey(DIK_A)) {
+		} else if (input->IsMoveLeftHeld()) {
 			if (velocity_.x > 0.0f)
 				velocity_.x *= (1.0f - kAttenuation);
 			acceleration.x -= kAcceleration * speedFactor;
@@ -345,7 +347,7 @@ void Player::GroundMovement() {
 	}
 }
 void Player::JumpMovement() {
-	if (onGround_ && Input::GetInstance()->PushKey(DIK_SPACE))
+	if (onGround_ && InputManager::GetInstance()->IsJumpHeld())
 		velocity_ += Vector3(0, kJumpAcceleration, 0);
 }
 
