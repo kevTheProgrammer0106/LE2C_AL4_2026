@@ -148,24 +148,25 @@ void EnemyRifleman::ShootFirearm() {
 
 AABB EnemyRifleman::GetBayonetLungeAABB() const {
 	constexpr float kOverlapMargin = 0.1f;
-	constexpr float kOwnerHalfWidth = 0.4f;
 	constexpr float kBayonetReach = 1.3f;
-	constexpr float kBayonetHeight = 1.0f;
+	constexpr float kBayonetHeightRatio = 0.625f; // 1.0 / 1.6 with the default body height
+	const float ownerHalfWidth = kWidth * 0.5f;
+	const float bayonetHeight = kHeight * kBayonetHeightRatio;
 
 	Vector3 pos = GetWorldPosition();
 	bool facingRight = isRight();
 
 	AABB aabb;
 	if (facingRight) {
-		aabb.min.x = pos.x + kOwnerHalfWidth - kOverlapMargin;
-		aabb.max.x = pos.x + kOwnerHalfWidth + kBayonetReach;
+		aabb.min.x = pos.x + ownerHalfWidth - kOverlapMargin;
+		aabb.max.x = pos.x + ownerHalfWidth + kBayonetReach;
 	} else {
-		aabb.min.x = pos.x - kOwnerHalfWidth - kBayonetReach;
-		aabb.max.x = pos.x - kOwnerHalfWidth + kOverlapMargin;
+		aabb.min.x = pos.x - ownerHalfWidth - kBayonetReach;
+		aabb.max.x = pos.x - ownerHalfWidth + kOverlapMargin;
 	}
-	aabb.min.y = pos.y - kBayonetHeight * 0.5f;
-	aabb.max.y = pos.y + kBayonetHeight * 0.5f;
-	aabb.min.z = pos.z - kOwnerHalfWidth;
-	aabb.max.z = pos.z + kOwnerHalfWidth;
+	aabb.min.y = pos.y - bayonetHeight * 0.5f;
+	aabb.max.y = pos.y + bayonetHeight * 0.5f;
+	aabb.min.z = pos.z - ownerHalfWidth;
+	aabb.max.z = pos.z + ownerHalfWidth;
 	return aabb;
 }

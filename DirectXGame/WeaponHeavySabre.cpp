@@ -1,4 +1,5 @@
 #include "WeaponHeavySabre.h"
+#include "BaseEnemy.h"
 #include "GlobalVariables.h"
 
 using namespace KamataEngine;
@@ -19,8 +20,8 @@ void WeaponHeavySabre::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "LungeReach", kLungeReach);
 	gv->AddItem(kGroupName, "HolsterOffsetTranslation", holsterOffset_.translation);
 	gv->AddItem(kGroupName, "HolsterOffsetRotation", holsterOffset_.rotation);
-	gv->AddItem(kGroupName, "LungeDamage", kLungeDamage);           // [NEW]
-	gv->AddItem(kGroupName, "LungeImpactPower", kLungeImpactPower); // [NEW]
+	gv->AddItem(kGroupName, "LungeDamage", kLungeDamage);
+	gv->AddItem(kGroupName, "LungeImpactPower", kLungeImpactPower);
 }
 
 void WeaponHeavySabre::ApplyGlobalVariables() {
@@ -49,23 +50,23 @@ AABB WeaponHeavySabre::GetAABB() const {
 
 AABB WeaponHeavySabre::GetSwingAABBGeneric(const Vector3& ownerPosition, bool facingRight, int comboIndex) const {
 	constexpr float kOverlapMargin = 0.1f;
-	constexpr float kOwnerHalfWidth = 0.4f;
+	const float ownerHalfWidth = BaseEnemy::GetBodyWidth() * 0.5f;
 
 	float reach = kComboReach[comboIndex];
 	float swingHeight = kComboSwingHeight[comboIndex];
 
 	AABB aabb;
 	if (facingRight) {
-		aabb.min.x = ownerPosition.x + kOwnerHalfWidth - kOverlapMargin;
-		aabb.max.x = ownerPosition.x + kOwnerHalfWidth + reach;
+		aabb.min.x = ownerPosition.x + ownerHalfWidth - kOverlapMargin;
+		aabb.max.x = ownerPosition.x + ownerHalfWidth + reach;
 	} else {
-		aabb.min.x = ownerPosition.x - kOwnerHalfWidth - reach;
-		aabb.max.x = ownerPosition.x - kOwnerHalfWidth + kOverlapMargin;
+		aabb.min.x = ownerPosition.x - ownerHalfWidth - reach;
+		aabb.max.x = ownerPosition.x - ownerHalfWidth + kOverlapMargin;
 	}
 	aabb.min.y = ownerPosition.y - swingHeight * 0.5f;
 	aabb.max.y = ownerPosition.y + swingHeight * 0.5f;
-	aabb.min.z = ownerPosition.z - kOwnerHalfWidth;
-	aabb.max.z = ownerPosition.z + kOwnerHalfWidth;
+	aabb.min.z = ownerPosition.z - ownerHalfWidth;
+	aabb.max.z = ownerPosition.z + ownerHalfWidth;
 	return aabb;
 }
 
@@ -173,20 +174,22 @@ void WeaponHeavySabre::SetLungePositionGeneric(const Vector3& ownerPosition, con
 // WeaponHeavySabre.cpp
 AABB WeaponHeavySabre::GetLungeAABBGeneric(const Vector3& ownerPosition, bool facingRight) const {
 	constexpr float kOverlapMargin = 0.1f;
-	constexpr float kOwnerHalfWidth = 0.4f;
-	constexpr float kLungeHeight = 1.4f;
+	// 1.4 / 1.6 with the default body height: same value as before, but now scales with the body.
+	constexpr float kLungeHeightRatio = 0.875f;
+	const float ownerHalfWidth = BaseEnemy::GetBodyWidth() * 0.5f;
+	const float lungeHeight = BaseEnemy::GetBodyHeight() * kLungeHeightRatio;
 
 	AABB aabb;
 	if (facingRight) {
-		aabb.min.x = ownerPosition.x + kOwnerHalfWidth - kOverlapMargin;
-		aabb.max.x = ownerPosition.x + kOwnerHalfWidth + kLungeReach;
+		aabb.min.x = ownerPosition.x + ownerHalfWidth - kOverlapMargin;
+		aabb.max.x = ownerPosition.x + ownerHalfWidth + kLungeReach;
 	} else {
-		aabb.min.x = ownerPosition.x - kOwnerHalfWidth - kLungeReach;
-		aabb.max.x = ownerPosition.x - kOwnerHalfWidth + kOverlapMargin;
+		aabb.min.x = ownerPosition.x - ownerHalfWidth - kLungeReach;
+		aabb.max.x = ownerPosition.x - ownerHalfWidth + kOverlapMargin;
 	}
-	aabb.min.y = ownerPosition.y - kLungeHeight * 0.5f;
-	aabb.max.y = ownerPosition.y + kLungeHeight * 0.5f;
-	aabb.min.z = ownerPosition.z - kOwnerHalfWidth;
-	aabb.max.z = ownerPosition.z + kOwnerHalfWidth;
+	aabb.min.y = ownerPosition.y - lungeHeight * 0.5f;
+	aabb.max.y = ownerPosition.y + lungeHeight * 0.5f;
+	aabb.min.z = ownerPosition.z - ownerHalfWidth;
+	aabb.max.z = ownerPosition.z + ownerHalfWidth;
 	return aabb;
 }

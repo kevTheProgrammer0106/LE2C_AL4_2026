@@ -4,7 +4,6 @@
 #include "BlockDetector.h"
 #include "Global.h"
 #include "PlayerBehavior.h"
-#include "InputManager.h"
 
 #include "FirearmMusket.h"
 #include "ProjectileBall.h"
@@ -17,6 +16,7 @@ class MapChipField;
 class Player {
 public:
 	~Player();
+
 	void KillInstant();
 	static void RegisterGlobalVariables();
 	static void ApplyGlobalVariables();
@@ -26,7 +26,7 @@ public:
 	    const KamataEngine::Vector3& position);
 	void Update();
 	void Draw();
-	
+
 	void SetGameScene(GameScene* gameScene) { gameScene_ = gameScene; }
 	void SetMapChipField(MapChipField* mapChipField) { mapChipField_ = mapChipField; }
 
@@ -39,7 +39,8 @@ public:
 	void SetWorldTransform(const KamataEngine::WorldTransform& worldTransform);
 	KamataEngine::Vector3 GetWorldPosition() const;
 	const KamataEngine::Vector3& GetVelocity() const { return velocity_; }
-	void ResetVelocity() { velocity_ = {}; } // [NEW]
+	void ResetVelocity() { velocity_ = {}; }
+
 	AABB GetAABB();
 
 	void MapChipCollisionUpdate();
@@ -68,9 +69,6 @@ public:
 	void OnCollision();
 
 	bool isDead() const { return isDead_; }
-
-
-
 	bool isAttack() const { return behavior_.IsAttacking(); }
 
 	int GetComboIndex() const { return behavior_.GetComboIndex(); }
@@ -97,7 +95,7 @@ public:
 	WeaponMode GetWeaponMode() const { return weaponMode_; }
 	void SetWeaponMode(WeaponMode mode);
 
-	bool IsMovingHorizontally() const { return InputManager::GetInstance()->IsMoveRightHeld() || InputManager::GetInstance()->IsMoveLeftHeld(); }
+	bool IsMovingHorizontally() const { return KamataEngine::Input::GetInstance()->PushKey(DIK_D) || KamataEngine::Input::GetInstance()->PushKey(DIK_A); }
 	KamataEngine::Vector2 GetEffectiveAimDir() const;
 
 	friend class PlayerBehavior;
@@ -128,8 +126,48 @@ public:
 	void SetControlLocked(bool locked) { controlLocked_ = locked; }
 	bool IsControlLocked() const { return controlLocked_; }
 
+	// ============================================================
+	//  Debuff status / control (used by GameScene::debugMenu, usable from gameplay too)
+	// ============================================================
+	struct DebuffStatus {
+		bool stunned = false;
+		float stunRemaining = 0.0f;
+
+		bool knockedBack = false;
+
+		bool slowedByTerrain = false; // standing on a kSlowBlock
+		bool slowedByEffect = false;  // timed/latched Slow applied via ApplySlow()
+		float slowFactor = 1.0f;      // effect factor (1.0 = none)
+		float slowRemaining = 0.0f;   // seconds left (ignored if slowUntilCleared)
+		bool slowUntilCleared = false;
+
+		bool controlLocked = false;
+
+		bool beingPushed = false; // forced-scroll push (display only)
+		float pushVelocityX = 0.0f;
+		uint32_t squishTimer = 0;
+	};
+	DebuffStatus GetDebuffStatus() const;
+	bool HasAnyDebuff() const;
+
+	// duration <= 0 -> stays until ClearSlow()/ClearAllDebuffs()
+	void ApplySlow(float factor, float duration);
+	void ClearSlow();
+	void ClearStun() { behavior_.ClearStun(); }
+	void ClearKnockback() { behavior_.ClearKnockback(); }
+	// Instantly removes stun, knockback, slow effect, control lock and squish progress.
+	void ClearAllDebuffs();
+
 private:
-	bool controlLocked_ = false; // [NEW]
+	bool controlLocked_ = false; 
+
+	// Slow effect state
+	bool slowActive_ = false;
+	bool slowUntilCleared_ = false;
+	float slowFactor_ = 1.0f;
+	float slowTimer_ = 0.0f;
+	void TickDebuffs();
+	bool IsOnSlowTerrain() const;
 
 	DropWeaponKind currentMeleeKind_ = DropWeaponKind::kSabreLight;
 	DropWeaponKind currentFirearmKind_ = DropWeaponKind::kMusketLong;
@@ -221,7 +259,8 @@ private:
 	static inline float kAttenuationCeilling = 0.2f;
 
 	bool isDead_ = false;
-	// --- SFX ---
+
+		// --- SFX ---
 	static inline uint32_t sWeaponSwitchSoundHandle_ = 0;
 	static inline float sSfxVolume_ = 1.0f;
 	static void PlaySfxHandle(uint32_t handle) {

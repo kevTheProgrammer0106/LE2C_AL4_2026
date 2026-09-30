@@ -45,6 +45,7 @@
 #include "EnemySpawner.h"
 #include "MusicManager.h"
 #include "UIMenu.h"
+#include "GameAssets.h"
 
 class StageManager;
 
@@ -148,11 +149,13 @@ public:
 	static bool GetArenaCameraOffsetOverride(int32_t stageIndex, uint8_t arenaID, KamataEngine::Vector3& outOffset);
 
 private:
+	static constexpr float kBlockScale = 1.0f;
+	static constexpr float kChunkWorldWidth = MapChipField::kChunkBlockSize * kBlockScale;
+	static constexpr float kChunkWorldHeight = MapChipField::kChunkBlockSize * kBlockScale;
 	uint32_t maxFieldChunks_ = 1;
 	uint32_t loadedChunkCount_ = 0;
 	uint32_t oldestLoadedChunk_ = 0;
 	bool levelCleared_ = false;
-	static inline float kChunkWorldWidth = MapChipField::kChunkBlockSize * 2.0f;
 	static inline float kChunkLoadTriggerMargin = 24.0f;
 
 	std::vector<std::unique_ptr<SwitchBlock>> switches_;
@@ -337,15 +340,13 @@ private:
 	std::vector<std::vector<BlockInstance>> worldTransformBackgroundBlocks_;
 	static inline float kBackgroundDepthOffset = 2.0f;
 	void GenerateBackgroundChunkTileMap(uint32_t chunkX, uint32_t chunkY);
-
 	uint32_t loadedTopChunkRow_ = MapChipField::kGroundChunkRow;
 	uint32_t loadedBottomChunkRow_ = MapChipField::kGroundChunkRow;
-	static inline float kChunkWorldHeight = MapChipField::kChunkBlockSize * 2.0f;
 	static inline float kVerticalChunkLoadTriggerMargin = 24.0f;
 	void LoadVerticalRow(uint32_t row);
 	bool usesVerticalRows_ = false;
 
-	std::set<std::pair<uint32_t, uint32_t>> generatedChunkRows_; // [NEW] guards against duplicate generation
+	std::set<std::pair<uint32_t, uint32_t>> generatedChunkRows_; 
 
 	InteractionPrompt interactionPrompt_;
 	uint32_t interactionPromptTex_ = 0;
@@ -409,4 +410,7 @@ private:
 	uint32_t sfxGateOpenHandle_ = 0;
 	uint32_t sfxGoalReachedHandle_ = 0;
 	uint32_t sfxItemPickupHandle_ = 0;
+
+	void DrawCollisionDebug();
+	bool showCollisionDebug_ = true;
 };

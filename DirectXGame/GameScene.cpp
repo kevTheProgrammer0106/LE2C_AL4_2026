@@ -4,6 +4,7 @@
 #include "GlobalVariables.h"
 #include "InputManager.h"
 #include "StageManager.h"
+#include "DebugCollisionDraw.h"
 #include <fstream>
 
 using namespace KamataEngine;
@@ -17,26 +18,22 @@ constexpr const char* kGroupName = "GameScene";
 void GameScene::RegisterGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
 	gv->CreateGroup(kGroupName);
-	gv->AddItem(kGroupName, "ChunkWorldWidth", kChunkWorldWidth);
 	gv->AddItem(kGroupName, "ChunkLoadTriggerMargin", kChunkLoadTriggerMargin);
 	gv->AddItem(kGroupName, "LoadingCoverFadeOutDuration", kLoadingCoverFadeOutDuration);
 	gv->AddItem(kGroupName, "EnemySpawnActivateDistance", kEnemySpawnActivateDistance);
 	gv->AddItem(kGroupName, "EntityCullDistance", kEntityCullDistance);
 	gv->AddItem(kGroupName, "BackgroundDepthOffset", kBackgroundDepthOffset);
-	gv->AddItem(kGroupName, "ChunkWorldHeight", kChunkWorldHeight);
 	gv->AddItem(kGroupName, "VerticalChunkLoadTriggerMargin", kVerticalChunkLoadTriggerMargin);
 	gv->AddItem(kGroupName, "InteractionRange", kInteractionRange);
 }
 
 void GameScene::ApplyGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
-	kChunkWorldWidth = gv->GetFloatValue(kGroupName, "ChunkWorldWidth");
 	kChunkLoadTriggerMargin = gv->GetFloatValue(kGroupName, "ChunkLoadTriggerMargin");
 	kLoadingCoverFadeOutDuration = gv->GetFloatValue(kGroupName, "LoadingCoverFadeOutDuration");
 	kEnemySpawnActivateDistance = gv->GetFloatValue(kGroupName, "EnemySpawnActivateDistance");
 	kEntityCullDistance = gv->GetFloatValue(kGroupName, "EntityCullDistance");
 	kBackgroundDepthOffset = gv->GetFloatValue(kGroupName, "BackgroundDepthOffset");
-	kChunkWorldHeight = gv->GetFloatValue(kGroupName, "ChunkWorldHeight");
 	kVerticalChunkLoadTriggerMargin = gv->GetFloatValue(kGroupName, "VerticalChunkLoadTriggerMargin");
 	kInteractionRange = gv->GetFloatValue(kGroupName, "InteractionRange");
 }
@@ -62,6 +59,14 @@ void GameScene::debugMenu() {
 		stageManager_->SetCurrentStageIndex(3);
 		reloadRequested_ = true;
 	}
+	if (ImGui::Button("ResetHP")) {
+		player_->SetHP(100);
+		player_->SetMaxHP(100);
+	}
+	if (ImGui::Button("SetDebugHP")) {
+		player_->SetMaxHP(9999);
+		player_->SetHP(9999);
+	}
 	if (ImGui::Button("Spawn Guard Effect")) {
 		Vector3 p = player_->GetWorldPosition();
 		CreateGuardEffect(p);
@@ -70,11 +75,118 @@ void GameScene::debugMenu() {
 		Vector3 p = player_->GetWorldPosition();
 		CreateHitEffect(p);
 	}
+	if (ImGui::Button("Spawn Rifleman")) {
+		if (player_) {
+			Vector3 p = player_->GetWorldPosition();
+			p.x += 2.0f;
+
+			SpawnEnemyAt(p, 0);
+		}
+	}
+	if (ImGui::Button("Spawn Fighter")) {
+		if (player_) {
+			Vector3 p = player_->GetWorldPosition();
+			p.x -= 2.0f;
+
+			SpawnEnemyAt(p, 2);
+		}
+	}
+	if (ImGui::Button("Spawn Cuirassier")) {
+		if (player_) {
+			Vector3 p = player_->GetWorldPosition();
+			p.x -= 2.0f;
+
+			SpawnEnemyAt(p, 1);
+		}
+	}
 	if (ImGui::Button("Add Limited Rifleman Spawner (x3, every 4s)")) {
 		AddEnemySpawner(player_->GetWorldPosition(), 0, 4.0f, EnemySpawner::SpawnMode::kLimited, 3, false);
 	}
 	if (ImGui::Button("Add Endless Cuirassier Spawner (every 8s, omniscient)")) {
 		AddEnemySpawner(player_->GetWorldPosition(), 1, 8.0f, EnemySpawner::SpawnMode::kEndless, -1, true);
+	}
+	if (player_) {
+		ImGui::Begin("Player Debuffs");
+
+		const ImVec4 kOn = {1.0f, 0.45f, 0.25f, 1.0f};
+		const ImVec4 kOff = {0.55f, 0.55f, 0.55f, 1.0f};
+		Player::DebuffStatus s = player_->GetDebuffStatus();
+
+		ImGui::Text("Active: %s", player_->HasAnyDebuff() ? "YES" : "none");
+		ImGui::Separator();
+
+		// --- Status ---
+		if (s.stunned)
+			ImGui::TextColored(kOn, "Stun: %.2fs left", s.stunRemaining);
+		else
+			ImGui::TextColored(kOff, "Stun: -");
+
+		ImGui::TextColored(s.knockedBack ? kOn : kOff, "Knockback: %s", s.knockedBack ? "ACTIVE" : "-");
+
+		ImGui::TextColored(s.slowedByTerrain ? kOn : kOff, "Slow (terrain): %s (x%.2f)", s.slowedByTerrain ? "ACTIVE" : "-", MapChipField::kSlowSpeedFactor);
+
+		if (s.slowedByEffect) {
+			if (s.slowUntilCleared)
+				ImGui::TextColored(kOn, "Slow (effect): x%.2f until cleared", s.slowFactor);
+			else
+				ImGui::TextColored(kOn, "Slow (effect): x%.2f, %.2fs left", s.slowFactor, s.slowRemaining);
+		} else {
+			ImGui::TextColored(kOff, "Slow (effect): -");
+		}
+
+		ImGui::TextColored(s.controlLocked ? kOn : kOff, "Control Locked: %s", s.controlLocked ? "ACTIVE" : "-");
+
+		if (s.beingPushed)
+			ImGui::TextColored(kOn, "Scroll Push: ACTIVE (vx %.3f, squish %u)", s.pushVelocityX, s.squishTimer);
+		else
+			ImGui::TextColored(kOff, "Scroll Push: -");
+
+		// --- Instant disable ---
+		ImGui::Separator();
+		ImGui::Text("Disable");
+		if (ImGui::Button("Clear ALL Debuffs"))
+			player_->ClearAllDebuffs();
+		if (ImGui::Button("Clear Stun"))
+			player_->ClearStun();
+		ImGui::SameLine();
+		if (ImGui::Button("Clear Knockback"))
+			player_->ClearKnockback();
+		ImGui::SameLine();
+		if (ImGui::Button("Clear Slow"))
+			player_->ClearSlow();
+
+		// --- Apply ---
+		ImGui::Separator();
+		ImGui::Text("Apply");
+
+		static float stunDuration = 1.5f;
+		ImGui::SliderFloat("Stun Duration", &stunDuration, 0.1f, 10.0f, "%.2f s");
+		if (ImGui::Button("Apply Stun"))
+			player_->SetStunned(stunDuration);
+
+		static float knockbackPower = 5.0f;
+		ImGui::SliderFloat("Knockback Power", &knockbackPower, 0.5f, 20.0f);
+		if (ImGui::Button("Knockback Left"))
+			player_->SetKnockback({-1.0f, 0.4f, 0.0f}, knockbackPower);
+		ImGui::SameLine();
+		if (ImGui::Button("Knockback Right"))
+			player_->SetKnockback({1.0f, 0.4f, 0.0f}, knockbackPower);
+
+		static float slowFactor = 0.45f;
+		static float slowDuration = 5.0f;
+		static bool slowUntilCleared = false;
+		ImGui::SliderFloat("Slow Factor", &slowFactor, 0.05f, 1.0f);
+		ImGui::Checkbox("Slow until cleared", &slowUntilCleared);
+		if (!slowUntilCleared)
+			ImGui::SliderFloat("Slow Duration", &slowDuration, 0.1f, 30.0f, "%.1f s");
+		if (ImGui::Button("Apply Slow"))
+			player_->ApplySlow(slowFactor, slowUntilCleared ? 0.0f : slowDuration);
+
+		bool locked = player_->IsControlLocked();
+		if (ImGui::Checkbox("Control Locked", &locked))
+			player_->SetControlLocked(locked);
+
+		ImGui::End();
 	}
 	ImGui::End();
 	cameraController_->Perspective();
@@ -303,11 +415,11 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 		musicManager_.Initialize(ingameMusicSoundDataHandle_, arenaMusicSoundDataHandle_);
 		musicManager_.StopMenuMusic(); 
 	}
-	blockTextureHandle = TextureManager::Load("./Resources/blockModel/grassBlock.png"); 
+	blockTextureHandle = TextureManager::Load("./Resources/blockNormal/blockGrass.png"); 
 	blockTexVariants_[0] = blockTextureHandle;
 	platformTexVariants_[0] = blockPlatformTextureHandle;
 
-	blockModel.reset(Model::CreateFromOBJ("blockModel"));
+	blockModel.reset(Model::CreateFromOBJ("blockNormal"));
 	blockPlatformTextureHandle = TextureManager::Load("./Resources/platform/block.png");
 	blockPlatformModel.reset(Model::CreateFromOBJ("platform"));
 
@@ -1437,20 +1549,8 @@ void GameScene::Draw() {
 	}
 
 #ifdef _DEBUG
-	//DrawPlayerAABB();
-	//DrawMeleeAABBPlayer();
-	//DrawAllEnemyMeleeAABB();
-	//if (stageManager_->GetCurrentStageIndex() == 0) {
-	//	DrawAllEnemyVisionCones();
-	//	DrawAllEnemyPathWaypoints();
-	//}
+	DrawCollisionDebug();
 #endif
-#ifdef _DEBUG
-	// if (enemyTest->IsDebug() && !enemyTest->IsDead()) {
-	//	enemyTest->Draw();
-	// }
-#endif
-
 	enemyHUD_.Draw();
 	interactionPrompt_.Draw();
 
@@ -1631,26 +1731,41 @@ void GameScene::UpdateFieldStreaming() {
 	uint32_t playerChunk = static_cast<uint32_t>(playerX / kChunkWorldWidth);
 	playerChunk = std::min(playerChunk, maxFieldChunks_ - 1);
 
+	// Chunk we need loaded: the current one, or the next one once we're inside the trigger margin.
+	uint32_t targetChunk = playerChunk;
 	float chunkEndX = static_cast<float>(playerChunk + 1) * kChunkWorldWidth;
-	uint32_t nextChunk = playerChunk + 1;
-	if (playerX >= chunkEndX - kChunkLoadTriggerMargin && nextChunk < maxFieldChunks_ && nextChunk >= loadedChunkCount_) {
+	float margin = std::min(kChunkLoadTriggerMargin, kChunkWorldWidth);
+	if (playerX >= chunkEndX - margin) {
+		targetChunk = playerChunk + 1;
+	}
+	targetChunk = std::min(targetChunk, maxFieldChunks_ - 1);
+
+	// Load every missing chunk up to the target (handles fast movement / teleports / checkpoints).
+	bool loadedAny = false;
+	while (loadedChunkCount_ <= targetChunk) {
+		uint32_t nextChunk = loadedChunkCount_;
 		int32_t stageIndex = stageManager_->GetCurrentStageIndex();
 
-		mapChipField_->LoadChunkCsv(nextChunk, stageManager_->GetFieldChunkFileName(stageIndex, nextChunk));
-		GenerateChunkTileMapRow(nextChunk, MapChipField::kGroundChunkRow); // [FIX] explicit row, idempotent
+		std::string fgPath = stageManager_->GetFieldChunkFileName(stageIndex, nextChunk);
+		if (std::ifstream(fgPath).good()) {
+			mapChipField_->LoadChunkCsv(nextChunk, fgPath);
+		}
+		GenerateChunkTileMapRow(nextChunk, MapChipField::kGroundChunkRow);
 
 		if (backgroundMapChipField_) {
 			std::string bgPath = stageManager_->GetBackgroundFieldChunkFileName(stageIndex, nextChunk);
-			std::ifstream bgTest(bgPath);
-			if (bgTest.good()) {
+			if (std::ifstream(bgPath).good()) {
 				backgroundMapChipField_->LoadChunkCsv(nextChunk, bgPath);
 			}
 			GenerateBackgroundChunkTileMap(nextChunk, MapChipField::kGroundChunkRow);
 		}
 
 		loadedChunkCount_ = nextChunk + 1;
-		cameraController_->SetWorldBounds(static_cast<float>(loadedChunkCount_) * kChunkWorldWidth, mapChipField_->GetWorldHeight());
+		loadedAny = true;
+	}
 
+	if (loadedAny) {
+		cameraController_->SetWorldBounds(static_cast<float>(loadedChunkCount_) * kChunkWorldWidth, mapChipField_->GetWorldHeight());
 		for (uint32_t row = loadedTopChunkRow_; row <= loadedBottomChunkRow_; ++row) {
 			if (row == MapChipField::kGroundChunkRow)
 				continue;
@@ -2052,4 +2167,73 @@ bool GameScene::GetArenaCameraOffsetOverride(int32_t stageIndex, uint8_t arenaID
 		}
 	}
 	return false;
+}
+void GameScene::DrawCollisionDebug() {
+#ifdef _DEBUG
+	if (Input::GetInstance()->TriggerKey(DIK_F1))
+		showCollisionDebug_ = !showCollisionDebug_;
+	if (!showCollisionDebug_ || !player_)
+		return;
+
+	using namespace DebugDraw;
+
+	// --- Player body + active melee swing ---
+	if (!player_->isDead()) {
+		Box(player_->GetAABB(), Color::kPlayer);
+
+		if (player_->isAttack()) {
+			// dynamic_cast: the player may be holding WeaponHeavySabre, which has no player-side swing AABB
+			if (WeaponSabre* sabre = dynamic_cast<WeaponSabre*>(player_->GetCurrentMelee())) {
+				if (player_->GetAttackAnimState().phase == Player::AttackPhase::kAttack) {
+					Box(sabre->GetSwingAABB(*player_, player_->GetComboIndex()), Color::kAttack);
+				}
+			}
+		}
+	}
+
+	// --- Enemies: body + active weapon hitboxes ---
+	for (const std::unique_ptr<BaseEnemy>& enemy : enemies_) {
+		if (!enemy || enemy->IsDead())
+			continue;
+		if (!IsWithinActiveRange(enemy->GetWorldPosition(), kEntityCullDistance))
+			continue;
+
+		Box(enemy->GetAABB(), Color::kEnemy);
+
+		if (EnemyFighter* fighter = dynamic_cast<EnemyFighter*>(enemy.get())) {
+			if (fighter->IsSwingActive())
+				Box(fighter->GetSwingAABB(), Color::kAttack);
+		} else if (EnemyCuirassier* cuirassier = dynamic_cast<EnemyCuirassier*>(enemy.get())) {
+			if (cuirassier->IsLungeActive())
+				Box(cuirassier->GetLungeAABB(), Color::kAttack);
+			else if (cuirassier->IsSwingActive())
+				Box(cuirassier->GetSwingAABB(), Color::kAttack);
+		} else if (EnemyRifleman* rifleman = dynamic_cast<EnemyRifleman*>(enemy.get())) {
+			if (rifleman->IsBayonetActive())
+				Box(rifleman->GetBayonetLungeAABB(), Color::kAttack);
+		}
+	}
+
+	// --- Projectiles ---
+	for (auto& bullet : playerBullets_)
+		if (bullet && !bullet->IsDead())
+			Box(bullet->GetAABB(), Color::kProjectile);
+	for (auto& bullet : enemyBullets_)
+		if (bullet && !bullet->IsDead())
+			Box(bullet->GetAABB(), Color::kProjectile);
+
+	// --- Interactables ---
+	for (auto& item : droppableItems_)
+		if (item && !item->IsPickedUp() && !item->IsExpired())
+			Box(item->GetAABB(), Color::kObject);
+	for (auto& hb : healthBlocks_)
+		if (hb && hb->IsActive())
+			Box(hb->GetAABB(), Color::kObject);
+	for (auto& sw : switches_)
+		if (sw)
+			Box(sw->GetAABB(), Color::kObject);
+	for (auto& gate : gates_)
+		if (gate && gate->IsBlocking())
+			Box(gate->GetAABB(), Color::kObject);
+#endif
 }

@@ -117,7 +117,9 @@ public:
 	void SetArenaID(uint8_t id) { arenaID_ = id; }
 	uint8_t GetArenaID() const { return arenaID_; }
 
-	
+	static float GetBodyWidth() { return kWidth; }
+	static float GetBodyHeight() { return kHeight; }
+
 	// --- SFX ---
 	// デフォルトの被弾/死亡SFX(全敵共通のフォールバック)。GameSceneがロード後にセットする。
 	static void SetDefaultHurtSoundHandle(uint32_t handle) { sDefaultHurtSoundHandle_ = handle; }

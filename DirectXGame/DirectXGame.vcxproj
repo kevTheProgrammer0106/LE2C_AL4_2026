@@ -192,6 +192,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClCompile Include="CameraController.cpp" />
     <ClCompile Include="CuirassierBehavior.cpp" />
     <ClCompile Include="DeathParticles.cpp" />
+    <ClCompile Include="DebugCollisionDraw.cpp" />
     <ClCompile Include="DroppableItem.cpp" />
     <ClCompile Include="EnemyCuirassier.cpp" />
     <ClCompile Include="EnemyFighter.cpp" />
@@ -202,6 +203,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClCompile Include="FighterBehavior.cpp" />
     <ClCompile Include="FirearmMusket.cpp" />
     <ClCompile Include="FirearmMusketBayonet.cpp" />
+    <ClCompile Include="GameAssets.cpp" />
     <ClCompile Include="GameScene.cpp" />
     <ClCompile Include="Global.cpp" />
     <ClCompile Include="GlobalVariables.cpp" />
@@ -248,6 +250,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClInclude Include="CameraController.h" />
     <ClInclude Include="CuirassierBehavior.h" />
     <ClInclude Include="DeathParticles.h" />
+    <ClInclude Include="DebugCollisionDraw.h" />
     <ClInclude Include="DroppableItem.h" />
     <ClInclude Include="EnemyCuirassier.h" />
     <ClInclude Include="EnemyFighter.h" />
@@ -258,6 +261,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClInclude Include="FighterBehavior.h" />
     <ClInclude Include="FirearmMusket.h" />
     <ClInclude Include="FirearmMusketBayonet.h" />
+    <ClInclude Include="GameAssets.h" />
     <ClInclude Include="GameScene.h" />
     <ClInclude Include="Global.h" />
     <ClInclude Include="GlobalVariables.h" />

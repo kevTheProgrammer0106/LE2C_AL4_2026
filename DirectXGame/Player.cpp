@@ -66,7 +66,6 @@ void Player::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "FirearmOffsetRotation", firearmOffset_.rotation);
 	gv->AddItem(kGroupName, "FirearmOffsetScale", firearmOffset_.scale);
 	gv->AddItem(kGroupName, "BlockAttackerKnockbackScale", kBlockAttackerKnockbackScale);
-	
 }
 void Player::ApplyGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
@@ -95,8 +94,69 @@ void Player::ApplyGlobalVariables() {
 	firearmOffset_.translation = gv->GetVector3Value(kGroupName, "FirearmOffsetTranslation");
 	firearmOffset_.rotation = gv->GetVector3Value(kGroupName, "FirearmOffsetRotation");
 	firearmOffset_.scale = gv->GetVector3Value(kGroupName, "FirearmOffsetScale");
-	
+
 	kBlockAttackerKnockbackScale = gv->GetFloatValue(kGroupName, "BlockAttackerKnockbackScale");
+}
+#pragma endregion
+
+#pragma region Debuffs 
+bool Player::IsOnSlowTerrain() const {
+	if (!mapChipField_)
+		return false;
+	Vector3 footPos = worldTransform_.translation_ + Vector3(0.0f, -(kHeight / 2.0f) - 0.05f, 0.0f);
+	return mapChipField_->IsSlowAtPosition(footPos);
+}
+
+void Player::TickDebuffs() {
+	if (!slowActive_ || slowUntilCleared_)
+		return;
+	slowTimer_ -= 1.0f / 60.0f;
+	if (slowTimer_ <= 0.0f)
+		ClearSlow();
+}
+
+void Player::ApplySlow(float factor, float duration) {
+	slowActive_ = true;
+	slowFactor_ = std::clamp(factor, 0.05f, 1.0f);
+	slowUntilCleared_ = (duration <= 0.0f);
+	slowTimer_ = std::max(duration, 0.0f);
+}
+
+void Player::ClearSlow() {
+	slowActive_ = false;
+	slowUntilCleared_ = false;
+	slowFactor_ = 1.0f;
+	slowTimer_ = 0.0f;
+}
+
+void Player::ClearAllDebuffs() {
+	ClearSlow();
+	ClearStun();
+	ClearKnockback();
+	controlLocked_ = false;
+	squishTimer_ = 0;
+}
+
+Player::DebuffStatus Player::GetDebuffStatus() const {
+	DebuffStatus s;
+	s.stunned = behavior_.IsStunned();
+	s.stunRemaining = behavior_.GetStunRemaining();
+	s.knockedBack = behavior_.IsKnockback();
+	s.slowedByTerrain = IsOnSlowTerrain();
+	s.slowedByEffect = slowActive_;
+	s.slowFactor = slowFactor_;
+	s.slowRemaining = slowTimer_;
+	s.slowUntilCleared = slowUntilCleared_;
+	s.controlLocked = controlLocked_;
+	s.beingPushed = isBeingPushed_;
+	s.pushVelocityX = pushVelocityX_;
+	s.squishTimer = squishTimer_;
+	return s;
+}
+
+bool Player::HasAnyDebuff() const {
+	DebuffStatus s = GetDebuffStatus();
+	return s.stunned || s.knockedBack || s.slowedByTerrain || s.slowedByEffect || s.controlLocked || s.beingPushed;
 }
 #pragma endregion
 
@@ -144,8 +204,8 @@ void Player::SetWeaponMode(WeaponMode mode) {
 		currentMelee_->SetWeaponState(weaponMode_ == WeaponMode::kMelee ? WeaponState::kEquipped : WeaponState::kHolstered);
 }
 Vector2 Player::ComputeMouseAimDir() const {
-	InputManager* input = InputManager::GetInstance();
-	Vector2 mouseScreen = {static_cast<float>(input->GetMouseX()), static_cast<float>(input->GetMouseY())};
+	auto mouse = Input::GetInstance()->GetMousePosition();
+	Vector2 mouseScreen = {static_cast<float>(mouse.x), static_cast<float>(mouse.y)};
 	Vector3 origin = GetWorldPosition();
 	Matrix4x4 matViewport = MakeViewportMatrix(0.0f, 0.0f, static_cast<float>(WinApp::kWindowWidth), static_cast<float>(WinApp::kWindowHeight), 0.0f, 1.0f);
 	Matrix4x4 matVPV = Multiply(camera_->matView, Multiply(camera_->matProjection, matViewport));
@@ -175,26 +235,18 @@ void Player::UpdateMovementState() {
 	context.velocity = velocity_;
 	context.onGround = onGround_;
 	context.isDead = isDead_;
-
-	AnimationManager::MovementEvents events = animManager_.UpdateMovementState(context);
-
-	if (!isDead_ && !behavior_.IsDeathBehavior()) {
-		if (events.justJumped) {
-			PlayMovementSfxHandle(sJumpSoundHandle_);
-		}
-		if (events.justLanded) {
-			PlayMovementSfxHandle(sLandSoundHandle_);
-		}
-		if (events.footstepTick) {
-			PlayMovementSfxHandle(sFootstepSoundHandle_);
-		}
-	}
+	animManager_.UpdateMovementState(context);
+}
+void Player::KillInstant() {
+	if (isDead_ || behavior_.IsDeathBehavior())
+		return;
+	behavior_.RequestDeath({0.0f, 1.0f, 0.0f}, 1.0f);
 }
 
 void Player::UseFirearm() {
 	if (!currentFirearm_ || weaponMode_ != WeaponMode::kFirearm)
 		return;
-	if (!InputManager::GetInstance()->IsPrimaryTriggered())
+	if (!Input::GetInstance()->IsTriggerMouse(0))
 		return;
 	if (!currentFirearm_->TryFire())
 		return;
@@ -206,34 +258,34 @@ void Player::UseFirearm() {
 		gameScene_->CreateFirearmProjectile(Owner::kPlayer, origin, aimDir);
 		Vector3 muzzlePos = origin;
 		gameScene_->CreateMuzzleFlash(muzzlePos);
-		BaseFirearm::PlayFireSound();
 	}
 	currentFirearm_->TriggerRecoil(lrDirection_ == LRDirection::kRight);
+	BaseFirearm::PlayFireSound();
 }
 void Player::UseMeleeWeapon() {
 	if (weaponMode_ != WeaponMode::kMelee)
 		return;
-	if (InputManager::GetInstance()->IsPrimaryTriggered()) {
+	if (Input::GetInstance()->IsTriggerMouse(0)) {
 		currentMelee_->SetWeaponState(WeaponState::kEquipped);
 		PlayerBehavior::AttackDirection direction = PlayerBehavior::AttackDirection::kSide;
-		if (InputManager::GetInstance()->IsAttackUpHeld())
+		if (Input::GetInstance()->PushKey(DIK_W))
 			direction = PlayerBehavior::AttackDirection::kUp;
-		else if (InputManager::GetInstance()->IsAttackDownHeld())
+		else if (Input::GetInstance()->PushKey(DIK_S))
 			direction = PlayerBehavior::AttackDirection::kDown;
 		behavior_.RequestAttack(direction);
 	}
 }
 void Player::Update() {
 	ApplyGlobalVariables();
+	TickDebuffs(); // [NEW]
 	if (currentFirearm_)
 		currentFirearm_->TickRecoil();
 
 	if (!controlLocked_) {
-		if (InputManager::GetInstance()->IsWeaponSwitchTriggered()) {
+		if (Input::GetInstance()->TriggerKey(DIK_Q)) {
 			SetWeaponMode(weaponMode_ == WeaponMode::kMelee ? WeaponMode::kFirearm : WeaponMode::kMelee);
-			PlaySfxHandle(sWeaponSwitchSoundHandle_);
 		}
-		bool isBlockingNow = InputManager::GetInstance()->IsBlockHeld();
+		bool isBlockingNow = Input::GetInstance()->IsPressMouse(1);
 		if (isBlockingNow && !behavior_.IsAttacking()) {
 			Vector2 aimDir = ComputeMouseAimDir();
 			AimFacing aim = ComputeAimFacing(aimDir, lrDirection_ == LRDirection::kRight);
@@ -293,6 +345,7 @@ void Player::SetWorldTransform(const KamataEngine::WorldTransform& worldTransfor
 	worldTransform_.scale_ = worldTransform.scale_;
 }
 Vector3 Player::GetWorldPosition() const { return {worldTransform_.translation_.x, worldTransform_.translation_.y, worldTransform_.translation_.z}; }
+
 AABB Player::GetAABB() {
 	Vector3 worldPos = GetWorldPosition();
 	AABB aabb;
@@ -301,21 +354,19 @@ AABB Player::GetAABB() {
 	return aabb;
 }
 void Player::GroundMovement() {
-	InputManager* input = InputManager::GetInstance();
-
 	if (!onGround_) {
 		velocity_ += Vector3(0, -kGravityAcceleration, 0);
 		velocity_.y = std::max(velocity_.y, -kLimitFallSpeed);
 	}
 	float speedFactor = 1.0f;
-	if (mapChipField_) {
-		Vector3 footPos = worldTransform_.translation_ + Vector3(0.0f, -(kHeight / 2.0f) - 0.05f, 0.0f);
-		if (mapChipField_->IsSlowAtPosition(footPos))
-			speedFactor = MapChipField::kSlowSpeedFactor;
-	}
-	if (input->IsMoveRightHeld() || input->IsMoveLeftHeld()) {
+	if (IsOnSlowTerrain())
+		speedFactor = MapChipField::kSlowSpeedFactor;
+	// [NEW] timed/latched Slow debuff stacks by taking the stronger (smaller) factor
+	if (slowActive_)
+		speedFactor = std::min(speedFactor, slowFactor_);
+	if (Input::GetInstance()->PushKey(DIK_D) || Input::GetInstance()->PushKey(DIK_A)) {
 		Vector3 acceleration = {};
-		if (input->IsMoveRightHeld()) {
+		if (Input::GetInstance()->PushKey(DIK_D)) {
 			if (velocity_.x < 0.0f)
 				velocity_.x *= (1.0f - kAttenuation);
 			acceleration.x += kAcceleration * speedFactor;
@@ -324,7 +375,7 @@ void Player::GroundMovement() {
 				turnFirstRotationY_ = worldTransform_.rotation_.y;
 				turnTimer_ = kTimeTurn;
 			}
-		} else if (input->IsMoveLeftHeld()) {
+		} else if (Input::GetInstance()->PushKey(DIK_A)) {
 			if (velocity_.x > 0.0f)
 				velocity_.x *= (1.0f - kAttenuation);
 			acceleration.x -= kAcceleration * speedFactor;
@@ -347,7 +398,7 @@ void Player::GroundMovement() {
 	}
 }
 void Player::JumpMovement() {
-	if (onGround_ && InputManager::GetInstance()->IsJumpHeld())
+	if (onGround_ && Input::GetInstance()->PushKey(DIK_SPACE))
 		velocity_ += Vector3(0, kJumpAcceleration, 0);
 }
 
@@ -463,11 +514,7 @@ void Player::WallCollision(const CollisionInfo& collisionInfo) {
 	if (collisionInfo.isHitWall)
 		velocity_.x *= (1.0f - kAttenuationWall);
 }
-void Player::KillInstant() {
-	if (isDead_ || behavior_.IsDeathBehavior())
-		return;
-	behavior_.RequestDeath({0.0f, 1.0f, 0.0f}, 1.0f);
-}
+
 void Player::MapChipCollisionUpdate() {
 	blockDetector_.SetWorldTransform(worldTransform_);
 	blockDetector_.SetVelocity(velocity_);

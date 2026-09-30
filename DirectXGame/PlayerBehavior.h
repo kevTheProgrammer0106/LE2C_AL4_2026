@@ -29,7 +29,6 @@ public:
 	void ResolveBehaviorRequest();
 	void UpdateCurrentBehavior();
 
-	
 	void RequestAttack(AttackDirection direction);
 	void RequestKnockback(float pushDirectionSign);
 
@@ -45,6 +44,21 @@ public:
 	bool IsBlocking() const { return isBlocking_; }
 	bool IsStunned() const { return behavior_ == Behavior::kStunned; }
 	bool IsDeathBehavior() const { return behavior_ == Behavior::kDeath; }
+
+	float GetStunRemaining() const { return (behavior_ == Behavior::kStunned && stunDuration_ > stunTimer_) ? (stunDuration_ - stunTimer_) : 0.0f; }
+
+	void ClearStun() {
+		if (behavior_ == Behavior::kStunned)
+			behaviorRequest_ = Behavior::kRoot;
+		else if (behaviorRequest_ == Behavior::kStunned)
+			behaviorRequest_ = Behavior::kUnknown;
+	}
+	void ClearKnockback() {
+		if (behavior_ == Behavior::kKnockback)
+			behaviorRequest_ = Behavior::kRoot;
+		else if (behaviorRequest_ == Behavior::kKnockback)
+			behaviorRequest_ = Behavior::kUnknown;
+	}
 
 	static void RegisterGlobalVariables();
 	static void ApplyGlobalVariables();
@@ -131,7 +145,7 @@ private:
 	};
 	static inline SRTOffset kNeutralPose = {};
 
-		// --- SFX ---
+	// --- SFX ---
 	static inline uint32_t sHurtSoundHandle_ = 0;
 	static inline uint32_t sDeathSoundHandle_ = 0;
 	static inline uint32_t sBlockStartSoundHandle_ = 0;

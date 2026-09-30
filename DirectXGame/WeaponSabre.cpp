@@ -94,30 +94,27 @@ AABB WeaponSabre::GetSwingAABB(const Player& player, int comboIndex) const {
 	return aabb;
 }
 
-// [NEW] 敵用。プレイヤーのAttackDirectionという概念を持たないため、常にkSide相当の
+
 // 横振りAABBとして扱う(Fighter/Cuirassierどちらも横薙ぎ/突きなのでこれで十分)。
 AABB WeaponSabre::GetSwingAABBGeneric(const Vector3& ownerPosition, bool facingRight, int comboIndex) const {
 	constexpr float kOverlapMargin = 0.1f;
-	// 敵の当たり判定サイズはBaseEnemyのkWidth/kHeightと同じ値を直接持っていないため、
-	// ここでは一般的なプレイヤーAABBと近い固定値を使う(見た目のリーチが主目的なので厳密一致は不要)。
-	constexpr float kOwnerHalfWidth = 0.4f;
-	//constexpr float kOwnerHalfHeight = 0.8f;
+	const float ownerHalfWidth = BaseEnemy::GetBodyWidth() * 0.5f;
 
 	float reach = kComboReach[comboIndex];
 	float swingHeight = kComboSwingHeight[comboIndex];
 
 	AABB aabb;
 	if (facingRight) {
-		aabb.min.x = ownerPosition.x + kOwnerHalfWidth - kOverlapMargin;
-		aabb.max.x = ownerPosition.x + kOwnerHalfWidth + reach;
+		aabb.min.x = ownerPosition.x + ownerHalfWidth - kOverlapMargin;
+		aabb.max.x = ownerPosition.x + ownerHalfWidth + reach;
 	} else {
-		aabb.min.x = ownerPosition.x - kOwnerHalfWidth - reach;
-		aabb.max.x = ownerPosition.x - kOwnerHalfWidth + kOverlapMargin;
+		aabb.min.x = ownerPosition.x - ownerHalfWidth - reach;
+		aabb.max.x = ownerPosition.x - ownerHalfWidth + kOverlapMargin;
 	}
 	aabb.min.y = ownerPosition.y - swingHeight * 0.5f;
 	aabb.max.y = ownerPosition.y + swingHeight * 0.5f;
-	aabb.min.z = ownerPosition.z - kOwnerHalfWidth;
-	aabb.max.z = ownerPosition.z + kOwnerHalfWidth;
+	aabb.min.z = ownerPosition.z - ownerHalfWidth;
+	aabb.max.z = ownerPosition.z + ownerHalfWidth;
 	return aabb;
 }
 
