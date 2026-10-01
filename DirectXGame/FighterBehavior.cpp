@@ -48,8 +48,6 @@ void FighterBehavior::BehaviorRootUpdate() {
 		comboIndex_ = 0;
 	}
 
-	fighterOwner_.UpdateMeleeVisual(nullptr); // 非攻撃中も構えのポーズを追従させる
-
 	if (!IsPlayerSpotted() || cooldownTimer_ > 0.0f) {
 		return;
 	}

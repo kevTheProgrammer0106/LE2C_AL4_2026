@@ -11,38 +11,74 @@ constexpr const char* kGroupName = "FirearmMusketBayonet";
 void FirearmMusketBayonet::RegisterGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
 	gv->CreateGroup(kGroupName);
+
 	gv->AddItem(kGroupName, "OffsetScale", musketOffset_.scale);
 	gv->AddItem(kGroupName, "OffsetRotate", musketOffset_.rotation);
 	gv->AddItem(kGroupName, "OffsetTranslate", musketOffset_.translation);
+
 	gv->AddItem(kGroupName, "OffsetHolsterScale", musketHolsterOffset_.scale);
 	gv->AddItem(kGroupName, "OffsetHolsterRotate", musketHolsterOffset_.rotation);
 	gv->AddItem(kGroupName, "OffsetHolsterTranslate", musketHolsterOffset_.translation);
+
 	gv->AddItem(kGroupName, "OffsetReloadScale", musketReloadOffset_.scale);
 	gv->AddItem(kGroupName, "OffsetReloadRotate", musketReloadOffset_.rotation);
 	gv->AddItem(kGroupName, "OffsetReloadTranslate", musketReloadOffset_.translation);
+
 	gv->AddItem(kGroupName, "ReloadDuration", kReloadDuration);
 	gv->AddItem(kGroupName, "ReloadHitBonus", kReloadHitBonus);
 	gv->AddItem(kGroupName, "ReloadDurationMin", kReloadDurationMin);
-	gv->AddItem(kGroupName, "LungeDamage", kLungeDamage);           // [NEW]
-	gv->AddItem(kGroupName, "LungeImpactPower", kLungeImpactPower); // [NEW]
+
+	// 既存の銃剣ダメージ値を登録する。
+	gv->AddItem(kGroupName, "LungeDamage", kLungeDamage);
+	gv->AddItem(kGroupName, "LungeImpactPower", kLungeImpactPower);
+
+	// 銃剣攻撃そのもののフェーズ・移動・間合いを登録する。
+	gv->AddItem(kGroupName, "BayonetAnticipateDuration", kBayonetAnticipateDuration);
+	gv->AddItem(kGroupName, "BayonetAttackDuration", kBayonetAttackDuration);
+	gv->AddItem(kGroupName, "BayonetRecoveryDuration", kBayonetRecoveryDuration);
+	gv->AddItem(kGroupName, "BayonetAttackSpeed", kBayonetAttackSpeed);
+	gv->AddItem(kGroupName, "BayonetReach", kBayonetReach);
+	gv->AddItem(kGroupName, "BayonetSwingHeight", kBayonetSwingHeight);
 }
 
 void FirearmMusketBayonet::ApplyGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
+
 	musketOffset_.scale = gv->GetVector3Value(kGroupName, "OffsetScale");
 	musketOffset_.rotation = gv->GetVector3Value(kGroupName, "OffsetRotate");
 	musketOffset_.translation = gv->GetVector3Value(kGroupName, "OffsetTranslate");
+
 	musketHolsterOffset_.scale = gv->GetVector3Value(kGroupName, "OffsetHolsterScale");
 	musketHolsterOffset_.rotation = gv->GetVector3Value(kGroupName, "OffsetHolsterRotate");
 	musketHolsterOffset_.translation = gv->GetVector3Value(kGroupName, "OffsetHolsterTranslate");
+
 	musketReloadOffset_.scale = gv->GetVector3Value(kGroupName, "OffsetReloadScale");
 	musketReloadOffset_.rotation = gv->GetVector3Value(kGroupName, "OffsetReloadRotate");
 	musketReloadOffset_.translation = gv->GetVector3Value(kGroupName, "OffsetReloadTranslate");
+
 	kReloadDuration = gv->GetFloatValue(kGroupName, "ReloadDuration");
+
 	kReloadHitBonus = gv->GetFloatValue(kGroupName, "ReloadHitBonus");
+
 	kReloadDurationMin = gv->GetFloatValue(kGroupName, "ReloadDurationMin");
-	kLungeDamage = gv->GetIntValue(kGroupName, "LungeDamage");             // [NEW]
-	kLungeImpactPower = gv->GetFloatValue(kGroupName, "LungeImpactPower"); // [NEW]
+
+	// 既存の銃剣ダメージ値を読み込む。
+	kLungeDamage = gv->GetIntValue(kGroupName, "LungeDamage");
+
+	kLungeImpactPower = gv->GetFloatValue(kGroupName, "LungeImpactPower");
+
+	// 銃剣攻撃パターンを読み込む。
+	kBayonetAnticipateDuration = gv->GetFloatValue(kGroupName, "BayonetAnticipateDuration");
+
+	kBayonetAttackDuration = gv->GetFloatValue(kGroupName, "BayonetAttackDuration");
+
+	kBayonetRecoveryDuration = gv->GetFloatValue(kGroupName, "BayonetRecoveryDuration");
+
+	kBayonetAttackSpeed = gv->GetFloatValue(kGroupName, "BayonetAttackSpeed");
+
+	kBayonetReach = gv->GetFloatValue(kGroupName, "BayonetReach");
+
+	kBayonetSwingHeight = gv->GetFloatValue(kGroupName, "BayonetSwingHeight");
 }
 
 void FirearmMusketBayonet::UpdateFollow(const WorldTransform& parentTransform, float localAimAngle, bool facingRight) {

@@ -158,10 +158,9 @@ void CameraController::SetWorldBounds(float worldWidth, float worldHeight) {
 
 #pragma region Additional Camera Perspectives
 
-void CameraController::Perspective() {
+void CameraController::DrawDebugControls() {
 #ifdef _DEBUG
-	ImGui::Begin("Camera Perspective Customization");
-	ImGui::Text("Press Q to enable debug camera");
+	ImGui::Text("Press P to toggle the debug camera"); 
 	int currentType = static_cast<int>(perspectiveType);
 	ImGui::Value("Current Perspective", static_cast<int>(perspectiveType));
 	ImGui::Combo("Perspective Type", &currentType, "Sidescroll\0Fixed\0TopDown\0TopDownDiagonal\0Isometric\0ThirdPerson\0FirstPerson\0");
@@ -178,7 +177,6 @@ void CameraController::Perspective() {
 	ImGui::BulletText("Camera SRT Parameters");
 	ImGui::DragFloat2("Rotation", &camera_->rotation_.x, 0.1f, -100.0f, 100.0f);
 	ImGui::DragFloat3("Translation", &camera_->translation_.x, 0.1f, -100.0f, 1000.0f);
-	ImGui::End();
 #endif
 }
 

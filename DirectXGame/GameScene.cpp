@@ -39,157 +39,7 @@ void GameScene::ApplyGlobalVariables() {
 }
 void GameScene::debugMenu() {
 #ifdef _DEBUG
-	reloadRequested_ = false;
-	ImGui::Begin("Debug Menu Reloader/Spawner");
-	if (ImGui::Button("Reload Scene"))
-		reloadRequested_ = true;
-	if (ImGui::Button("Load Field01")) {
-		stageManager_->SetCurrentStageIndex(0);
-		reloadRequested_ = true;
-	}
-	if (ImGui::Button("Load Field02")) {
-		stageManager_->SetCurrentStageIndex(1);
-		reloadRequested_ = true;
-	}
-	if (ImGui::Button("Load Field03")) {
-		stageManager_->SetCurrentStageIndex(2);
-		reloadRequested_ = true;
-	}
-	if (ImGui::Button("Load TestField")) {
-		stageManager_->SetCurrentStageIndex(3);
-		reloadRequested_ = true;
-	}
-	if (ImGui::Button("ResetHP")) {
-		player_->SetHP(100);
-		player_->SetMaxHP(100);
-	}
-	if (ImGui::Button("SetDebugHP")) {
-		player_->SetMaxHP(9999);
-		player_->SetHP(9999);
-	}
-	if (ImGui::Button("Spawn Guard Effect")) {
-		Vector3 p = player_->GetWorldPosition();
-		CreateGuardEffect(p);
-	}
-	if (ImGui::Button("Spawn Hit Effect")) {
-		Vector3 p = player_->GetWorldPosition();
-		CreateHitEffect(p);
-	}
-	if (ImGui::Button("Spawn Rifleman")) {
-		if (player_) {
-			Vector3 p = player_->GetWorldPosition();
-			p.x += 2.0f;
-
-			SpawnEnemyAt(p, 0);
-		}
-	}
-	if (ImGui::Button("Spawn Fighter")) {
-		if (player_) {
-			Vector3 p = player_->GetWorldPosition();
-			p.x -= 2.0f;
-
-			SpawnEnemyAt(p, 2);
-		}
-	}
-	if (ImGui::Button("Spawn Cuirassier")) {
-		if (player_) {
-			Vector3 p = player_->GetWorldPosition();
-			p.x -= 2.0f;
-
-			SpawnEnemyAt(p, 1);
-		}
-	}
-	if (ImGui::Button("Add Limited Rifleman Spawner (x3, every 4s)")) {
-		AddEnemySpawner(player_->GetWorldPosition(), 0, 4.0f, EnemySpawner::SpawnMode::kLimited, 3, false);
-	}
-	if (ImGui::Button("Add Endless Cuirassier Spawner (every 8s, omniscient)")) {
-		AddEnemySpawner(player_->GetWorldPosition(), 1, 8.0f, EnemySpawner::SpawnMode::kEndless, -1, true);
-	}
-	if (player_) {
-		ImGui::Begin("Player Debuffs");
-
-		const ImVec4 kOn = {1.0f, 0.45f, 0.25f, 1.0f};
-		const ImVec4 kOff = {0.55f, 0.55f, 0.55f, 1.0f};
-		Player::DebuffStatus s = player_->GetDebuffStatus();
-
-		ImGui::Text("Active: %s", player_->HasAnyDebuff() ? "YES" : "none");
-		ImGui::Separator();
-
-		// --- Status ---
-		if (s.stunned)
-			ImGui::TextColored(kOn, "Stun: %.2fs left", s.stunRemaining);
-		else
-			ImGui::TextColored(kOff, "Stun: -");
-
-		ImGui::TextColored(s.knockedBack ? kOn : kOff, "Knockback: %s", s.knockedBack ? "ACTIVE" : "-");
-
-		ImGui::TextColored(s.slowedByTerrain ? kOn : kOff, "Slow (terrain): %s (x%.2f)", s.slowedByTerrain ? "ACTIVE" : "-", MapChipField::kSlowSpeedFactor);
-
-		if (s.slowedByEffect) {
-			if (s.slowUntilCleared)
-				ImGui::TextColored(kOn, "Slow (effect): x%.2f until cleared", s.slowFactor);
-			else
-				ImGui::TextColored(kOn, "Slow (effect): x%.2f, %.2fs left", s.slowFactor, s.slowRemaining);
-		} else {
-			ImGui::TextColored(kOff, "Slow (effect): -");
-		}
-
-		ImGui::TextColored(s.controlLocked ? kOn : kOff, "Control Locked: %s", s.controlLocked ? "ACTIVE" : "-");
-
-		if (s.beingPushed)
-			ImGui::TextColored(kOn, "Scroll Push: ACTIVE (vx %.3f, squish %u)", s.pushVelocityX, s.squishTimer);
-		else
-			ImGui::TextColored(kOff, "Scroll Push: -");
-
-		// --- Instant disable ---
-		ImGui::Separator();
-		ImGui::Text("Disable");
-		if (ImGui::Button("Clear ALL Debuffs"))
-			player_->ClearAllDebuffs();
-		if (ImGui::Button("Clear Stun"))
-			player_->ClearStun();
-		ImGui::SameLine();
-		if (ImGui::Button("Clear Knockback"))
-			player_->ClearKnockback();
-		ImGui::SameLine();
-		if (ImGui::Button("Clear Slow"))
-			player_->ClearSlow();
-
-		// --- Apply ---
-		ImGui::Separator();
-		ImGui::Text("Apply");
-
-		static float stunDuration = 1.5f;
-		ImGui::SliderFloat("Stun Duration", &stunDuration, 0.1f, 10.0f, "%.2f s");
-		if (ImGui::Button("Apply Stun"))
-			player_->SetStunned(stunDuration);
-
-		static float knockbackPower = 5.0f;
-		ImGui::SliderFloat("Knockback Power", &knockbackPower, 0.5f, 20.0f);
-		if (ImGui::Button("Knockback Left"))
-			player_->SetKnockback({-1.0f, 0.4f, 0.0f}, knockbackPower);
-		ImGui::SameLine();
-		if (ImGui::Button("Knockback Right"))
-			player_->SetKnockback({1.0f, 0.4f, 0.0f}, knockbackPower);
-
-		static float slowFactor = 0.45f;
-		static float slowDuration = 5.0f;
-		static bool slowUntilCleared = false;
-		ImGui::SliderFloat("Slow Factor", &slowFactor, 0.05f, 1.0f);
-		ImGui::Checkbox("Slow until cleared", &slowUntilCleared);
-		if (!slowUntilCleared)
-			ImGui::SliderFloat("Slow Duration", &slowDuration, 0.1f, 30.0f, "%.1f s");
-		if (ImGui::Button("Apply Slow"))
-			player_->ApplySlow(slowFactor, slowUntilCleared ? 0.0f : slowDuration);
-
-		bool locked = player_->IsControlLocked();
-		if (ImGui::Checkbox("Control Locked", &locked))
-			player_->SetControlLocked(locked);
-
-		ImGui::End();
-	}
-	ImGui::End();
-	cameraController_->Perspective();
+	debugMenu_.Draw(this);
 #endif
 }
 
@@ -860,7 +710,6 @@ void GameScene::ChangePhase() {
 		if (deathParticleModel && deathParticles_->IsFinished())
 			phase_ = Phase::kRetry;
 		retryMenuInput_.StartButtonFade(true, kButtonFadeDuration);
-		cameraController_->Perspective();
 		cameraController_->Update();
 		for (std::vector<BlockInstance>& line : worldTransformBlocks_) {
 			for (BlockInstance& block : line) {
@@ -1292,9 +1141,6 @@ void GameScene::CheckAllCollisions() {
 
 		float hitRotZ = 0.0f;
 		switch (player_->GetAttackDirection()) {
-		case Player::AttackDirection::kUp:
-			hitRotZ = std::numbers::pi_v<float> / 2.0f;
-			break;
 		case Player::AttackDirection::kDown:
 			hitRotZ = -std::numbers::pi_v<float> / 2.0f;
 			break;
@@ -1369,11 +1215,6 @@ void GameScene::CheckAllCollisions() {
 		if (touchesKillBlock(enemy->GetAABB()))
 			enemy->KillInstant();
 	}
-#ifdef _DEBUG
-	// if (!enemyTest->IsDead() && touchesKillBlock(enemyTest->GetAABB()))
-	//	enemyTest->KillInstant();
-#endif
-
 	auto resolveGateCollision = [&](const AABB& entityAABB, KamataEngine::WorldTransform* wtToPush) {
 		for (auto& gate : gates_) {
 			if (!gate || !gate->IsBlocking())
@@ -1444,8 +1285,9 @@ void GameScene::CheckAllCollisions() {
 			if (rifleman->IsBayonetActive() && !rifleman->HasHitPlayerThisSwing()) {
 				if (IsCollisionAABB(rifleman->GetBayonetLungeAABB(), aabb1)) {
 					rifleman->MarkHitPlayerThisSwing();
-					int damage = rifleman->GetCurrentFirearm() ? rifleman->GetCurrentFirearm()->GetLungeDamage() : 10;
-					float power = rifleman->GetCurrentFirearm() ? rifleman->GetCurrentFirearm()->GetLungeImpactPower() : 1.5f;
+					FirearmMusketBayonet* firearm = rifleman->GetCurrentFirearm();
+					int damage = firearm ? firearm->GetLungeDamage() : 10;
+					float power = firearm ? firearm->GetLungeImpactPower() : 1.8f;
 					player_->TakeDamage(damage, hitDirTo(rifleman->GetWorldPosition()), power, rifleman);
 				}
 			}
@@ -2172,68 +2014,93 @@ void GameScene::DrawCollisionDebug() {
 #ifdef _DEBUG
 	if (Input::GetInstance()->TriggerKey(DIK_F1))
 		showCollisionDebug_ = !showCollisionDebug_;
-	if (!showCollisionDebug_ || !player_)
+	if (Input::GetInstance()->TriggerKey(DIK_F4))
+		DebugDraw::gShowVision = !DebugDraw::gShowVision;
+	if (!player_)
 		return;
 
 	using namespace DebugDraw;
 
-	// --- Player body + active melee swing ---
-	if (!player_->isDead()) {
-		Box(player_->GetAABB(), Color::kPlayer);
+	if (showCollisionDebug_) {
+		// --- Player body + active melee swing ---
+		if (!player_->isDead()) {
+			Box(player_->GetAABB(), Color::kPlayer);
 
-		if (player_->isAttack()) {
-			// dynamic_cast: the player may be holding WeaponHeavySabre, which has no player-side swing AABB
-			if (WeaponSabre* sabre = dynamic_cast<WeaponSabre*>(player_->GetCurrentMelee())) {
-				if (player_->GetAttackAnimState().phase == Player::AttackPhase::kAttack) {
-					Box(sabre->GetSwingAABB(*player_, player_->GetComboIndex()), Color::kAttack);
+			if (player_->isAttack()) {
+				// dynamic_cast: the player may be holding WeaponHeavySabre, which has no player-side swing AABB
+				if (WeaponSabre* sabre = dynamic_cast<WeaponSabre*>(player_->GetCurrentMelee())) {
+					if (player_->GetAttackAnimState().phase == Player::AttackPhase::kAttack) {
+						Box(sabre->GetSwingAABB(*player_, player_->GetComboIndex()), Color::kAttack);
+					}
 				}
 			}
 		}
+
+		// --- Enemies: body + active weapon hitboxes ---
+		for (const std::unique_ptr<BaseEnemy>& enemy : enemies_) {
+			if (!enemy || enemy->IsDead())
+				continue;
+			if (!IsWithinActiveRange(enemy->GetWorldPosition(), kEntityCullDistance))
+				continue;
+
+			Box(enemy->GetAABB(), Color::kEnemy);
+
+			if (EnemyFighter* fighter = dynamic_cast<EnemyFighter*>(enemy.get())) {
+				if (fighter->IsSwingActive())
+					Box(fighter->GetSwingAABB(), Color::kAttack);
+			} else if (EnemyCuirassier* cuirassier = dynamic_cast<EnemyCuirassier*>(enemy.get())) {
+				if (cuirassier->IsLungeActive())
+					Box(cuirassier->GetLungeAABB(), Color::kAttack);
+				else if (cuirassier->IsSwingActive())
+					Box(cuirassier->GetSwingAABB(), Color::kAttack);
+			} else if (EnemyRifleman* rifleman = dynamic_cast<EnemyRifleman*>(enemy.get())) {
+				if (rifleman->IsBayonetActive())
+					Box(rifleman->GetBayonetLungeAABB(), Color::kAttack);
+			}
+		}
+
+		// --- Projectiles ---
+		for (auto& bullet : playerBullets_)
+			if (bullet && !bullet->IsDead())
+				Box(bullet->GetAABB(), Color::kProjectile);
+		for (auto& bullet : enemyBullets_)
+			if (bullet && !bullet->IsDead())
+				Box(bullet->GetAABB(), Color::kProjectile);
+
+		// --- Interactables ---
+		for (auto& item : droppableItems_)
+			if (item && !item->IsPickedUp() && !item->IsExpired())
+				Box(item->GetAABB(), Color::kObject);
+		for (auto& hb : healthBlocks_)
+			if (hb && hb->IsActive())
+				Box(hb->GetAABB(), Color::kObject);
+		for (auto& sw : switches_)
+			if (sw)
+				Box(sw->GetAABB(), Color::kObject);
+		for (auto& gate : gates_)
+			if (gate && gate->IsBlocking())
+				Box(gate->GetAABB(), Color::kObject);
 	}
 
-	// --- Enemies: body + active weapon hitboxes ---
-	for (const std::unique_ptr<BaseEnemy>& enemy : enemies_) {
-		if (!enemy || enemy->IsDead())
-			continue;
-		if (!IsWithinActiveRange(enemy->GetWorldPosition(), kEntityCullDistance))
-			continue;
+	// --- Enemy vision cones (F4) ---
+	if (gShowVision) {
+		for (const std::unique_ptr<BaseEnemy>& enemy : enemies_) {
+			if (!enemy || enemy->IsDead())
+				continue;
+			if (!IsWithinActiveRange(enemy->GetWorldPosition(), kEntityCullDistance))
+				continue;
 
-		Box(enemy->GetAABB(), Color::kEnemy);
+			const VisionSensor& sensor = enemy->GetVisionSensor();
+			if (!sensor.HasValidCone())
+				continue;
 
-		if (EnemyFighter* fighter = dynamic_cast<EnemyFighter*>(enemy.get())) {
-			if (fighter->IsSwingActive())
-				Box(fighter->GetSwingAABB(), Color::kAttack);
-		} else if (EnemyCuirassier* cuirassier = dynamic_cast<EnemyCuirassier*>(enemy.get())) {
-			if (cuirassier->IsLungeActive())
-				Box(cuirassier->GetLungeAABB(), Color::kAttack);
-			else if (cuirassier->IsSwingActive())
-				Box(cuirassier->GetSwingAABB(), Color::kAttack);
-		} else if (EnemyRifleman* rifleman = dynamic_cast<EnemyRifleman*>(enemy.get())) {
-			if (rifleman->IsBayonetActive())
-				Box(rifleman->GetBayonetLungeAABB(), Color::kAttack);
+			bool spotted = enemy->IsPlayerSpotted();
+			VisionCone(sensor, spotted);
+
+			// line of sight: eye -> player while spotted
+			if (spotted && !player_->isDead())
+				Line(sensor.GetVisionTriangle().center, player_->GetWorldPosition(), Color::kVisionSpotted);
 		}
 	}
-
-	// --- Projectiles ---
-	for (auto& bullet : playerBullets_)
-		if (bullet && !bullet->IsDead())
-			Box(bullet->GetAABB(), Color::kProjectile);
-	for (auto& bullet : enemyBullets_)
-		if (bullet && !bullet->IsDead())
-			Box(bullet->GetAABB(), Color::kProjectile);
-
-	// --- Interactables ---
-	for (auto& item : droppableItems_)
-		if (item && !item->IsPickedUp() && !item->IsExpired())
-			Box(item->GetAABB(), Color::kObject);
-	for (auto& hb : healthBlocks_)
-		if (hb && hb->IsActive())
-			Box(hb->GetAABB(), Color::kObject);
-	for (auto& sw : switches_)
-		if (sw)
-			Box(sw->GetAABB(), Color::kObject);
-	for (auto& gate : gates_)
-		if (gate && gate->IsBlocking())
-			Box(gate->GetAABB(), Color::kObject);
 #endif
 }

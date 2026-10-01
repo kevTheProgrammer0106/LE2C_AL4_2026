@@ -65,7 +65,7 @@ void PathFindingAI::UpdatePathToPlayer() {
 	    livePlayer ? PredictPlayerLandingIndex(livePlayer->GetWorldPosition(), livePlayer->GetVelocity()) : GetGroundedGoalIndex(owner_->GetBehaviorModule().GetLastKnownPlayerPos());
 
 	PathFindingAlgorithm::PathCostProfile costProfile = owner_->BuildPathCostProfile();
-	currentPath_ = PathFindingAlgorithm::FindPath(mapChipField_, startIndex, goalIndex, 2000, &costProfile);
+	currentPath_ = PathFindingAlgorithm::FindPath(mapChipField_, startIndex, goalIndex, 4000, &costProfile);
 	currentPathIndex_ = 0;
 }
 

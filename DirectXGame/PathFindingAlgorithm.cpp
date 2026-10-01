@@ -1,4 +1,6 @@
+#define NOMINMAX
 #include "PathFindingAlgorithm.h"
+#include "BaseEnemy.h"
 
 #include <algorithm>
 #include <cmath>
@@ -55,7 +57,37 @@ bool PathFindingAlgorithm::IsWalkable(MapChipField* mapChipField, uint32_t xInde
 		return false;
 	}
 	MapChipType type = mapChipField->GetMapChipTypeByIndex(xIndex, yIndex);
-	return type != MapChipType::kBlock && type != MapChipType::kBlockHalfUp && type != MapChipType::kBlockHalfDown;
+	// [FIX] kSlowBlockも当たり判定上は実体のある地面(IsGroundType)なので、通行不可セルとして扱う。
+	return type != MapChipType::kBlock && type != MapChipType::kBlockHalfUp && type != MapChipType::kBlockHalfDown && type != MapChipType::kSlowBlock;
+}
+
+uint32_t PathFindingAlgorithm::GetAgentHeightCells(MapChipField* mapChipField) {
+	uint32_t numRows = mapChipField->GetNumBlockVertical();
+	if (numRows == 0) {
+		return 1;
+	}
+	float blockHeight = mapChipField->GetWorldHeight() / static_cast<float>(numRows);
+	if (blockHeight <= 0.0001f) {
+		return 1;
+	}
+	// 足元はセル下端付近に立つので、体高さ/ブロック高さを切り上げたセル数を占める。
+	// 0.05fの余裕は、ちょうどセル数ぴったりの体高さ(例: 2.0/1.0)で1セル余分に取らないため。
+	float cells = std::ceil(BaseEnemy::GetBodyHeight() / blockHeight - 0.05f);
+	return static_cast<uint32_t>(std::max(cells, 1.0f));
+}
+
+bool PathFindingAlgorithm::HasHeadroom(MapChipField* mapChipField, uint32_t xIndex, uint32_t yIndex) {
+	uint32_t cells = GetAgentHeightCells(mapChipField);
+	// yIndexは上が0。体の上側のセルはyIndex-1, yIndex-2, ...
+	for (uint32_t k = 1; k < cells; ++k) {
+		if (yIndex < k) {
+			return false; // マップ上端を突き抜ける
+		}
+		if (!IsWalkable(mapChipField, xIndex, yIndex - k)) {
+			return false;
+		}
+	}
+	return true;
 }
 
 bool PathFindingAlgorithm::CanMoveBetween(MapChipField* mapChipField, const IndexSet& current, const IndexSet& next) {
@@ -74,6 +106,11 @@ bool PathFindingAlgorithm::CanMoveBetween(MapChipField* mapChipField, const Inde
 		return false;
 	}
 
+	// [FIX] 体が2セル分の高さを持つので、移動先の頭上にも空きが必要
+	if (!HasHeadroom(mapChipField, next.xIndex, next.yIndex)) {
+		return false;
+	}
+
 	return true;
 }
 
@@ -88,6 +125,7 @@ float PathFindingAlgorithm::GetTraversalCost(MapChipField* mapChipField, uint32_
 	case MapChipType::kBlock:
 	case MapChipType::kBlockHalfUp:
 	case MapChipType::kBlockHalfDown:
+	case MapChipType::kSlowBlock:
 		// IsWalkableで除外されるため通常ここには来ない
 		return std::numeric_limits<float>::infinity();
 	case MapChipType::kPlatform:

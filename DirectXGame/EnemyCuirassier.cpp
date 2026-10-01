@@ -8,12 +8,23 @@ void EnemyCuirassier::Initialize(const std::array<PartResources, static_cast<siz
 	BaseEnemy::Initialize(partResources, camera, position);
 	SetMaxHP(350);
 	SetHP(350);
-	if (currentMelee_) {
-		currentMelee_->SetWeaponState(WeaponState::kEquipped);
-	}
 }
 
-void EnemyCuirassier::Update() { BaseEnemy::Update(); }
+void EnemyCuirassier::Update() {
+	BaseEnemy::Update();
+
+	if (isDead_ || !currentMelee_)
+		return;
+	if (GetBehaviorModule().IsDeathBehavior())
+		return;
+
+	UpdateWeaponEquipState();
+
+	if (GetBehaviorModule().GetBehavior() == BaseEnemyBehavior::Behavior::kMelee)
+		return;
+	UpdateMeleeVisual(nullptr);
+}
+
 
 void EnemyCuirassier::Draw() {
 	BaseEnemy::Draw();
@@ -25,7 +36,7 @@ void EnemyCuirassier::Draw() {
 void EnemyCuirassier::SetMeleeModel(Model* model, uint32_t textureHandle) {
 	currentMelee_ = std::make_unique<WeaponHeavySabre>();
 	currentMelee_->Initialize(model, textureHandle, camera_, worldTransform_.translation_);
-	currentMelee_->SetWeaponState(WeaponState::kEquipped);
+	SnapWeaponEquipState(ignoreEquipStates_);
 }
 
 void EnemyCuirassier::UpdateMeleeVisual(const BaseMelee::GenericAttackAnimState* attackState) {

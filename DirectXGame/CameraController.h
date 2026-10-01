@@ -31,7 +31,7 @@ public:
 	void SetWorldBounds(float worldWidth, float worldHeight);
 
 	void Reset();
-	void Perspective();
+	void DrawDebugControls(); // ImGui contents only; the caller owns the window
 
 	void UpdateFixedCamera(const KamataEngine::WorldTransform& worldTransformTarget);
 	void UpdateTopDownCamera(const KamataEngine::WorldTransform& worldTransformTarget);

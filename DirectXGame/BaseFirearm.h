@@ -81,6 +81,11 @@ public:
 	static void PlayFireSound() { PlaySfxHandle(sFireSoundHandle_); }
 	static void PlayReloadSound() { PlaySfxHandle(sReloadSoundHandle_); }
 
+	void SnapEquipped(bool equipped) {
+		equipTarget_ = equipped ? 1.0f : 0.0f;
+		equipFactor_ = equipTarget_;
+	}
+
 protected:
 	static inline float kImpactPower = 1.2f;
 

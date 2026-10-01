@@ -30,7 +30,6 @@ public:
 	void ResetBayonetHit() { hasHitPlayerThisSwing_ = false; }
 	AABB GetBayonetLungeAABB() const;
 
-	// [NEW] gun-pose body lean, mirrors player-style aiming/firing/reloading posture
 	enum class GunPose { kNeutral, kAiming, kFiring, kReloading };
 	void SetGunPose(GunPose pose) {
 		gunPose_ = pose;
@@ -44,7 +43,11 @@ public:
 	static void SetBayonetLungeSoundHandle(uint32_t handle) { sBayonetLungeSoundHandle_ = handle; }
 	static void SetSfxVolume(float volume) { sSfxVolume_ = volume; }
 
+	SRTOffset GetActionAnimOffset() const override;
+
 private:
+	friend class DebugMenu;
+
 	std::unique_ptr<FirearmMusketBayonet> currentFirearm_;
 	bool isBayonetActive_ = false;
 	bool hasHitPlayerThisSwing_ = false;
@@ -84,6 +87,16 @@ private:
 	}
 
 protected:
+	void RefreshWeaponVisual() override {
+		SetBayonetActive(false);
+		ResetBayonetHit();
+		UpdateFirearmHybrid();
+	}
+	void SnapWeaponEquipState(bool equipped) override {
+		if (currentFirearm_)
+			currentFirearm_->SnapEquipped(equipped);
+	}
+
 	std::unique_ptr<BaseEnemyBehavior> CreateBehaviorModule() override { return std::make_unique<RiflemanBehavior>(*this); }
 	bool GetDropInfo(DropItemCategory& outCategory, DropWeaponKind& outKind) const override {
 		outCategory = DropItemCategory::kFirearm;

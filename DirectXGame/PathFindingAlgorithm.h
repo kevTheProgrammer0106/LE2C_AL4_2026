@@ -13,6 +13,9 @@
 /// GetTraversalCostは今後ブロック種別（泥・水・氷など）を追加した際に
 /// ここへコスト差分を書き足していくためのプレースホルダーで、
 /// 現状はkBlock以外すべて一律コスト1.0として扱う。
+///
+/// [FIX] ブロックサイズが1.0になり、敵(高さ1.6)が縦2セル分を占めるようになったため、
+/// 移動先セルの真上にも頭上の空き(HasHeadroom)を要求する。
 /// </summary>
 class PathFindingAlgorithm {
 public:
@@ -42,7 +45,7 @@ public:
 	// costProfileを渡すと、kPathNode/kJumpNodeのコストをsubIDに応じて変化させられる(nullptrならデフォルトを使用)。
 	// 戻り値には開始地点を含まず、開始地点の次のセルからゴールまでが順番に格納される。
 	// 経路が存在しない、または探索上限に達した場合は空のvectorを返す。
-	static std::vector<IndexSet> FindPath(MapChipField* mapChipField, const IndexSet& start, const IndexSet& goal, uint32_t maxSearchNodes = 2000, const PathCostProfile* costProfile = nullptr);
+	static std::vector<IndexSet> FindPath(MapChipField* mapChipField, const IndexSet& start, const IndexSet& goal, uint32_t maxSearchNodes = 4000, const PathCostProfile* costProfile = nullptr);
 
 	// ジャンプノードのlinkID(ルーティング優先度tier)が「常時ジャンプ(tier1以上)」かどうかを判定する。
 	// tier0だけが「任意ジャンプ(必要な時のみ)」で、それ以外は全て常時ジャンプ扱いにする。
@@ -52,6 +55,11 @@ private:
 	static bool IsInsideMap(MapChipField* mapChipField, uint32_t xIndex, uint32_t yIndex);
 	static bool IsWalkable(MapChipField* mapChipField, uint32_t xIndex, uint32_t yIndex);
 	static bool CanMoveBetween(MapChipField* mapChipField, const IndexSet& current, const IndexSet& next);
+
+	// [NEW] 敵の体が占める縦方向のセル数(1セル=現在のブロック高さ)。BaseEnemyの体高さとマップのブロック高さから算出する。
+	static uint32_t GetAgentHeightCells(MapChipField* mapChipField);
+	// [NEW] (xIndex, yIndex)のセルに立った時、頭上(体が占める上側のセル)が全て歩行可能か。
+	static bool HasHeadroom(MapChipField* mapChipField, uint32_t xIndex, uint32_t yIndex);
 
 	// 移動コストのプレースホルダー。ブロック種別が増えたらswitchへケースを足していく。
 	// kPathNode/kJumpNodeについてはprofileのsubID別テーブルを参照する。

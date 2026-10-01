@@ -1,5 +1,4 @@
 #pragma once
-
 #include "BaseMelee.h"
 
 class WeaponHeavySabre final : public BaseMelee {
@@ -33,7 +32,16 @@ public:
 		}
 	}
 
+	void SnapWeaponState(WeaponState state) {
+		weaponState_ = state;
+		equipTimer_ = 1.0f;
+		isTransitioning_ = false;
+	}
+	void SetEquipDuration(float seconds);
+	float GetEquipDuration() const { return equipDuration_; }
+
 private:
+	friend class DebugMenu;
 	WeaponState weaponState_ = WeaponState::kEquipped;
 	float equipTimer_ = 1.0f;
 	float equipDuration_ = 0.3f;

@@ -1,5 +1,11 @@
 {
     "FirearmMusketBayonet": {
+        "BayonetAnticipateDuration": 10.0,
+        "BayonetAttackDuration": 10.0,
+        "BayonetAttackSpeed": 0.25,
+        "BayonetReach": 2.0,
+        "BayonetRecoveryDuration": 15.0,
+        "BayonetSwingHeight": 1.7999999523162842,
         "LungeDamage": 10,
         "LungeImpactPower": 1.7999999523162842,
         "OffsetHolsterRotate": [

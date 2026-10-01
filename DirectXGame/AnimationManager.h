@@ -19,7 +19,10 @@ public:
 	struct AnimationContext {
 		KamataEngine::Vector3 velocity = {};
 		bool onGround = true;
-		bool isDead = false; // kDeathビヘイビア中はGetMovementAnimOffsetをニュートラルにする
+		bool isDead = false;
+
+		// 移動アニメーションとは別の、攻撃・照準・リロード等による体のポーズ
+		SRTOffset actionPose = {};
 	};
 
 	struct MovementEvents {
@@ -44,6 +47,7 @@ public:
 	virtual ~AnimationManager() = default;
 
 protected:
+	friend class DebugMenu;
 	static constexpr size_t kPartCount = static_cast<size_t>(PartSlot::kCount);
 	static constexpr size_t body = static_cast<size_t>(PartSlot::kBody);
 	static constexpr size_t head = static_cast<size_t>(PartSlot::kHead);

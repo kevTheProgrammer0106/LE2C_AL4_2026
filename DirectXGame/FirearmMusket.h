@@ -26,6 +26,7 @@ public:
 	static void SetMusketLoadedSoundHandle(uint32_t handle) { sMusketLoadedSoundHandle_ = handle; }
 
 private:
+	friend class DebugMenu;
 	// --- 弾薬・リロード関連 ---
 	int currentAmmo_ = 1;
 	static inline int kMaxAmmo = 1;

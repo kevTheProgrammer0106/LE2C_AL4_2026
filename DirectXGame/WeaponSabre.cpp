@@ -48,18 +48,6 @@ AABB WeaponSabre::GetSwingAABB(const Player& player, int comboIndex) const {
 
 	AABB aabb;
 	switch (dir) {
-	case Player::AttackDirection::kUp: {
-		float reach = kUpDownReach[comboIndex];
-		float width = kUpDownWidth[comboIndex];
-		float centerX = (playerAABB.min.x + playerAABB.max.x) * 0.5f;
-		aabb.min.x = centerX - width * 0.5f;
-		aabb.max.x = centerX + width * 0.5f;
-		aabb.min.y = playerAABB.max.y - kOverlapMargin;
-		aabb.max.y = playerAABB.max.y + reach;
-		aabb.min.z = playerAABB.min.z;
-		aabb.max.z = playerAABB.max.z;
-		break;
-	}
 	case Player::AttackDirection::kDown: {
 		float reach = kUpDownReach[comboIndex];
 		float width = kUpDownWidth[comboIndex];
@@ -170,7 +158,7 @@ void WeaponSabre::SetMeleePosition(const Player& player) {
 				break;
 			}
 		} else {
-			const SRTOffset& directionPose = (dir == Player::AttackDirection::kUp) ? kUpAttackOffset : kDownAttackOffset;
+			const SRTOffset& directionPose = kDownAttackOffset;
 			switch (anim.phase) {
 			case Player::AttackPhase::kAnticipate:
 				pose = LerpSRT(holsterOffset_, directionPose, anim.t);

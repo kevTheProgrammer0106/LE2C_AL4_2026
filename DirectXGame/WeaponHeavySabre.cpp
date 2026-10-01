@@ -1,3 +1,4 @@
+#define NOMINMAX
 #include "WeaponHeavySabre.h"
 #include "BaseEnemy.h"
 #include "GlobalVariables.h"
@@ -193,3 +194,5 @@ AABB WeaponHeavySabre::GetLungeAABBGeneric(const Vector3& ownerPosition, bool fa
 	aabb.max.z = ownerPosition.z + ownerHalfWidth;
 	return aabb;
 }
+
+	void WeaponHeavySabre::SetEquipDuration(float seconds) { equipDuration_ = std::max(seconds, 0.01f); }

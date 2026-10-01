@@ -53,9 +53,6 @@ void CuirassierBehavior::BehaviorRootUpdate() {
 	}
 	Player* player = scene->GetPlayer();
 
-	// 通常の見た目(非攻撃時の構え)を追従させる
-	cuirassierOwner_.UpdateMeleeVisual(nullptr);
-
 	Vector3 diff = player->GetWorldPosition() - owner_.GetWorldPosition();
 	float distance = std::sqrt(diff.x * diff.x + diff.y * diff.y);
 

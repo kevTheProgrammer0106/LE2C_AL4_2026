@@ -268,20 +268,21 @@ void Player::UseMeleeWeapon() {
 	if (Input::GetInstance()->IsTriggerMouse(0)) {
 		currentMelee_->SetWeaponState(WeaponState::kEquipped);
 		PlayerBehavior::AttackDirection direction = PlayerBehavior::AttackDirection::kSide;
-		if (Input::GetInstance()->PushKey(DIK_W))
-			direction = PlayerBehavior::AttackDirection::kUp;
-		else if (Input::GetInstance()->PushKey(DIK_S))
+		if (Input::GetInstance()->PushKey(DIK_S))
 			direction = PlayerBehavior::AttackDirection::kDown;
 		behavior_.RequestAttack(direction);
 	}
 }
 void Player::Update() {
 	ApplyGlobalVariables();
-	TickDebuffs(); // [NEW]
+	TickDebuffs();
 	if (currentFirearm_)
 		currentFirearm_->TickRecoil();
 
-	if (!controlLocked_) {
+	if (behavior_.IsStunned())
+		behavior_.SetBlocking(false);
+	const bool canAct = !controlLocked_ && !behavior_.IsStunned();
+	if (canAct) {
 		if (Input::GetInstance()->TriggerKey(DIK_Q)) {
 			SetWeaponMode(weaponMode_ == WeaponMode::kMelee ? WeaponMode::kFirearm : WeaponMode::kMelee);
 		}
@@ -315,7 +316,7 @@ void Player::Update() {
 		UpdateAimAndFirearm();
 	}
 
-	if (!controlLocked_) {
+	if (canAct) {
 		UseFirearm();
 		UseMeleeWeapon();
 	}

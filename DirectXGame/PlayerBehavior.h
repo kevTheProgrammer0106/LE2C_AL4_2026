@@ -12,7 +12,7 @@ public:
 
 	enum class Behavior { kUnknown, kRoot, kAttack, kKnockback, kStunned, kBlock, kDeath };
 	enum class AttackPhase { kAnticipate, kAttack, kRecovery };
-	enum class AttackDirection { kSide, kUp, kDown };
+	enum class AttackDirection { kSide, kDown };
 
 	struct AttackAnimState {
 		AttackPhase phase = AttackPhase::kAnticipate;
@@ -39,6 +39,7 @@ public:
 
 	void RequestStun(float duration);
 	void RequestHitKnockback(const KamataEngine::Vector3& direction, float power);
+	void BeginKnockback(const KamataEngine::Vector3& velocity);
 	void RequestDeath(const KamataEngine::Vector3& direction, float power);
 	void SetBlocking(bool blocking);
 	bool IsBlocking() const { return isBlocking_; }

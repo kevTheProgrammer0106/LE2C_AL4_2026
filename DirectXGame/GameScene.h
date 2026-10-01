@@ -46,6 +46,7 @@
 #include "MusicManager.h"
 #include "UIMenu.h"
 #include "GameAssets.h"
+#include "DebugMenu.h" 
 
 class StageManager;
 
@@ -149,6 +150,9 @@ public:
 	static bool GetArenaCameraOffsetOverride(int32_t stageIndex, uint8_t arenaID, KamataEngine::Vector3& outOffset);
 
 private:
+	friend class DebugMenu;
+	DebugMenu debugMenu_;  
+
 	static constexpr float kBlockScale = 1.0f;
 	static constexpr float kChunkWorldWidth = MapChipField::kChunkBlockSize * kBlockScale;
 	static constexpr float kChunkWorldHeight = MapChipField::kChunkBlockSize * kBlockScale;

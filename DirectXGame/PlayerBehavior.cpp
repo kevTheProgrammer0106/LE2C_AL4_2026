@@ -104,9 +104,14 @@ void PlayerBehavior::UpdateCurrentBehavior() {
 }
 
 void PlayerBehavior::RequestAttack(AttackDirection direction) {
-	if (owner_.IsControlLocked() || behavior_ == Behavior::kKnockback) {
+	if (owner_.IsControlLocked() || behavior_ == Behavior::kKnockback || behavior_ == Behavior::kStunned || behaviorRequest_ == Behavior::kStunned) {
 		return;
 	}
+	
+	if (direction == AttackDirection::kDown && owner_.onGround_) {
+		direction = AttackDirection::kSide;
+	}
+
 	if (!isAttacking_) {
 		comboIndex_ = 0;
 		isAttacking_ = true;
@@ -123,15 +128,29 @@ void PlayerBehavior::RequestAttack(AttackDirection direction) {
 }
 
 void PlayerBehavior::RequestStun(float duration) {
+	if (behavior_ == Behavior::kDeath || behaviorRequest_ == Behavior::kDeath)
+		return;
 	stunDuration_ = duration;
+	isAttacking_ = false; // otherwise the player can't attack again after the stun
+	comboInputBuffered_ = false;
 	behaviorRequest_ = Behavior::kStunned;
 }
-
-void PlayerBehavior::RequestHitKnockback(const Vector3& direction, float power) {
-	owner_.velocity_ = {direction.x * (power * kHitKnockbackSpeedScale), direction.y * (power * kHitKnockbackSpeedScale), direction.z * (power * kHitKnockbackSpeedScale)};
+// Single path for every knockback source.
+void PlayerBehavior::BeginKnockback(const Vector3& velocity) {
+	if (behavior_ == Behavior::kDeath || behaviorRequest_ == Behavior::kDeath)
+		return;
+	owner_.velocity_ = velocity;
 	isAttacking_ = false;
+	comboInputBuffered_ = false;
 	behaviorRequest_ = Behavior::kKnockback;
 }
+void PlayerBehavior::RequestHitKnockback(const Vector3& direction, float power) {
+	float s = power * kHitKnockbackSpeedScale;
+	BeginKnockback({direction.x * s, direction.y * s, direction.z * s});
+}
+
+// Legacy entry point (attack-was-blocked recoil), now routed through the same path.
+void PlayerBehavior::RequestKnockback(float pushDirectionSign) { BeginKnockback({pushDirectionSign * kKnockBackSpeedX, kKnockBackSpeedY, 0.0f}); }
 
 void PlayerBehavior::RequestDeath(const Vector3& direction, float power) {
 	deathDirection_ = direction;
@@ -228,13 +247,6 @@ void PlayerBehavior::BehaviorDeathUpdate() {
 		owner_.isDead_ = true;
 }
 
-void PlayerBehavior::RequestKnockback(float pushDirectionSign) {
-	owner_.velocity_.x = pushDirectionSign * kKnockBackSpeedX;
-	owner_.velocity_.y = kKnockBackSpeedY;
-	isAttacking_ = false;
-	behaviorRequest_ = Behavior::kKnockback;
-}
-
 PlayerBehavior::AttackAnimState PlayerBehavior::GetAttackAnimState() const {
 	float duration = 1.0f;
 	const BaseMelee* melee = owner_.GetCurrentMelee();
@@ -286,7 +298,6 @@ void PlayerBehavior::BehaviorRootUpdate() {
 void PlayerBehavior::BehaviorAttackInitialize() {
 	attackParameter_ = 0;
 	attackPhase_ = AttackPhase::kAnticipate;
-	owner_.velocity_.y = 0.0f;
 	attackVelocity_ = {0.0f, 0.0f, 0.0f};
 	if (BaseMelee* melee = owner_.GetCurrentMelee()) {
 		melee->ResetSwingHits();
@@ -361,20 +372,30 @@ void PlayerBehavior::BehaviorAttackUpdate() {
 	}
 	}
 
-	Vector3 finalMove;
-	if (attackDirection_ == AttackDirection::kUp || attackDirection_ == AttackDirection::kDown) {
+	if (attackDirection_ == AttackDirection::kDown) {
+		// GroundMovement() already applies gravity while airborne.
 		if (!owner_.IsControlLocked()) {
 			owner_.GroundMovement();
 			owner_.JumpMovement();
 		}
-		finalMove = owner_.velocity_;
+		CollisionInfo collisionMapInfo;
+		collisionMapInfo.move = owner_.velocity_;
+		owner_.MapChipCollisionUpdate(collisionMapInfo);
 	} else {
-		finalMove = attackVelocity_;
-	}
+		// Side attack: lunge on X, gravity on Y while airborne.
+		if (!owner_.onGround_) {
+			owner_.velocity_.y -= Player::kGravityAcceleration;
+			owner_.velocity_.y = std::max(owner_.velocity_.y, -Player::kLimitFallSpeed);
+		}
 
-	CollisionInfo collisionMapInfo;
-	collisionMapInfo.move = finalMove;
-	owner_.MapChipCollisionUpdate(collisionMapInfo);
+		CollisionInfo horizontalInfo;
+		horizontalInfo.move = {attackVelocity_.x, 0.0f, 0.0f};
+		owner_.MapChipCollisionUpdate(horizontalInfo);
+
+		CollisionInfo verticalInfo;
+		verticalInfo.move = {0.0f, owner_.velocity_.y, 0.0f};
+		owner_.MapChipCollisionUpdate(verticalInfo);
+	}
 
 	WorldTransformUpdate(owner_.worldTransform_);
 	WorldTransformUpdate(owner_.worldTransformAttack_);

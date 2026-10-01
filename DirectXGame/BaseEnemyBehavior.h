@@ -40,7 +40,16 @@ public:
 	Behavior GetBehavior() const { return behavior_; }
 	bool IsRootBehavior() const { return behavior_ == Behavior::kRoot; }
 	bool IsDeathBehavior() const { return behavior_ == Behavior::kDeath; }
-	void RequestBehavior(Behavior request) { behaviorRequest_ = request; }
+	void RequestBehavior(Behavior request) {
+		// デバッグ中は新しいAI状態への遷移だけを止める。
+		// 現在のBehavior自体はUpdateされるため、武器アニメーションや
+		// 現在の攻撃モーションを継続して確認できる。
+		if (kDebugDecisionFreeze_) {
+			return;
+		}
+
+		behaviorRequest_ = request;
+	}
 
 	virtual bool IsEngaged() const { return false; }
 
@@ -92,6 +101,21 @@ public:
 		knockbackPower_ = power;
 		behaviorRequest_ = Behavior::kKnockback;
 	}
+	void RequestStun(float duration) {
+		if (behavior_ == Behavior::kDeath || behaviorRequest_ == Behavior::kDeath)
+			return;
+		stunDuration_ = duration;
+		behaviorRequest_ = Behavior::kStunned;
+	}
+	void ClearDebuffs() {
+		if (behavior_ == Behavior::kStunned || behavior_ == Behavior::kKnockback)
+			behaviorRequest_ = Behavior::kRoot;
+		else if (behaviorRequest_ == Behavior::kStunned || behaviorRequest_ == Behavior::kKnockback)
+			behaviorRequest_ = Behavior::kUnknown;
+	}
+	bool IsStunned() const { return behavior_ == Behavior::kStunned; }
+	bool IsKnockedBack() const { return behavior_ == Behavior::kKnockback; }
+	bool IsDebuffed() const { return IsStunned() || IsKnockedBack(); }
 
 	bool HasLastKnownPosition() const { return hasLastKnownPosition_; }
 	void SetHasLastKnownPosition(bool value) { hasLastKnownPosition_ = value; }
@@ -118,7 +142,17 @@ public:
 	void SetPersistentAwareness(bool value) { persistentAwareness_ = value; }
 	bool HasPersistentAwareness() const { return persistentAwareness_; }
 
+	//デバッグツール
+	static void SetDebugDecisionFreeze(bool frozen) { kDebugDecisionFreeze_ = frozen; }
+	static bool IsDebugDecisionFreeze() { return kDebugDecisionFreeze_; }
+	static void SetDebugMovementFreeze(bool frozen) { kDebugMovementFreeze_ = frozen; }
+	static bool IsDebugMovementFreeze() { return kDebugMovementFreeze_; }
+
 protected:
+
+	static inline bool kDebugDecisionFreeze_ = false;
+	static inline bool kDebugMovementFreeze_ = false;
+
 	virtual void BehaviorRootInitialize();
 	virtual void BehaviorRootUpdate();
 
@@ -130,10 +164,10 @@ protected:
 
 	virtual void BehaviorDieInitialize();
 	virtual void BehaviorDieUpdate();
-
-	// [NEW]
 	virtual void BehaviorKnockbackInitialize();
 	virtual void BehaviorKnockbackUpdate();
+	virtual void BehaviorStunnedInitialize();
+	virtual void BehaviorStunnedUpdate();
 
 	void IdleFacingUpdate();
 
@@ -218,10 +252,13 @@ protected:
 	static inline float kDeathMaxFallSpeed = 0.75f;
 
 	static inline float kFloorLevelTolerance = 0.6f;
-	// [NEW] knockback state
+
 	KamataEngine::Vector3 knockbackDirection_{};
 	float knockbackPower_ = 0.0f;
 	uint32_t knockbackParameter_ = 0;
 	static inline uint32_t kKnockbackDuration = 15;
 	static inline float kKnockbackSpeedScale = 0.12f;
+
+	float stunTimer_ = 0.0f;
+	float stunDuration_ = 0.0f;
 };

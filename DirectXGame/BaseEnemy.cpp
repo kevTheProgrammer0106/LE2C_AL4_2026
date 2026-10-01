@@ -127,6 +127,8 @@ void BaseEnemy::Update() {
 		return;
 
 	behavior_->UpdateCurrentBehavior();
+	if (behavior_->IsDebuffed()) 
+		RefreshWeaponVisual();
 	UpdateMovementState();
 	UpdateBodyParts();
 }
@@ -396,5 +398,42 @@ void BaseEnemy::SpawnDropItem() {
 	DropWeaponKind kind;
 	if (GetDropInfo(category, kind)) {
 		gameScene_->CreateDroppableItem(GetWorldPosition(), category, kind);
+	}
+}
+bool BaseEnemy::ShouldWeaponBeEquipped() const {
+	if (!behavior_)
+		return false;
+	Behavior current = behavior_->GetBehavior();
+	if (current == Behavior::kMelee || current == Behavior::kAiming || current == Behavior::kReloading || current == Behavior::kBlock)
+		return true;
+	// IsChasing(): spotted, or still within the chase timeout / alerted by a nearby enemy.
+	return behavior_->IsChasing() || behavior_->IsEngaged();
+}
+
+void BaseEnemy::UpdateWeaponEquipState() {
+	if (ignoreEquipStates_) {
+		weaponEquipped_ = true;
+		equipLockTimer_ = 0.0f;
+		return;
+	}
+
+	if (equipLockTimer_ > 0.0f)
+		equipLockTimer_ = std::max(0.0f, equipLockTimer_ - 1.0f / 60.0f);
+
+	bool want = ShouldWeaponBeEquipped();
+	if (want != weaponEquipped_) {
+		weaponEquipped_ = want;
+		if (GetEquipStyle() == EquipStyle::kHeavy)
+			equipLockTimer_ = kHeavyEquipLockDuration;
+		ApplyWeaponEquipState(weaponEquipped_);
+	}
+}
+
+void BaseEnemy::SetIgnoreEquipStates(bool ignore) {
+	ignoreEquipStates_ = ignore;
+	equipLockTimer_ = 0.0f;
+	if (ignore) {
+		weaponEquipped_ = true;
+		SnapWeaponEquipState(true);
 	}
 }

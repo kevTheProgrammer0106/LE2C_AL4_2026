@@ -42,40 +42,27 @@ void EnemyRifleman::Initialize(const std::array<PartResources, static_cast<size_
 }
 
 void EnemyRifleman::Update() {
-	BaseEnemy::Update();
-
-	if (!isDead_ && currentFirearm_) {
-		currentFirearm_->SetOffset(firearmOffset_.scale, firearmOffset_.rotation, firearmOffset_.translation);
-		currentFirearm_->TickRecoil();
-	}
-
 	if (!isDead_) {
 		gunPoseTimer_ += 1.0f / 60.0f;
-		SRTOffset pose{};
-		switch (gunPose_) {
-		case GunPose::kAiming:
-			pose = kAimPose;
-			break;
-		case GunPose::kFiring: {
-			float t = std::clamp(gunPoseTimer_ / kFirePoseDuration, 0.0f, 1.0f);
-			pose = LerpSRT(kFirePose, kAimPose, t);
-			break;
-		}
-		case GunPose::kReloading:
-			pose = kReloadPose;
-			break;
-		default:
-			break;
-		}
+	}
 
-		parts_[body].transform.translation_ += pose.translation;
-		parts_[body].transform.rotation_ += pose.rotation;
-		parts_[body].transform.scale_ = {
-		    parts_[body].transform.scale_.x * pose.scale.x,
-		    parts_[body].transform.scale_.y * pose.scale.y,
-		    parts_[body].transform.scale_.z * pose.scale.z,
-		};
-		WorldTransformUpdate(parts_[body].transform);
+	BaseEnemy::Update();
+
+	if (isDead_ || !currentFirearm_)
+		return;
+
+	currentFirearm_->SetOffset(firearmOffset_.scale, firearmOffset_.rotation, firearmOffset_.translation);
+	currentFirearm_->TickRecoil();
+
+	if (GetBehaviorModule().IsDeathBehavior())
+		return;
+
+	UpdateWeaponEquipState();
+
+	using B = BaseEnemyBehavior::Behavior;
+	B current = GetBehaviorModule().GetBehavior();
+	if (current != B::kAiming && current != B::kReloading && current != B::kMelee) {
+		UpdateFirearmHybrid();
 	}
 }
 
@@ -89,6 +76,7 @@ void EnemyRifleman::Draw() {
 void EnemyRifleman::SetMusketModel(Model* model, uint32_t textureHandle) {
 	currentFirearm_ = std::make_unique<FirearmMusketBayonet>();
 	currentFirearm_->Initialize(model, textureHandle, camera_);
+	SnapWeaponEquipState(ignoreEquipStates_);
 }
 
 Vector2 EnemyRifleman::ComputeTargetAimPosition() {
@@ -123,8 +111,9 @@ void EnemyRifleman::UpdateFirearmHybrid() {
 		currentFirearm_->SetEquipped(true);
 		currentFirearm_->UpdateFollow(GetWorldTransform(), 0.0f, isRight());
 	} else {
-		currentFirearm_->SetEquipped(false);
-		currentFirearm_->UpdateFollow(GetWorldTransform(), 0.0f, 0.0f);
+		bool equipped = (currentBehavior != Behavior::kReloading) && IsWeaponEquipped();
+		currentFirearm_->SetEquipped(equipped);
+		currentFirearm_->UpdateFollow(GetWorldTransform(), 0.0f, isRight());
 	}
 }
 
@@ -147,26 +136,66 @@ void EnemyRifleman::ShootFirearm() {
 }
 
 AABB EnemyRifleman::GetBayonetLungeAABB() const {
-	constexpr float kOverlapMargin = 0.1f;
-	constexpr float kBayonetReach = 1.3f;
-	constexpr float kBayonetHeightRatio = 0.625f; // 1.0 / 1.6 with the default body height
-	const float ownerHalfWidth = kWidth * 0.5f;
-	const float bayonetHeight = kHeight * kBayonetHeightRatio;
-
-	Vector3 pos = GetWorldPosition();
-	bool facingRight = isRight();
-
-	AABB aabb;
-	if (facingRight) {
-		aabb.min.x = pos.x + ownerHalfWidth - kOverlapMargin;
-		aabb.max.x = pos.x + ownerHalfWidth + kBayonetReach;
-	} else {
-		aabb.min.x = pos.x - ownerHalfWidth - kBayonetReach;
-		aabb.max.x = pos.x - ownerHalfWidth + kOverlapMargin;
+	if (!currentFirearm_) {
+		return {};
 	}
-	aabb.min.y = pos.y - bayonetHeight * 0.5f;
-	aabb.max.y = pos.y + bayonetHeight * 0.5f;
-	aabb.min.z = pos.z - ownerHalfWidth;
-	aabb.max.z = pos.z + ownerHalfWidth;
+
+	float reach = currentFirearm_->GetBayonetReach();
+	float swingHeight = currentFirearm_->GetBayonetSwingHeight();
+
+	float halfWidth = BaseEnemy::GetBodyWidth() * 0.5f;
+	float centerY = worldTransform_.translation_.y;
+
+	AABB aabb{};
+
+	if (isRight()) {
+		aabb.min.x = worldTransform_.translation_.x + halfWidth - 0.1f;
+
+		aabb.max.x = worldTransform_.translation_.x + halfWidth + reach;
+	} else {
+		aabb.min.x = worldTransform_.translation_.x - halfWidth - reach;
+
+		aabb.max.x = worldTransform_.translation_.x + halfWidth + 0.1f;
+	}
+
+	aabb.min.y = centerY - swingHeight * 0.5f;
+
+	aabb.max.y = centerY + swingHeight * 0.5f;
+
+	aabb.min.z = worldTransform_.translation_.z - halfWidth;
+
+	aabb.max.z = worldTransform_.translation_.z + halfWidth;
+
 	return aabb;
+}
+
+SRTOffset EnemyRifleman::GetActionAnimOffset() const {
+	SRTOffset pose{};
+
+	if (!currentFirearm_) {
+		return pose;
+	}
+
+	switch (gunPose_) {
+	case GunPose::kAiming:
+		pose = kAimPose;
+		break;
+
+	case GunPose::kFiring: {
+		float t = std::clamp(gunPoseTimer_ / kFirePoseDuration, 0.0f, 1.0f);
+
+		pose = LerpSRT(kFirePose, kAimPose, t);
+		break;
+	}
+
+	case GunPose::kReloading:
+		pose = kReloadPose;
+		break;
+
+	case GunPose::kNeutral:
+	default:
+		break;
+	}
+
+	return pose;
 }

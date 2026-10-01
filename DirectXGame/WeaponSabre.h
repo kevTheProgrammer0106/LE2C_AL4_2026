@@ -9,7 +9,7 @@ public:
 	void SetWorldPosition(KamataEngine::Vector3& TargetPosition) override;
 	void SetMeleePosition(const Player& player);
 
-	// [NEW] Player以外(敵)がこの武器を装備している場合の位置更新。
+	// Player以外(敵)がこの武器を装備している場合の位置更新。
 	// ownerPosition/ownerRotation/facingRightは呼び出し側(EnemyFighter/EnemyCuirassier)が
 	// 自分のworldTransform_から渡す。attackState==nullptrなら非攻撃時のホルスター/構えのみ。
 	void SetMeleePositionGeneric(const KamataEngine::Vector3& ownerPosition, const KamataEngine::Vector3& ownerRotation, bool facingRight, const GenericAttackAnimState* attackState);
@@ -27,7 +27,14 @@ public:
 	void SetWeaponState(WeaponState state);
 	void UpdateWeaponState();
 
+	void SnapWeaponState(WeaponState state) {
+		weaponState_ = state;
+		equipTimer_ = 1.0f;
+		isTransitioning_ = false;
+	}
+
 private:
+	friend class DebugMenu;
 	WeaponState weaponState_ = WeaponState::kEquipped;
 	float equipTimer_ = 1.0f;
 	float equipDuration_ = 0.25f;

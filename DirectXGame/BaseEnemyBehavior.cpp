@@ -69,6 +69,10 @@ PathFindingAlgorithm::PathCostProfile BaseEnemyBehavior::BuildPathCostProfile() 
 }
 
 void BaseEnemyBehavior::UpdateVisionAndChaseRequest() {
+	if (kDebugDecisionFreeze_) {
+		return;
+	}
+
 	if (!owner_.isDead_ && behavior_ != Behavior::kDeath && behaviorRequest_ != Behavior::kDeath) {
 		Vector3 eyePos = owner_.GetWorldPosition() + Vector3(0.0f, kVisionEyeHeight, 0.0f);
 		Vector3 baseFacingDir = owner_.isRight() ? Vector3(1.0f, 0.0f, 0.0f) : Vector3(-1.0f, 0.0f, 0.0f);
@@ -109,10 +113,9 @@ void BaseEnemyBehavior::UpdateVisionAndChaseRequest() {
 			chaseTimeoutTimer_ += 1.0f / 60.0f;
 			hasBroadcastAlertThisSighting_ = false;
 		}
-
 		bool shouldChase = IsChasing();
 		if (shouldChase) {
-			if (!IsEngaged() && (behavior_ != Behavior::kRoot || behaviorRequest_ == Behavior::kRoam || behaviorRequest_ == Behavior::kIdle)) {
+			if (!IsDebuffed() && !IsEngaged() && (behavior_ != Behavior::kRoot || behaviorRequest_ == Behavior::kRoam || behaviorRequest_ == Behavior::kIdle)) {
 				behaviorRequest_ = Behavior::kRoot;
 			}
 		} else if (behavior_ == Behavior::kRoot && behaviorRequest_ == Behavior::kUnknown) {
@@ -138,7 +141,10 @@ void BaseEnemyBehavior::InitializeBehaviorState(Behavior behavior) {
 		break;
 	case Behavior::kKnockback:
 		BehaviorKnockbackInitialize();
-		break; // [NEW]
+		break;
+	case Behavior::kStunned:
+		BehaviorStunnedInitialize();
+		break;
 	case Behavior::kIdle:
 	default:
 		BehaviorIdleInitialize();
@@ -161,7 +167,11 @@ void BaseEnemyBehavior::UpdateBehaviorState() {
 	case Behavior::kKnockback:
 		BehaviorKnockbackUpdate();
 		RunPhysicsAndCollisionUpdate();
-		break; // [NEW]
+		break; 
+	case Behavior::kStunned:
+		BehaviorStunnedUpdate();
+		RunPhysicsAndCollisionUpdate();
+		break;
 	case Behavior::kIdle:
 	default:
 		BehaviorIdleUpdate();
@@ -304,7 +314,7 @@ void BaseEnemyBehavior::BehaviorRoamUpdate() {
 	}
 }
 
-// [NEW] Knockback
+// Knockback
 void BaseEnemyBehavior::BehaviorKnockbackInitialize() {
 	knockbackParameter_ = 0;
 	owner_.velocity_ = {knockbackDirection_.x * (knockbackPower_ * kKnockbackSpeedScale), knockbackDirection_.y * (knockbackPower_ * kKnockbackSpeedScale) + 0.15f, 0.0f};
@@ -317,6 +327,16 @@ void BaseEnemyBehavior::BehaviorKnockbackUpdate() {
 	if (knockbackParameter_ >= kKnockbackDuration) {
 		behaviorRequest_ = Behavior::kRoot;
 	}
+}
+void BaseEnemyBehavior::BehaviorStunnedInitialize() {
+	stunTimer_ = 0.0f;
+	owner_.velocity_.x = 0.0f;
+}
+void BaseEnemyBehavior::BehaviorStunnedUpdate() {
+	stunTimer_ += 1.0f / 60.0f;
+	owner_.velocity_.x = 0.0f; // gravity is still handled by PhysicsAndCollisionUpdate
+	if (stunTimer_ >= stunDuration_)
+		behaviorRequest_ = Behavior::kRoot;
 }
 
 void BaseEnemyBehavior::BehaviorDieInitialize() {
@@ -471,5 +491,19 @@ bool BaseEnemyBehavior::TryJumpIfLedgeAhead(int direction) {
 
 Vector3& BaseEnemyBehavior::OwnerVelocity() { return owner_.velocity_; }
 const Vector3& BaseEnemyBehavior::OwnerVelocity() const { return owner_.velocity_; }
-void BaseEnemyBehavior::RunPhysicsAndCollisionUpdate() { owner_.PhysicsAndCollisionUpdate(); }
+void BaseEnemyBehavior::RunPhysicsAndCollisionUpdate() {
+	// デバッグ中はBehavior自体を更新しつつ、敵本体の物理移動だけ停止する。
+	// これにより武器のポーズ・アニメーション・当たり判定をその場で確認できる。
+	if (kDebugMovementFreeze_) {
+		owner_.velocity_.x = 0.0f;
+		owner_.velocity_.y = 0.0f;
+		return;
+	}
+
+	if (owner_.IsEquipLocked() && (behavior_ == Behavior::kRoot || behavior_ == Behavior::kIdle || behavior_ == Behavior::kRoam)) {
+		owner_.velocity_.x = 0.0f;
+	}
+
+	owner_.PhysicsAndCollisionUpdate();
+}
 GameScene* BaseEnemyBehavior::OwnerGameScene() const { return owner_.gameScene_; }

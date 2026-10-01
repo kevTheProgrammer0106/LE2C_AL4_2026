@@ -193,6 +193,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClCompile Include="CuirassierBehavior.cpp" />
     <ClCompile Include="DeathParticles.cpp" />
     <ClCompile Include="DebugCollisionDraw.cpp" />
+    <ClCompile Include="DebugMenu.cpp" />
     <ClCompile Include="DroppableItem.cpp" />
     <ClCompile Include="EnemyCuirassier.cpp" />
     <ClCompile Include="EnemyFighter.cpp" />
@@ -251,6 +252,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClInclude Include="CuirassierBehavior.h" />
     <ClInclude Include="DeathParticles.h" />
     <ClInclude Include="DebugCollisionDraw.h" />
+    <ClInclude Include="DebugMenu.h" />
     <ClInclude Include="DroppableItem.h" />
     <ClInclude Include="EnemyCuirassier.h" />
     <ClInclude Include="EnemyFighter.h" />

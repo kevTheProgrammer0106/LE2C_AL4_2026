@@ -119,6 +119,7 @@ public:
 
 	void SetStunned(float duration) { behavior_.RequestStun(duration); }
 	void SetKnockback(const KamataEngine::Vector3& direction, float power) { behavior_.RequestHitKnockback(direction, power); }
+
 	void SetBlocking(bool blocking) { behavior_.SetBlocking(blocking); }
 	bool IsBlocking() const { return behavior_.IsBlocking(); }
 	bool IsStunnedState() const { return behavior_.IsStunned(); }

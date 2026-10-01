@@ -66,6 +66,7 @@ void EnemySpawner::Update(GameScene* gameScene, const Vector3& playerPosition) {
 		BaseEnemy* justSpawned = gameScene->GetEnemies().back().get();
 		justSpawned->SetArenaID(arenaID_);
 		if (spawnedEnemiesOmniscient_) {
+			justSpawned->SetIgnoreEquipStates(true);
 			justSpawned->ReceiveAlert(playerPosition);
 			justSpawned->SetPersistentAwareness(true);
 		}

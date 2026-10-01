@@ -35,6 +35,7 @@ protected:
 	void BehaviorRootUpdate() override;
 
 private:
+	friend class DebugMenu;
 	enum class MeleePhase { kAnticipate, kAttack, kRecovery };
 
 	void BehaviorUseMeleeInitialize();

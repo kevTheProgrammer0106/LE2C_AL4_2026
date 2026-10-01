@@ -25,6 +25,8 @@ public:
 	int GetCurrentComboIndex() const { return currentComboIndex_; }
 
 protected:
+	void RefreshWeaponVisual() override { UpdateMeleeVisual(nullptr); }
+
 	std::unique_ptr<BaseEnemyBehavior> CreateBehaviorModule() override { return std::make_unique<FighterBehavior>(*this); }
 	bool GetDropInfo(DropItemCategory& outCategory, DropWeaponKind& outKind) const override {
 		outCategory = DropItemCategory::kMelee;
@@ -32,6 +34,14 @@ protected:
 		return true;
 	}
 
+	void ApplyWeaponEquipState(bool equipped) override {
+		if (currentMelee_)
+			currentMelee_->SetWeaponState(equipped ? WeaponState::kEquipped : WeaponState::kHolstered);
+	}
+	void SnapWeaponEquipState(bool equipped) override {
+		if (currentMelee_)
+			currentMelee_->SnapWeaponState(equipped ? WeaponState::kEquipped : WeaponState::kHolstered);
+	}
 private:
 	std::unique_ptr<WeaponSabre> currentMelee_;
 

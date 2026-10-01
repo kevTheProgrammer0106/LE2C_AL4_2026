@@ -49,6 +49,7 @@ public:
 	static void ApplyGlobalVariables();
 
 private:
+	friend class DebugMenu;
 	uint8_t resolvedEnemyType_ = 0xFF; 
 
 	KamataEngine::Vector3 position_{};

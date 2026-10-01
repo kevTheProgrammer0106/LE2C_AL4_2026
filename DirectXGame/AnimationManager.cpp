@@ -120,39 +120,62 @@ SRTOffset AnimationManager::GetMovementAnimOffset() const {
 }
 
 void AnimationManager::UpdateBodyParts(const WorldTransform& worldTransform, const AnimationContext& context, std::array<BodyPart, kPartCount>& parts) {
+
 	SRTOffset anim = context.isDead ? SRTOffset{} : GetMovementAnimOffset();
 
+	if (!context.isDead) {
+		// 移動アニメーションと戦闘中の体ポーズを合成する
+		anim.translation += context.actionPose.translation;
+		anim.rotation += context.actionPose.rotation;
+
+		anim.scale = {anim.scale.x * context.actionPose.scale.x, anim.scale.y * context.actionPose.scale.y, anim.scale.z * context.actionPose.scale.z};
+	}
+
 	parts[body].transform.translation_ = worldTransform.translation_ + anim.translation;
+
 	parts[body].transform.rotation_ = worldTransform.rotation_ + anim.rotation;
+
 	parts[body].transform.scale_ = {
 	    worldTransform.scale_.x * anim.scale.x,
 	    worldTransform.scale_.y * anim.scale.y,
 	    worldTransform.scale_.z * anim.scale.z,
 	};
+
 	WorldTransformUpdate(parts[body].transform);
 
-	// head/hat は parts[body].transform を親にする
+	// head は最終的な body transform を親として計算する
 	Matrix4x4 rotMatrix =
 	    Multiply(MakeRotateXMatrix(parts[body].transform.rotation_.x), Multiply(MakeRotateYMatrix(parts[body].transform.rotation_.y), MakeRotateZMatrix(parts[body].transform.rotation_.z)));
+
 	Vector3 rotatedHeadOffset = TransformNormal(headOffset_.translation, rotMatrix);
+
 	parts[head].transform.translation_ = parts[body].transform.translation_ + rotatedHeadOffset;
+
 	parts[head].transform.rotation_ = parts[body].transform.rotation_ + headOffset_.rotation;
+
 	parts[head].transform.scale_ = {
 	    parts[body].transform.scale_.x * headOffset_.scale.x,
 	    parts[body].transform.scale_.y * headOffset_.scale.y,
 	    parts[body].transform.scale_.z * headOffset_.scale.z,
 	};
+
 	WorldTransformUpdate(parts[head].transform);
 
+	// hat は最終的な head transform を親として計算する
 	Matrix4x4 headRotMatrix =
 	    Multiply(MakeRotateXMatrix(parts[head].transform.rotation_.x), Multiply(MakeRotateYMatrix(parts[head].transform.rotation_.y), MakeRotateZMatrix(parts[head].transform.rotation_.z)));
+
 	Vector3 rotatedHatOffset = TransformNormal(hatOffset_.translation, headRotMatrix);
+
 	parts[hat].transform.translation_ = parts[head].transform.translation_ + rotatedHatOffset;
+
 	parts[hat].transform.rotation_ = parts[head].transform.rotation_ + hatOffset_.rotation;
+
 	parts[hat].transform.scale_ = {
 	    parts[head].transform.scale_.x * hatOffset_.scale.x,
 	    parts[head].transform.scale_.y * hatOffset_.scale.y,
 	    parts[head].transform.scale_.z * hatOffset_.scale.z,
 	};
+
 	WorldTransformUpdate(parts[hat].transform);
 }

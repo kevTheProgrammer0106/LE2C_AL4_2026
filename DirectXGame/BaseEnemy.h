@@ -114,6 +114,9 @@ public:
 	void SetMaxHP(int maxHp) { maxHP_ = maxHp; }
 
 	void RequestKnockback(const KamataEngine::Vector3& direction, float power) { behavior_->RequestKnockback(direction, power); }
+	void RequestStun(float duration) { behavior_->RequestStun(duration); }
+	void ClearDebuffs() { behavior_->ClearDebuffs(); }
+
 	void SetArenaID(uint8_t id) { arenaID_ = id; }
 	uint8_t GetArenaID() const { return arenaID_; }
 
@@ -134,7 +137,20 @@ public:
 	static void SetDefaultJumpSoundHandle(uint32_t handle) { sDefaultJumpSoundHandle_ = handle; }
 	static void SetDefaultLandSoundHandle(uint32_t handle) { sDefaultLandSoundHandle_ = handle; }
 
+	// Light = equips while still moving. Heavy = enemy stops while equipping/unequipping.
+	enum class EquipStyle { kLight, kHeavy };
+	virtual EquipStyle GetEquipStyle() const { return EquipStyle::kLight; }
+
+	bool IsWeaponEquipped() const { return weaponEquipped_; }
+	// True while a heavy equip/unequip is in progress (movement is held).
+	bool IsEquipLocked() const { return equipLockTimer_ > 0.0f; }
+	// Arena-spawned enemies: no equip states, weapon is always ready and never locks movement.
+	void SetIgnoreEquipStates(bool ignore);
+
 protected:
+	friend class DebugMenu;
+	virtual SRTOffset GetActionAnimOffset() const { return {}; }
+
 	int hp_ = 100;
 	int maxHP_ = 100;
 	KamataEngine::Vector3 pendingHitDirection_ = {1.0f, 0.3f, 0.0f};
@@ -279,4 +295,16 @@ protected:
 			KamataEngine::Audio::GetInstance()->PlayWave(sDefaultLandSoundHandle_, false, kMovementSfxVolume);
 		}
 	}
+
+	// Called every frame while stunned/knocked back: drops stale attack hitboxes and keeps the held weapon attached.
+	virtual void RefreshWeaponVisual() {}
+	void UpdateWeaponEquipState();
+	bool ShouldWeaponBeEquipped() const;
+	virtual void ApplyWeaponEquipState(bool /*equipped*/) {}
+	virtual void SnapWeaponEquipState(bool /*equipped*/) {}
+
+	bool weaponEquipped_ = false;
+	bool ignoreEquipStates_ = false;
+	float equipLockTimer_ = 0.0f;
+	static inline float kHeavyEquipLockDuration = 1.5f;
 };

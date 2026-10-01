@@ -48,6 +48,11 @@ std::vector<Vector3> GetAxesXY(const std::vector<Vector3>& rect, const std::vect
 	}
 	return axes;
 }
+
+// [FIX] 視線を遮るのは実体のある地形ブロックのみ。
+// 以前はkBlockだけだったので、kSlowBlock/半ブロック越しにプレイヤーが見えてしまっていた。
+// プラットフォーム(一方通行)とバリア(カメラ用の見えない壁)は遮らない。
+bool BlocksLineOfSight(MapChipType type) { return type == MapChipType::kBlock || type == MapChipType::kBlockHalfUp || type == MapChipType::kBlockHalfDown || type == MapChipType::kSlowBlock; }
 } // namespace
 
 void VisionSensor::RegisterGlobalVariables() {
@@ -71,8 +76,9 @@ void VisionSensor::UpdateVisionCone(const Vector3& eyePos, const Vector3& facing
 	Vector3 rightDir = RotateXY(facingDir, -halfAngleRad);
 
 	visionTriangle_.center = eyePos;
-	visionTriangle_.left = {eyePos.x + leftDir.x * kVisionRadius, eyePos.y + leftDir.y * kVisionRadius};
-	visionTriangle_.right = {eyePos.x + rightDir.x * kVisionRadius, eyePos.y + rightDir.y * kVisionRadius};
+	visionTriangle_.left = {eyePos.x + leftDir.x * kVisionRadius, eyePos.y + leftDir.y * kVisionRadius, eyePos.z};
+	visionTriangle_.right = {eyePos.x + rightDir.x * kVisionRadius, eyePos.y + rightDir.y * kVisionRadius, eyePos.z};
+	hasValidCone_ = true;
 }
 
 bool VisionSensor::SATCollisionRectTriangle(const std::vector<Vector3>& rect, const std::vector<Vector3>& tri) {
@@ -107,7 +113,7 @@ bool VisionSensor::IsSegmentBlockedByMapChip(const Vector3& from, const Vector3&
 
 		MapChipField::IndexSet indexSet = mapChipField_->GetMapChipIndexSetByPosition(samplePos);
 		MapChipType type = mapChipField_->GetMapChipTypeByIndex(indexSet.xIndex, indexSet.yIndex);
-		if (type == MapChipType::kBlock) {
+		if (BlocksLineOfSight(type)) {
 			return true; // 遮蔽物あり
 		}
 	}

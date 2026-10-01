@@ -56,6 +56,8 @@ public:
 	std::string GetBackgroundFieldChunkFileName(int32_t stageIndex, uint32_t chunkIndex) const;
 
 private:
+	friend class DebugMenu;
+
 	int32_t currentStageIndex_ = 0;
 	std::vector<StageData> stageDatas_;
 	CheckpointData checkpoint_;

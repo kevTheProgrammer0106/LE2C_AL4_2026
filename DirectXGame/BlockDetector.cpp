@@ -1,6 +1,7 @@
 #define NOMINMAX
 #include "BlockDetector.h"
 #include "GlobalVariables.h"
+#include <cmath>
 
 using namespace KamataEngine;
 
@@ -110,70 +111,60 @@ void BlockDetector::TopCollision(CollisionInfo& collisionInfo) {
 void BlockDetector::BottomCollision(CollisionInfo& collisionInfo) {
 	if (collisionInfo.move.y >= 0.0f)
 		return;
-	std::array<Vector3, kNumCorner> positionNew;
-	for (uint32_t i = 0; i < positionNew.size(); ++i) {
-		positionNew[i] = CornerPosition(worldTransform_.translation_ + collisionInfo.move, static_cast<Corner>(i));
-	}
 
-	// Current (pre-move) foot corner positions — needed to tell whether we
-	// were already above the platform's top surface before this frame's
-	// movement. That's the deciding factor for one-way tiles: land on it
-	// only if we were coming from above, otherwise pass straight through
-	// (e.g. jumping up through it, or already standing inside it due to some
-	// other resolution).
-	std::array<Vector3, kNumCorner> positionOld;
-	for (uint32_t i = 0; i < positionOld.size(); ++i) {
-		positionOld[i] = CornerPosition(worldTransform_.translation_, static_cast<Corner>(i));
-	}
+	const Vector3 center = worldTransform_.translation_;
 
-	MapChipField::IndexSet indexSet;
-	MapChipType mapChipTypeNext;
+	// Sweeps one foot corner from its old to its new position so thin one-way platforms
+	// can't be skipped over in a single frame. Returns the landing surface's top Y.
+	auto resolveCorner = [&](Corner corner, float& outTop) -> bool {
+		Vector3 oldPos = CornerPosition(center, corner);
+		Vector3 newPos = CornerPosition(center + collisionInfo.move, corner);
 
-	auto resolveBottomHit = [&](const Vector3& newPos, const Vector3& oldPos) -> bool {
-		if (!mapChipField_->IsSolidAtPosition(newPos)) {
-			return false;
-		}
+		constexpr float kStep = 0.1f;
+		float distance = oldPos.y - newPos.y;
+		int steps = std::max(1, static_cast<int>(std::ceil(distance / kStep)));
 
-		if (mapChipField_->IsOneWayAtPosition(newPos)) {
-			// [FIX] Core of the one-way fix. Only accept this as a landing
-			// if the corner's *previous* Y was at or above the platform's
-			// top surface — i.e. we were falling onto it from above, not
-			// already below it (which would mean jumping up through it or
-			// walking under it, and should pass through unobstructed).
-			MapChipField::IndexSet oneWayIndex = mapChipField_->GetMapChipIndexSetByPosition(newPos);
-			MapChipField::Rect oneWayRect = mapChipField_->GetRectByIndex(oneWayIndex.xIndex, oneWayIndex.yIndex);
-			if (oldPos.y < oneWayRect.top) {
-				return false; // was already at/under the platform's surface -> pass through
+		for (int i = 0; i <= steps; ++i) {
+			float t = static_cast<float>(i) / static_cast<float>(steps);
+			Vector3 sample = {oldPos.x + (newPos.x - oldPos.x) * t, oldPos.y + (newPos.y - oldPos.y) * t, 0.0f};
+
+			if (!mapChipField_->IsSolidAtPosition(sample))
+				continue;
+
+			MapChipField::IndexSet index = mapChipField_->GetMapChipIndexSetByPosition(sample);
+			MapChipField::Rect rect = mapChipField_->GetRectByIndex(index.xIndex, index.yIndex);
+
+			if (mapChipField_->IsOneWayAtPosition(sample)) {
+				// Only land if the foot started at/above the platform's top surface.
+				if (oldPos.y < rect.top - 0.001f)
+					continue;
+			} else {
+				// Keep the existing "don't double count stacked blocks" rule.
+				MapChipType above = mapChipField_->GetMapChipTypeByIndex(index.xIndex, index.yIndex - 1);
+				if (above == MapChipType::kBlock)
+					continue;
 			}
+
+			outTop = rect.top;
 			return true;
 		}
-
-		// Non-platform solid tile: keep the original behavior of ignoring
-		// the hit if the tile directly below (in the fall direction) is
-		// itself a full kBlock (this preserves the existing "don't double
-		// count stacked blocks" logic from before the fix).
-		indexSet = mapChipField_->GetMapChipIndexSetByPosition(newPos);
-		mapChipTypeNext = mapChipField_->GetMapChipTypeByIndex(indexSet.xIndex, indexSet.yIndex - 1);
-		return mapChipTypeNext != MapChipType::kBlock;
+		return false;
 	};
 
-	bool hitLeft = resolveBottomHit(positionNew[kBottomLeft], positionOld[kBottomLeft]);
-	bool hitRight = resolveBottomHit(positionNew[kBottomRight], positionOld[kBottomRight]);
-
+	float topLeft = 0.0f;
+	float topRight = 0.0f;
+	bool hitLeft = resolveCorner(kBottomLeft, topLeft);
+	bool hitRight = resolveCorner(kBottomRight, topRight);
 	if (!hitLeft && !hitRight)
 		return;
 
+	// Snap the feet onto the highest surface that was hit (instead of stopping dead above it).
+	float footY = worldTransform_.translation_.y - (kHeight / 2.0f);
 	float clampedMoveY = collisionInfo.move.y;
-	if (hitLeft) {
-		indexSet = mapChipField_->GetMapChipIndexSetByPosition(positionNew[kBottomLeft]);
-		MapChipField::Rect rect = mapChipField_->GetRectByIndex(indexSet.xIndex, indexSet.yIndex);
-		clampedMoveY = std::max(clampedMoveY, std::max(0.0f, (rect.top - worldTransform_.translation_.y) + (kHeight / 2.0f) + kBlank));
-	}
-	if (hitRight) {
-		indexSet = mapChipField_->GetMapChipIndexSetByPosition(positionNew[kBottomRight]);
-		MapChipField::Rect rect = mapChipField_->GetRectByIndex(indexSet.xIndex, indexSet.yIndex);
-		clampedMoveY = std::max(clampedMoveY, std::max(0.0f, (rect.top - worldTransform_.translation_.y) + (kHeight / 2.0f) + kBlank));
-	}
+	if (hitLeft)
+		clampedMoveY = std::max(clampedMoveY, (topLeft + kBlank) - footY);
+	if (hitRight)
+		clampedMoveY = std::max(clampedMoveY, (topRight + kBlank) - footY);
 
 	collisionInfo.move.y = clampedMoveY;
 	collisionInfo.isHitGround = true;

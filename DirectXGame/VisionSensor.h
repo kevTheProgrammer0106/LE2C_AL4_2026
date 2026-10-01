@@ -4,6 +4,7 @@
 
 #include "Global.h"
 #include "KamataEngine.h"
+#include <array>
 #include <vector>
 
 class MapChipField;
@@ -37,6 +38,9 @@ public:
 	bool IsPlayerSpotted() const { return isPlayerSpotted_; }
 	const VisionTriangle& GetVisionTriangle() const { return visionTriangle_; }
 
+	// [NEW] 視野コーンが一度でも更新されたか(デバッグ描画で原点に線が出るのを防ぐ)
+	bool HasValidCone() const { return hasValidCone_; }
+
 	// 調整用パラメータへのアクセス（デバッグ描画等で使う場合）
 	static float GetVisionRadius() { return kVisionRadius; }
 	static float GetVisionHalfAngle() { return kVisionHalfAngle; }
@@ -45,8 +49,6 @@ public:
 	std::array<KamataEngine::Vector3, kNumConeMarkers> GetDebugConePoints() const;
 
 private:
-
-
 	void UpdateVisionCone(const KamataEngine::Vector3& eyePos, const KamataEngine::Vector3& facingDir);
 	bool IsSegmentBlockedByMapChip(const KamataEngine::Vector3& from, const KamataEngine::Vector3& to) const;
 	static bool SATCollisionRectTriangle(const std::vector<KamataEngine::Vector3>& rect, const std::vector<KamataEngine::Vector3>& tri);
@@ -55,9 +57,10 @@ private:
 
 	VisionTriangle visionTriangle_{};
 	bool isPlayerSpotted_ = false;
+	bool hasValidCone_ = false;
 
 	// --- 索敵(視野)関連 ---
 	static inline float kVisionHalfAngle = 35.0f; // 視野の片側角度(度)
-	static inline float kVisionRadius = 30.0f;     // 索敵距離
+	static inline float kVisionRadius = 30.0f;    // 索敵距離
 	static inline float kRaySampleStep = 0.2f;    // 視線判定のサンプリング間隔
 };

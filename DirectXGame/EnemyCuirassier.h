@@ -38,13 +38,29 @@ public:
 	}
 	static void SetMovementSoundHandle(uint32_t handle) { sMovementSoundHandle_ = handle; }
 	
+	EquipStyle GetEquipStyle() const override { return EquipStyle::kHeavy; }
 
 protected:
+	void RefreshWeaponVisual() override { UpdateMeleeVisual(nullptr); }
+
 	std::unique_ptr<BaseEnemyBehavior> CreateBehaviorModule() override { return std::make_unique<CuirassierBehavior>(*this); }
 	bool GetDropInfo(DropItemCategory& outCategory, DropWeaponKind& outKind) const override {
 		outCategory = DropItemCategory::kMelee;
 		outKind = DropWeaponKind::kSabreHeavy;
 		return true;
+	}
+
+	void ApplyWeaponEquipState(bool equipped) override {
+		if (!currentMelee_)
+			return;
+		currentMelee_->SetEquipDuration(kHeavyEquipLockDuration);
+		currentMelee_->SetWeaponState(equipped ? WeaponState::kEquipped : WeaponState::kHolstered);
+	}
+	void SnapWeaponEquipState(bool equipped) override {
+		if (!currentMelee_)
+			return;
+		currentMelee_->SetEquipDuration(kHeavyEquipLockDuration);
+		currentMelee_->SnapWeaponState(equipped ? WeaponState::kEquipped : WeaponState::kHolstered);
 	}
 
 	// BaseEnemyのvirtualフックをoverride。専用ハンドルがあればそちらを、なければ
