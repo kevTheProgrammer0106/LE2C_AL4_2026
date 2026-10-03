@@ -42,11 +42,11 @@
 #include "UserInterfaceGameplayHUD.h"
 
 #include "ArenaManager.h"
+#include "DebugMenu.h"
 #include "EnemySpawner.h"
+#include "GameAssets.h"
 #include "MusicManager.h"
 #include "UIMenu.h"
-#include "GameAssets.h"
-#include "DebugMenu.h" 
 
 class StageManager;
 
@@ -110,7 +110,16 @@ public:
 	void TriggerLevelClear();
 	bool isLevelCleared() const { return levelCleared_; }
 
-	void SpawnEnemyAt(const KamataEngine::Vector3& position, uint8_t subID);
+	// Returns the enemy that was created (nullptr if subID has no enemy type). Facing is snapped to the right.
+	BaseEnemy* SpawnEnemyAt(const KamataEngine::Vector3& position, uint8_t subID);
+
+	// Placement state painted on an 'E' map chip's link ID (3rd character): E<type><state>, e.g. "E21".
+	enum class EnemyPlacementState : uint8_t {
+		kWander = 0,     // original behavior (idle/roam)
+		kHoldLeft = 1,   // stands still, faces left
+		kHoldRight = 2,  // stands still, faces right
+		kOmniscient = 4, // always knows where the player is (same awareness as arena-spawned enemies)
+	};
 
 	// --- Arena ---
 	ArenaManager* GetOrCreateArena(uint8_t arenaID);
@@ -151,7 +160,7 @@ public:
 
 private:
 	friend class DebugMenu;
-	DebugMenu debugMenu_;  
+	DebugMenu debugMenu_;
 
 	static constexpr float kBlockScale = 1.0f;
 	static constexpr float kChunkWorldWidth = MapChipField::kChunkBlockSize * kBlockScale;
@@ -332,7 +341,9 @@ private:
 		KamataEngine::Vector3 position;
 		uint8_t subID = 0;
 		bool spawned = false;
+		uint8_t placementState = 0; // EnemyPlacementState, from the chip's link ID
 	};
+	void ApplyEnemyPlacementState(BaseEnemy* enemy, uint8_t placementState);
 	std::vector<EnemySpawnPoint> enemySpawnPoints_;
 	void UpdateEnemySpawning();
 
@@ -350,7 +361,7 @@ private:
 	void LoadVerticalRow(uint32_t row);
 	bool usesVerticalRows_ = false;
 
-	std::set<std::pair<uint32_t, uint32_t>> generatedChunkRows_; 
+	std::set<std::pair<uint32_t, uint32_t>> generatedChunkRows_;
 
 	InteractionPrompt interactionPrompt_;
 	uint32_t interactionPromptTex_ = 0;

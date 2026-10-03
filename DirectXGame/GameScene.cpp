@@ -1,10 +1,10 @@
 #define NOMINMAX
 
 #include "GameScene.h"
+#include "DebugCollisionDraw.h"
 #include "GlobalVariables.h"
 #include "InputManager.h"
 #include "StageManager.h"
-#include "DebugCollisionDraw.h"
 #include <fstream>
 
 using namespace KamataEngine;
@@ -78,7 +78,7 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	ArenaManager::RegisterGlobalVariables();
 	HealthBlock::RegisterGlobalVariables();
 	GameScene::RegisterGlobalVariables();
-	MusicManager::RegisterGlobalVariables(); 
+	MusicManager::RegisterGlobalVariables();
 
 	originPoint.Initialize();
 
@@ -155,7 +155,6 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	enemyBodyTex_ = TextureManager::Load("./Resources/riflemanBody/riflemanTorso.png");
 	enemyHeadTex_ = TextureManager::Load("./Resources/riflemanHead/riflemanHead.png");
 	enemyHatTex_ = TextureManager::Load("./Resources/riflemanHat/riflemanShako.png");
-
 
 	deathParticles_ = std::make_unique<DeathParticles>();
 	deathParticleTextureHandle_ = TextureManager::Load("./Resources/deathParticle/white1x1.png");
@@ -240,7 +239,7 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 
 		uint32_t sfxWeaponSwitch = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/weaponSwitch.wav");
 		Player::SetWeaponSwitchSoundHandle(sfxWeaponSwitch);
-			
+
 		uint32_t sfxFootstep = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/FootStep.wav");
 		uint32_t sfxJump = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/Jump.wav");
 		uint32_t sfxLand = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/Landing.wav");
@@ -263,9 +262,9 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 		ingameMusicSoundDataHandle_ = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/combatMusic.wav");
 		arenaMusicSoundDataHandle_ = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/ArenaMusic.wav");
 		musicManager_.Initialize(ingameMusicSoundDataHandle_, arenaMusicSoundDataHandle_);
-		musicManager_.StopMenuMusic(); 
+		musicManager_.StopMenuMusic();
 	}
-	blockTextureHandle = TextureManager::Load("./Resources/blockNormal/blockGrass.png"); 
+	blockTextureHandle = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
 	blockTexVariants_[0] = blockTextureHandle;
 	platformTexVariants_[0] = blockPlatformTextureHandle;
 
@@ -300,19 +299,19 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 		platformTexVariants_[kSubIDConcrete] = TextureManager::Load("./Resources/block/grassBlock.png");
 		platformTexVariants_[kSubIDRubber] = TextureManager::Load("./Resources/block/grassBlock.png");
 
-		//blockTexVariants_[kSubIDGrass] = TextureManager::Load("./Resources/block/grassBlock.png");
-		//blockTexVariants_[kSubIDWood] = TextureManager::Load("./Resources/block/woodBlock.png");
-		//blockTexVariants_[kSubIDBrick] = TextureManager::Load("./Resources/block/brickBlock.png");
-		//blockTexVariants_[kSubIDCobble] = TextureManager::Load("./Resources/block/cobbleBlock.png");
-		//blockTexVariants_[kSubIDConcrete] = TextureManager::Load("./Resources/block/concreteBlock.png");
-		//blockTexVariants_[kSubIDRubber] = TextureManager::Load("./Resources/block/rubberBlock.png");
+		// blockTexVariants_[kSubIDGrass] = TextureManager::Load("./Resources/block/grassBlock.png");
+		// blockTexVariants_[kSubIDWood] = TextureManager::Load("./Resources/block/woodBlock.png");
+		// blockTexVariants_[kSubIDBrick] = TextureManager::Load("./Resources/block/brickBlock.png");
+		// blockTexVariants_[kSubIDCobble] = TextureManager::Load("./Resources/block/cobbleBlock.png");
+		// blockTexVariants_[kSubIDConcrete] = TextureManager::Load("./Resources/block/concreteBlock.png");
+		// blockTexVariants_[kSubIDRubber] = TextureManager::Load("./Resources/block/rubberBlock.png");
 
 		//		platformTexVariants_[kSubIDGrass] = TextureManager::Load("./Resources/block/grassBlock.png");
-		//platformTexVariants_[kSubIDWood] = TextureManager::Load("./Resources/platform/woodBlock.png");
-		//platformTexVariants_[kSubIDBrick] = TextureManager::Load("./Resources/platform/brickBlock.png");
-		//platformTexVariants_[kSubIDCobble] = TextureManager::Load("./Resources/platform/cobbleBlock.png");
-		//platformTexVariants_[kSubIDConcrete] = TextureManager::Load("./Resources/platform/concreteBlock.png");
-		//platformTexVariants_[kSubIDRubber] = TextureManager::Load("./Resources/platform/rubberBlock.png");
+		// platformTexVariants_[kSubIDWood] = TextureManager::Load("./Resources/platform/woodBlock.png");
+		// platformTexVariants_[kSubIDBrick] = TextureManager::Load("./Resources/platform/brickBlock.png");
+		// platformTexVariants_[kSubIDCobble] = TextureManager::Load("./Resources/platform/cobbleBlock.png");
+		// platformTexVariants_[kSubIDConcrete] = TextureManager::Load("./Resources/platform/concreteBlock.png");
+		// platformTexVariants_[kSubIDRubber] = TextureManager::Load("./Resources/platform/rubberBlock.png");
 	}
 	cursorTex_[0] = TextureManager::Load("./Resources/UserInterface/directionAim.png");
 	cursorTex_[1] = TextureManager::Load("./Resources/UserInterface/directionArrow.png");
@@ -321,7 +320,7 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	healthBarFillTex_ = TextureManager::Load("./Resources/white1x1.png");
 	playerHealthUI_.Initialize(healthBarBackgroundTex_, healthBarFillTex_);
 
-	modelHealthBlock_.reset(Model::CreateFromOBJ("block")); 
+	modelHealthBlock_.reset(Model::CreateFromOBJ("block"));
 	healthBlockTex_ = TextureManager::Load("./Resources/block/block.png");
 
 	enemyIconRiflemanTex_ = TextureManager::Load("./Resources/UserInterface/iconRifleman.png");
@@ -442,7 +441,7 @@ void GameScene::InitializeRetryMenu() {
 }
 
 void GameScene::InitializeInGamePauseButton() {
-	inGamePauseButtonTex_ = TextureManager::Load("./Resources/UserInterface/buttonIngamePause.png"); 
+	inGamePauseButtonTex_ = TextureManager::Load("./Resources/UserInterface/buttonIngamePause.png");
 	gameplayHUDInput_.Initialize(inGamePauseButtonTex_, &camera_);
 
 	constexpr float kButtonSize = 44.0f;
@@ -583,7 +582,7 @@ void GameScene::ChangePhase() {
 				finished_ = true;
 			}
 		}
-		break; 
+		break;
 	case Phase::kPlay: {
 		fade_->Update();
 		if (fade_->IsFinished()) {
@@ -863,7 +862,8 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 			case MapChipType::kEnemy: {
 				uint8_t subID = mapChipField_->GetMapChipSubIDByIndex(j, i);
 				Vector3 enemyPosition = mapChipField_->GetMapChipPositionByIndex(j, i);
-				enemySpawnPoints_.push_back({enemyPosition, subID, false});
+				uint8_t placementState = mapChipField_->GetMapChipLinkIDByIndex(j, i); // 0 wander, 1 hold left, 2 hold right, 4 omniscient
+				enemySpawnPoints_.push_back({enemyPosition, subID, false, placementState});
 			} break;
 			case MapChipType::kGoal: {
 				Vector3 goalPosition = mapChipField_->GetMapChipPositionByIndex(j, i);
@@ -934,11 +934,11 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 				}
 				enemySpawners_.push_back(std::move(spawner));
 			} break;
-			case MapChipType::kCheckpoint: { 
+			case MapChipType::kCheckpoint: {
 				Vector3 cpPos = mapChipField_->GetMapChipPositionByIndex(j, i);
 				checkpointTriggers_.push_back({cpPos, false});
 			} break;
-			case MapChipType::kHealthBlock: { 
+			case MapChipType::kHealthBlock: {
 				uint8_t subID = mapChipField_->GetMapChipSubIDByIndex(j, i);
 				Vector3 healthBlockPos = mapChipField_->GetMapChipPositionByIndex(j, i);
 				HealthBlock::Mode mode = (subID == 0) ? HealthBlock::Mode::kLimited : HealthBlock::Mode::kTimer;
@@ -1034,8 +1034,7 @@ void GameScene::Update() {
 	debugMenu();
 
 	cursor_.Update();
-	if (phase_ != Phase::kDeath)
-	{
+	if (phase_ != Phase::kDeath) {
 		cursor_.UpdateCursor();
 	}
 	if (InputManager::GetInstance()->IsPauseTriggered()) {
@@ -1117,9 +1116,6 @@ void GameScene::Update() {
 
 void GameScene::CheckAllCollisions() {
 	AABB aabb1, aabb2;
-#ifdef _DEBUG
-	// AABB aabbTest1;
-#endif
 	aabb1 = player_->GetAABB();
 
 	for (const std::unique_ptr<BaseEnemy>& enemy : enemies_) {
@@ -1131,9 +1127,6 @@ void GameScene::CheckAllCollisions() {
 		if (IsCollisionAABB(aabb1, aabb2)) {
 		}
 	}
-#ifdef _DEBUG
-	// aabbTest1 = enemyTest->GetAABB();
-#endif
 
 	if (player_->isAttack()) {
 		WeaponSabre* melee = static_cast<WeaponSabre*>(player_->GetCurrentMelee());
@@ -1157,6 +1150,12 @@ void GameScene::CheckAllCollisions() {
 			if (IsCollisionAABB(meleeAABB, enemy->GetAABB())) {
 				enemy->OnCollision(player_.get());
 				melee->MarkHit(enemy.get());
+
+				if (enemy->WasBlocked()) {
+					// guarded: no hit effect / knockback on the enemy, the player recoils instead
+					player_->OnCollision(enemy.get());
+					continue;
+				}
 
 				Vector3 effectPos = (enemy->GetWorldPosition() + player_->GetWorldPosition()) / 2.0f;
 				CreateHitEffect(effectPos, hitRotZ);
@@ -1256,40 +1255,47 @@ void GameScene::CheckAllCollisions() {
 		return dir;
 	};
 
+	auto resolveAttackOnPlayer = [&](const AABB& attackBox, const Vector3& attackerPos, int damage, float power, BaseEnemy* attacker) -> bool {
+		Vector3 dir = hitDirTo(attackerPos);
+		if (player_->IsBlockingAttack(attackBox, attackerPos)) {
+			player_->OnBlocked(dir, power, attacker);
+			return true;
+		}
+		if (!IsCollisionAABB(attackBox, aabb1))
+			return false;
+		player_->TakeDamage(damage, dir, power, attacker);
+		return true;
+	};
+
 	auto checkEnemyWeaponVsPlayer = [&](BaseEnemy* enemyPtr) {
 		if (!enemyPtr || enemyPtr->IsDead() || enemyPtr->IsCollisionDisabled())
 			return;
 		if (EnemyFighter* fighter = dynamic_cast<EnemyFighter*>(enemyPtr)) {
 			WeaponSabre* melee = fighter->GetCurrentMelee();
 			if (fighter->IsSwingActive() && melee && !melee->HasHit(player_.get())) {
-				if (IsCollisionAABB(fighter->GetSwingAABB(), aabb1)) {
+				int comboIdx = fighter->GetCurrentComboIndex();
+				if (resolveAttackOnPlayer(fighter->GetSwingAABB(), fighter->GetWorldPosition(), melee->GetDamage(comboIdx, Owner::kEnemy), melee->GetImpactPower(comboIdx), fighter))
 					melee->MarkHit(player_.get());
-					int comboIdx = fighter->GetCurrentComboIndex();
-					player_->TakeDamage(melee->GetDamage(comboIdx, Owner::kEnemy), hitDirTo(fighter->GetWorldPosition()), melee->GetImpactPower(comboIdx), fighter);
-				}
 			}
 		} else if (EnemyCuirassier* cuirassier = dynamic_cast<EnemyCuirassier*>(enemyPtr)) {
 			WeaponHeavySabre* melee = cuirassier->GetCurrentMelee();
 			bool active = cuirassier->IsSwingActive() || cuirassier->IsLungeActive();
 			if (active && melee && !melee->HasHit(player_.get())) {
-				AABB weaponAABB = cuirassier->IsLungeActive() ? cuirassier->GetLungeAABB() : cuirassier->GetSwingAABB();
-				if (IsCollisionAABB(weaponAABB, aabb1)) {
+				bool lunge = cuirassier->IsLungeActive();
+				AABB weaponAABB = lunge ? cuirassier->GetLungeAABB() : cuirassier->GetSwingAABB();
+				int comboIdx = cuirassier->GetCurrentComboIndex();
+				int damage = lunge ? melee->GetLungeDamage() : melee->GetDamage(comboIdx, Owner::kEnemy);
+				float power = lunge ? melee->GetLungeImpactPower() : melee->GetImpactPower(comboIdx);
+				if (resolveAttackOnPlayer(weaponAABB, cuirassier->GetWorldPosition(), damage, power, cuirassier))
 					melee->MarkHit(player_.get());
-					int comboIdx = cuirassier->GetCurrentComboIndex();
-					int damage = cuirassier->IsLungeActive() ? melee->GetLungeDamage() : melee->GetDamage(comboIdx, Owner::kEnemy);
-					float power = cuirassier->IsLungeActive() ? melee->GetLungeImpactPower() : melee->GetImpactPower(comboIdx);
-					player_->TakeDamage(damage, hitDirTo(cuirassier->GetWorldPosition()), power, cuirassier);
-				}
 			}
 		} else if (EnemyRifleman* rifleman = dynamic_cast<EnemyRifleman*>(enemyPtr)) {
 			if (rifleman->IsBayonetActive() && !rifleman->HasHitPlayerThisSwing()) {
-				if (IsCollisionAABB(rifleman->GetBayonetLungeAABB(), aabb1)) {
+				FirearmMusketBayonet* firearm = rifleman->GetCurrentFirearm();
+				int damage = firearm ? firearm->GetLungeDamage() : 10;
+				float power = firearm ? firearm->GetLungeImpactPower() : 1.8f;
+				if (resolveAttackOnPlayer(rifleman->GetBayonetLungeAABB(), rifleman->GetWorldPosition(), damage, power, rifleman))
 					rifleman->MarkHitPlayerThisSwing();
-					FirearmMusketBayonet* firearm = rifleman->GetCurrentFirearm();
-					int damage = firearm ? firearm->GetLungeDamage() : 10;
-					float power = firearm ? firearm->GetLungeImpactPower() : 1.8f;
-					player_->TakeDamage(damage, hitDirTo(rifleman->GetWorldPosition()), power, rifleman);
-				}
 			}
 		}
 	};
@@ -1303,11 +1309,8 @@ void GameScene::CheckAllCollisions() {
 	for (auto& bullet : enemyBullets_) {
 		if (bullet->IsDead())
 			continue;
-		AABB bulletAABB = bullet->GetAABB();
-		if (IsCollisionAABB(aabb1, bulletAABB)) {
-			player_->TakeDamage(bullet->GetDamage(bullet->GetOwner()), hitDirTo(bullet->GetWorldPosition()), bullet->GetImpactPower());
+		if (resolveAttackOnPlayer(bullet->GetAABB(), bullet->GetWorldPosition(), bullet->GetDamage(bullet->GetOwner()), bullet->GetImpactPower(), nullptr))
 			bullet->OnCollision();
-		}
 	}
 
 	if (goal_ && !player_->isDead() && phase_ == Phase::kPlay) {
@@ -1354,7 +1357,7 @@ void GameScene::Draw() {
 	for (auto& sw : switches_)
 		if (sw)
 			sw->Draw();
-	for (auto& hb : healthBlocks_) 
+	for (auto& hb : healthBlocks_)
 		if (hb)
 			hb->Draw();
 	for (std::unique_ptr<BaseEnemy>& enemy : enemies_) {
@@ -1436,7 +1439,8 @@ void GameScene::Draw() {
 	}
 }
 
-void GameScene::SpawnEnemyAt(const Vector3& position, uint8_t subID) {
+BaseEnemy* GameScene::SpawnEnemyAt(const Vector3& position, uint8_t subID) {
+	const size_t enemyCountBefore = enemies_.size();
 	switch (subID) {
 	case 0: {
 		std::array<PartResources, 3> enemyParts = {
@@ -1474,6 +1478,39 @@ void GameScene::SpawnEnemyAt(const Vector3& position, uint8_t subID) {
 	default:
 		break;
 	}
+
+	if (enemies_.size() == enemyCountBefore)
+		return nullptr;
+
+	BaseEnemy* spawned = enemies_.back().get();
+	// BaseEnemy::Initialize starts with rotation_.y facing left while lrDirection_ is kRight (Cuirassier never
+	// overrides it), and FaceDirection(kRight) early-outs, so a right-facing enemy kept a left-facing body
+	// with right-facing weapons. Snap body + direction together on spawn.
+	spawned->GetBehaviorModule().SnapFacing(static_cast<int>(BaseEnemy::LRDirection::kRight));
+	return spawned;
+}
+
+void GameScene::ApplyEnemyPlacementState(BaseEnemy* enemy, uint8_t placementState) {
+	if (!enemy)
+		return;
+	switch (static_cast<EnemyPlacementState>(placementState)) {
+	case EnemyPlacementState::kHoldLeft:
+		enemy->GetBehaviorModule().SetPostMode(BaseEnemyBehavior::PostMode::kHoldLeft);
+		break;
+	case EnemyPlacementState::kHoldRight:
+		enemy->GetBehaviorModule().SetPostMode(BaseEnemyBehavior::PostMode::kHoldRight);
+		break;
+	case EnemyPlacementState::kOmniscient:
+		// Same setup EnemySpawner uses for arena enemies.
+		enemy->SetIgnoreEquipStates(true);
+		if (player_)
+			enemy->ReceiveAlert(player_->GetWorldPosition());
+		enemy->SetPersistentAwareness(true);
+		break;
+	case EnemyPlacementState::kWander:
+	default: // 3 and anything else: original behavior
+		break;
+	}
 }
 
 void GameScene::UpdateEnemySpawning() {
@@ -1483,9 +1520,17 @@ void GameScene::UpdateEnemySpawning() {
 	for (EnemySpawnPoint& spawnPoint : enemySpawnPoints_) {
 		if (spawnPoint.spawned)
 			continue;
-		float dx = std::abs(spawnPoint.position.x - playerPos.x);
-		if (dx <= kEnemySpawnActivateDistance) {
-			SpawnEnemyAt(spawnPoint.position, spawnPoint.subID);
+		bool shouldSpawn = false;
+		if (spawnPoint.placementState == static_cast<uint8_t>(EnemyPlacementState::kOmniscient)) {
+			// Omniscient enemies spawn as soon as their chunk is loaded, regardless of distance.
+			uint32_t chunk = static_cast<uint32_t>(std::max(0.0f, spawnPoint.position.x) / kChunkWorldWidth);
+			shouldSpawn = chunk >= oldestLoadedChunk_ && chunk < loadedChunkCount_;
+		} else {
+			shouldSpawn = std::abs(spawnPoint.position.x - playerPos.x) <= kEnemySpawnActivateDistance;
+		}
+		if (shouldSpawn) {
+			BaseEnemy* spawned = SpawnEnemyAt(spawnPoint.position, spawnPoint.subID);
+			ApplyEnemyPlacementState(spawned, spawnPoint.placementState);
 			spawnPoint.spawned = true;
 		}
 	}
@@ -1531,7 +1576,7 @@ void GameScene::CreateDroppableItem(const Vector3& position, DropItemCategory ca
 void GameScene::ApplyItemPickup(const DroppableItem& item) {
 	Vector3 dropPos = player_->GetWorldPosition();
 
-	if (sfxItemPickupHandle_ != 0) { 
+	if (sfxItemPickupHandle_ != 0) {
 		Audio::GetInstance()->PlayWave(sfxItemPickupHandle_, false, 1.0f);
 	}
 
@@ -1711,7 +1756,6 @@ void GameScene::UnloadChunkVisuals(uint32_t chunkIndex) {
 			sp.spawned = true;
 	}
 
-	
 	enemySpawners_.erase(std::remove_if(enemySpawners_.begin(), enemySpawners_.end(), [&](const std::unique_ptr<EnemySpawner>& s) { return !s || inRange(s->GetPosition().x); }), enemySpawners_.end());
 }
 
@@ -1815,7 +1859,6 @@ void GameScene::TryInteract() {
 		interactionPrompt_.Hide();
 	}
 }
-
 
 void GameScene::UpdateArenaTriggers() {
 	if (!player_ || player_->isDead() || phase_ != Phase::kPlay)
@@ -1966,8 +2009,8 @@ const std::vector<GameScene::ArenaFieldConfig>& GameScene::GetArenaFieldConfigs(
 	            {1, 0, 3.0f, EnemySpawner::SpawnMode::kLimited, 3},
 	            {2, 1, 1.0f, EnemySpawner::SpawnMode::kLimited, 1}, // cuirassier will join the fray
 	            {3, 2, 5.0f, EnemySpawner::SpawnMode::kLimited, 4}, // fighter invades from the left
-	            {4, 0, 5.0f, EnemySpawner::SpawnMode::kLimited, 4}, // rifleman flanks at right 
-	            {5, 2, 0.5f, EnemySpawner::SpawnMode::kLimited, 2}, //FIGHTEERRR
+	            {4, 0, 5.0f, EnemySpawner::SpawnMode::kLimited, 4}, // rifleman flanks at right
+	            {5, 2, 0.5f, EnemySpawner::SpawnMode::kLimited, 2}, // FIGHTEERRR
 	            {6, 0, 0.5f, EnemySpawner::SpawnMode::kLimited, 2}, // RIFLEMANNN
 	            {7, 1, 5.0f, EnemySpawner::SpawnMode::kLimited, 1}, // CUIRASSIERRR
 	        },	            /*hasCameraOffsetOverride*/ true,
@@ -2014,93 +2057,71 @@ void GameScene::DrawCollisionDebug() {
 #ifdef _DEBUG
 	if (Input::GetInstance()->TriggerKey(DIK_F1))
 		showCollisionDebug_ = !showCollisionDebug_;
-	if (Input::GetInstance()->TriggerKey(DIK_F4))
-		DebugDraw::gShowVision = !DebugDraw::gShowVision;
-	if (!player_)
+	if (!showCollisionDebug_ || !player_)
 		return;
 
 	using namespace DebugDraw;
 
-	if (showCollisionDebug_) {
-		// --- Player body + active melee swing ---
-		if (!player_->isDead()) {
-			Box(player_->GetAABB(), Color::kPlayer);
+	// --- Player body + active melee swing ---
+	if (!player_->isDead()) {
+		Box(player_->GetAABB(), Color::kPlayer);
+		if (player_->IsBlockActive())
+			Box(player_->GetBlockAABB(), Color::kBlock);
 
-			if (player_->isAttack()) {
-				// dynamic_cast: the player may be holding WeaponHeavySabre, which has no player-side swing AABB
-				if (WeaponSabre* sabre = dynamic_cast<WeaponSabre*>(player_->GetCurrentMelee())) {
-					if (player_->GetAttackAnimState().phase == Player::AttackPhase::kAttack) {
-						Box(sabre->GetSwingAABB(*player_, player_->GetComboIndex()), Color::kAttack);
-					}
+		if (player_->isAttack()) {
+			// dynamic_cast: the player may be holding WeaponHeavySabre, which has no player-side swing AABB
+			if (WeaponSabre* sabre = dynamic_cast<WeaponSabre*>(player_->GetCurrentMelee())) {
+				if (player_->GetAttackAnimState().phase == Player::AttackPhase::kAttack) {
+					Box(sabre->GetSwingAABB(*player_, player_->GetComboIndex()), Color::kAttack);
 				}
 			}
 		}
-
-		// --- Enemies: body + active weapon hitboxes ---
-		for (const std::unique_ptr<BaseEnemy>& enemy : enemies_) {
-			if (!enemy || enemy->IsDead())
-				continue;
-			if (!IsWithinActiveRange(enemy->GetWorldPosition(), kEntityCullDistance))
-				continue;
-
-			Box(enemy->GetAABB(), Color::kEnemy);
-
-			if (EnemyFighter* fighter = dynamic_cast<EnemyFighter*>(enemy.get())) {
-				if (fighter->IsSwingActive())
-					Box(fighter->GetSwingAABB(), Color::kAttack);
-			} else if (EnemyCuirassier* cuirassier = dynamic_cast<EnemyCuirassier*>(enemy.get())) {
-				if (cuirassier->IsLungeActive())
-					Box(cuirassier->GetLungeAABB(), Color::kAttack);
-				else if (cuirassier->IsSwingActive())
-					Box(cuirassier->GetSwingAABB(), Color::kAttack);
-			} else if (EnemyRifleman* rifleman = dynamic_cast<EnemyRifleman*>(enemy.get())) {
-				if (rifleman->IsBayonetActive())
-					Box(rifleman->GetBayonetLungeAABB(), Color::kAttack);
-			}
-		}
-
-		// --- Projectiles ---
-		for (auto& bullet : playerBullets_)
-			if (bullet && !bullet->IsDead())
-				Box(bullet->GetAABB(), Color::kProjectile);
-		for (auto& bullet : enemyBullets_)
-			if (bullet && !bullet->IsDead())
-				Box(bullet->GetAABB(), Color::kProjectile);
-
-		// --- Interactables ---
-		for (auto& item : droppableItems_)
-			if (item && !item->IsPickedUp() && !item->IsExpired())
-				Box(item->GetAABB(), Color::kObject);
-		for (auto& hb : healthBlocks_)
-			if (hb && hb->IsActive())
-				Box(hb->GetAABB(), Color::kObject);
-		for (auto& sw : switches_)
-			if (sw)
-				Box(sw->GetAABB(), Color::kObject);
-		for (auto& gate : gates_)
-			if (gate && gate->IsBlocking())
-				Box(gate->GetAABB(), Color::kObject);
 	}
 
-	// --- Enemy vision cones (F4) ---
-	if (gShowVision) {
-		for (const std::unique_ptr<BaseEnemy>& enemy : enemies_) {
-			if (!enemy || enemy->IsDead())
-				continue;
-			if (!IsWithinActiveRange(enemy->GetWorldPosition(), kEntityCullDistance))
-				continue;
+	// --- Enemies: body + active weapon hitboxes ---
+	for (const std::unique_ptr<BaseEnemy>& enemy : enemies_) {
+		if (!enemy || enemy->IsDead())
+			continue;
+		if (!IsWithinActiveRange(enemy->GetWorldPosition(), kEntityCullDistance))
+			continue;
 
-			const VisionSensor& sensor = enemy->GetVisionSensor();
-			if (!sensor.HasValidCone())
-				continue;
+		Box(enemy->GetAABB(), Color::kEnemy);
+		VisionCone(enemy->GetVisionSensor(), enemy->IsPlayerSpotted());
 
-			bool spotted = enemy->IsPlayerSpotted();
-			VisionCone(sensor, spotted);
-
-			// line of sight: eye -> player while spotted
-			if (spotted && !player_->isDead())
-				Line(sensor.GetVisionTriangle().center, player_->GetWorldPosition(), Color::kVisionSpotted);
+		if (EnemyFighter* fighter = dynamic_cast<EnemyFighter*>(enemy.get())) {
+			if (fighter->IsSwingActive())
+				Box(fighter->GetSwingAABB(), Color::kAttack);
+		} else if (EnemyCuirassier* cuirassier = dynamic_cast<EnemyCuirassier*>(enemy.get())) {
+			if (cuirassier->IsLungeActive())
+				Box(cuirassier->GetLungeAABB(), Color::kAttack);
+			else if (cuirassier->IsSwingActive())
+				Box(cuirassier->GetSwingAABB(), Color::kAttack);
+		} else if (EnemyRifleman* rifleman = dynamic_cast<EnemyRifleman*>(enemy.get())) {
+			if (rifleman->IsBayonetActive())
+				Box(rifleman->GetBayonetLungeAABB(), Color::kAttack);
 		}
 	}
+
+	// --- Projectiles ---
+	for (auto& bullet : playerBullets_)
+		if (bullet && !bullet->IsDead())
+			Box(bullet->GetAABB(), Color::kProjectile);
+	for (auto& bullet : enemyBullets_)
+		if (bullet && !bullet->IsDead())
+			Box(bullet->GetAABB(), Color::kProjectile);
+
+	// --- Interactables ---
+	for (auto& item : droppableItems_)
+		if (item && !item->IsPickedUp() && !item->IsExpired())
+			Box(item->GetAABB(), Color::kObject);
+	for (auto& hb : healthBlocks_)
+		if (hb && hb->IsActive())
+			Box(hb->GetAABB(), Color::kObject);
+	for (auto& sw : switches_)
+		if (sw)
+			Box(sw->GetAABB(), Color::kObject);
+	for (auto& gate : gates_)
+		if (gate && gate->IsBlocking())
+			Box(gate->GetAABB(), Color::kObject);
 #endif
 }

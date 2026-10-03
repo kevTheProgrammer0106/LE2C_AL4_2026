@@ -11,21 +11,6 @@
 /// </summary>
 namespace DebugDraw {
 
-namespace Color {
-inline const KamataEngine::Vector4 kPlayer = {0.2f, 1.0f, 0.2f, 1.0f};        // green
-inline const KamataEngine::Vector4 kEnemy = {1.0f, 0.9f, 0.1f, 1.0f};         // yellow
-inline const KamataEngine::Vector4 kAttack = {1.0f, 0.15f, 0.15f, 1.0f};      // red (active hitboxes)
-inline const KamataEngine::Vector4 kProjectile = {0.2f, 0.9f, 1.0f, 1.0f};    // cyan
-inline const KamataEngine::Vector4 kObject = {0.8f, 0.4f, 1.0f, 1.0f};        // purple (items, gates, switches, health blocks)
-inline const KamataEngine::Vector4 kVision = {0.3f, 0.6f, 1.0f, 1.0f};        // blue (vision cone, player not seen)
-inline const KamataEngine::Vector4 kVisionSpotted = {1.0f, 0.2f, 0.9f, 1.0f}; // magenta (vision cone, player spotted)
-} // namespace Color
-
-// F4 toggles this (see GameScene::DrawCollisionDebug)
-inline bool gShowVision = true;
-
-inline void Line(const KamataEngine::Vector3& a, const KamataEngine::Vector3& b, const KamataEngine::Vector4& color) { KamataEngine::PrimitiveDrawer::GetInstance()->DrawLine3d(a, b, color); }
-
 inline void Box(const AABB& box, const KamataEngine::Vector4& color) {
 	using namespace KamataEngine;
 	PrimitiveDrawer* drawer = PrimitiveDrawer::GetInstance();
@@ -47,23 +32,29 @@ inline void Box(const AABB& box, const KamataEngine::Vector4& color) {
 	}
 }
 
-// Draws the enemy's vision triangle (eye -> left -> right). The sensor stores left/right as XY only,
-// so z is taken from the eye position to keep the cone in the gameplay plane.
+namespace Color {
+inline const KamataEngine::Vector4 kPlayer = {0.2f, 1.0f, 0.2f, 1.0f};        // green
+inline const KamataEngine::Vector4 kBlock = {0.3f, 0.5f, 1.0f, 1.0f};         // blue (player block box)
+inline const KamataEngine::Vector4 kEnemy = {1.0f, 0.9f, 0.1f, 1.0f};         // yellow
+inline const KamataEngine::Vector4 kAttack = {1.0f, 0.15f, 0.15f, 1.0f};      // red (active hitboxes)
+inline const KamataEngine::Vector4 kProjectile = {0.2f, 0.9f, 1.0f, 1.0f};    // cyan
+inline const KamataEngine::Vector4 kObject = {0.8f, 0.4f, 1.0f, 1.0f};        // purple (items, gates, switches, health blocks)
+inline const KamataEngine::Vector4 kVision = {1.0f, 1.0f, 1.0f, 1.0f};        // white (vision cone, player not seen)
+inline const KamataEngine::Vector4 kVisionSpotted = {1.0f, 0.3f, 0.3f, 1.0f}; // red-ish (vision cone, player spotted)
+} // namespace Color
+
+// Draws an enemy's vision triangle (eye -> left, eye -> right, left -> right).
+// Skipped until the sensor has produced a cone at least once, so no stray line from the origin.
 inline void VisionCone(const VisionSensor& sensor, bool spotted) {
-	using namespace KamataEngine;
-	if (!sensor.HasValidCone()) {
+	if (!sensor.HasValidCone())
 		return;
-	}
+	using namespace KamataEngine;
+	PrimitiveDrawer* drawer = PrimitiveDrawer::GetInstance();
 	const VisionSensor::VisionTriangle& tri = sensor.GetVisionTriangle();
 	const Vector4& color = spotted ? Color::kVisionSpotted : Color::kVision;
-
-	Vector3 center = tri.center;
-	Vector3 left = {tri.left.x, tri.left.y, center.z};
-	Vector3 right = {tri.right.x, tri.right.y, center.z};
-
-	Line(center, left, color);
-	Line(center, right, color);
-	Line(left, right, color);
+	drawer->DrawLine3d(tri.center, tri.left, color);
+	drawer->DrawLine3d(tri.center, tri.right, color);
+	drawer->DrawLine3d(tri.left, tri.right, color);
 }
 
 } // namespace DebugDraw

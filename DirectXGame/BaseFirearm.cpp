@@ -1,7 +1,7 @@
 #include "BaseFirearm.h"
 #include "GlobalVariables.h"
 
-using namespace KamataEngine;
+    using namespace KamataEngine;
 
 namespace {
 constexpr const char* kGroupName = "BaseFirearm";
@@ -34,27 +34,44 @@ void BaseFirearm::Initialize(Model* model, uint32_t textureHandle, Camera* camer
 	worldTransform_.Initialize();
 }
 
+// Shared by every firearm. Only reads the virtual offset getters -- no stats.
 void BaseFirearm::UpdateFollow(const WorldTransform& parentTransform, float localAimAngle, bool facingRight) {
+	TickReload();
+
 	equipFactor_ = Lerp(equipFactor_, equipTarget_, kEquipLerpSpeed);
 
-	Matrix4x4 parentRotation = Multiply(MakeRotateXMatrix(parentTransform.rotation_.x), Multiply(MakeRotateYMatrix(parentTransform.rotation_.y), MakeRotateZMatrix(parentTransform.rotation_.z)));
+	Matrix4x4 rotMatrix = Multiply(MakeRotateXMatrix(parentTransform.rotation_.x), Multiply(MakeRotateYMatrix(parentTransform.rotation_.y), MakeRotateZMatrix(parentTransform.rotation_.z)));
 
-	float correctedAimAngle = facingRight ? localAimAngle : -localAimAngle;
-	float combatRotZ = correctedAimAngle;
-	float combatRotY = parentTransform.rotation_.y + offset_.rotation.y;
+	float facingSign = facingRight ? 1.0f : -1.0f;
+	float correctedAimAngle = localAimAngle * facingSign;
 
-	const SRTOffset& stowedOffset = isShowingReloadPose_ ? reloadOffset_ : holsterOffset_;
+	// Combat pose, blended toward knockback/stun when debuffed
+	const SRTOffset combat = ComputeCombatOffset(GetCombatOffset());
 
-	float holsterRotZ = stowedOffset.rotation.z;
-	float holsterRotY = parentTransform.rotation_.y + stowedOffset.rotation.y;
+	// Stowed pose: reload pose while "showing reload", otherwise holster
+	const SRTOffset& stowed = isShowingReloadPose_ ? GetReloadOffset() : GetHolsterOffset();
 
-	Vector3 blendedLocalOffset = Lerp(stowedOffset.translation, offset_.translation, equipFactor_);
-	Vector3 blendedScale = Lerp(stowedOffset.scale, offset_.scale, equipFactor_);
-	float blendedRotX = Lerp(stowedOffset.rotation.x, offset_.rotation.x, equipFactor_);
+	Vector3 holsterRotation = stowed.rotation;
+	if (!facingRight) {
+		holsterRotation.y = -holsterRotation.y;
+		holsterRotation.z = -holsterRotation.z;
+	}
+
+	float holsterRotY = parentTransform.rotation_.y + holsterRotation.y;
+	float holsterRotZ = holsterRotation.z;
+
+	float combatRotY = parentTransform.rotation_.y + GetModelYawOffset() + combat.rotation.y;
+	// combat.rotation.z is a world-space roll authored facing right, so mirror it when facing left
+	// (otherwise knockback/stun/block would tilt the gun the wrong way on left-facing entities)
+	float combatRotZ = correctedAimAngle + combat.rotation.z * facingSign;
+
+	Vector3 blendedLocalOffset = Lerp(stowed.translation, combat.translation, equipFactor_);
+	Vector3 blendedScale = Lerp(stowed.scale, combat.scale, equipFactor_);
+	float blendedRotX = Lerp(stowed.rotation.x, combat.rotation.x, equipFactor_);
 	float blendedRotY = Lerp(holsterRotY, combatRotY, equipFactor_);
 	float blendedRotZ = Lerp(holsterRotZ, combatRotZ, equipFactor_);
 
-	Vector3 rotatedOffset = TransformNormal(blendedLocalOffset, parentRotation);
+	Vector3 rotatedOffset = TransformNormal(blendedLocalOffset, rotMatrix);
 
 	worldTransform_.translation_ = parentTransform.translation_ + rotatedOffset;
 	worldTransform_.rotation_.x = parentTransform.rotation_.x + blendedRotX;

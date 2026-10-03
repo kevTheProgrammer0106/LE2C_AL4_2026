@@ -31,7 +31,8 @@ struct OpenNodeCompare {
 		return left.heuristic > right.heuristic;
 	}
 };
-
+// 上方向(=ジャンプ)への1マス移動に加算するコスト。歩ける迂回路があればそちらを優先させる
+constexpr float kUpwardStepPenalty = 0.75f;
 } // namespace
 
 const PathFindingAlgorithm::PathCostProfile& PathFindingAlgorithm::GetDefaultPathCostProfile() {
@@ -236,6 +237,10 @@ std::vector<PathFindingAlgorithm::IndexSet>
 			float traversalCost = GetTraversalCost(mapChipField, nextXIndex, nextYIndex, profile);
 			if (!std::isfinite(traversalCost) || traversalCost <= 0.0f) {
 				continue;
+			}
+
+			if (deltaY[direction] == -1) {
+				traversalCost += kUpwardStepPenalty;
 			}
 
 			float tentativeGCost = currentNode.gCost + traversalCost;

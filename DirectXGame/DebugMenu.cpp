@@ -502,8 +502,14 @@ void DebugMenu::DrawHeavySabreTab() {
 
 // ------------------------------------------------------------------ Musket (EnemyRifleman)
 void DebugMenu::DrawMusketTab() {
-	ImGui::TextDisabled("Musket offsets, rifleman poses and bayonet values are registered -> Global Variables window.");
+	ImGui::TextDisabled("Musket offsets, rifleman poses and lunge timings (frames) are in the Global Variables window.");
 	EditSRT("firearmOffset_ (extra, applied via SetOffset)", EnemyRifleman::firearmOffset_);
+
+	if (ImGui::CollapsingHeader("Bayonet lunge poses", ImGuiTreeNodeFlags_DefaultOpen)) {
+		ImGui::TextDisabled("rotation.y must stay -1.5708. translation.z = forward, .x = camera side, rotation.x = barrel pitch.");
+		EditSRT("windUp", FirearmMusketBayonet::kLungePoses.windUp);
+		EditSRT("thrust", FirearmMusketBayonet::kLungePoses.thrust);
+	}
 }
 
 // ------------------------------------------------------------------ Body / Anim
@@ -550,7 +556,9 @@ void DebugMenu::DrawBodyTab() {
 		EditSRT("kRunPoseHigh", AnimationManager::kRunPoseHigh);
 		EditSRT("kJumpPose", AnimationManager::kJumpPose);
 		EditSRT("kFallPose", AnimationManager::kFallPose);
+
 	}
+
 	DragF("FootstepInterval", AnimationManager::kFootstepInterval, 0.005f);
 }
 
@@ -564,20 +572,19 @@ void DebugMenu::DrawCombatTab() {
 		DragF("Lunge recovery (s)", CuirassierBehavior::kLungeRecoveryDuration, 0.01f);
 		DragF("Lunge speed", CuirassierBehavior::kLungeSpeed, 0.005f);
 		DragF("Melee engage range", CuirassierBehavior::kMeleeEngageRange, 0.05f);
-		DragF("Block chance", CuirassierBehavior::kBlockChance, 0.01f);
-		DragF("Block check range", CuirassierBehavior::kBlockCheckRange, 0.05f);
-		DragF("Block duration (s)", CuirassierBehavior::kBlockDuration, 0.01f);
 	}
 	if (ImGui::CollapsingHeader("Fighter AI")) {
 		DragF("Melee engage range", FighterBehavior::kMeleeEngageRange, 0.05f);
 		DragF("Cooldown (s)", FighterBehavior::kCooldownDuration, 0.01f);
 		DragF("Combo reset (s)", FighterBehavior::kComboResetDuration, 0.05f);
+		DragF("Block chance when hit", FighterBehavior::kBlockChanceWhenHit, 0.01f);
 	}
 	if (ImGui::CollapsingHeader("Rifleman AI")) {
 		DragF("Aim duration (s)", RiflemanBehavior::kAimDuration, 0.01f);
 		DragF("Retreat speed", RiflemanBehavior::kRetreatSpeed, 0.002f);
 		DragF("Retreat duration (s)", RiflemanBehavior::kRetreatDuration, 0.01f);
-		DragF("Melee engage range", RiflemanBehavior::kMeleeEngageRange, 0.05f);
+		DragF("Firing range", RiflemanBehavior::kRetreatRange, 0.05f);
+		DragF("Firing range", RiflemanBehavior::kBayonetRange, 0.05f);
 		DragF("Firing range", RiflemanBehavior::kFiringRange, 0.05f);
 	}
 }

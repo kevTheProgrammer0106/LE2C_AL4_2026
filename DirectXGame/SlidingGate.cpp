@@ -1,3 +1,4 @@
+#define NOMINMAX
 #include "SlidingGate.h"
 #include "GlobalVariables.h"
 
@@ -69,9 +70,9 @@ void SlidingGate::ApplyGlobalVariables() {
 void SlidingGate::Update() {
 	float target = isOpenTarget_ ? 1.0f : 0.0f;
 	if (openFactor_ < target) {
-		openFactor_ = min(openFactor_ + kSlideSpeed, target);
+		openFactor_ = std::min(openFactor_ + kSlideSpeed, target);
 	} else if (openFactor_ > target) {
-		openFactor_ = max(openFactor_ - kSlideSpeed, target);
+		openFactor_ = std::max(openFactor_ - kSlideSpeed, target);
 	}
 
 	Vector3 slideOffset{};

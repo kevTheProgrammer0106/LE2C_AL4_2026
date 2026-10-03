@@ -1,5 +1,5 @@
-// ===================== MusicManager.cpp =====================
 #include "MusicManager.h"
+#include "AudioSettings.h"
 #include "GlobalVariables.h"
 
 using namespace KamataEngine;
@@ -102,13 +102,13 @@ void MusicManager::Update() {
 
 void MusicManager::ApplyVolumes() {
 	if (ingameVoiceHandle_ != 0) {
-		Audio::GetInstance()->SetVolume(ingameVoiceHandle_, ingameVolumeCurrent_ * kIngameBaseVolume);
+		Audio::GetInstance()->SetVolume(ingameVoiceHandle_, ingameVolumeCurrent_ * kIngameBaseVolume * AudioSettings::GetMusicVolume());
 	}
 	if (arenaVoiceHandle_ != 0) {
-		Audio::GetInstance()->SetVolume(arenaVoiceHandle_, arenaVolumeCurrent_ * kArenaBaseVolume);
+		Audio::GetInstance()->SetVolume(arenaVoiceHandle_, arenaVolumeCurrent_ * kArenaBaseVolume * AudioSettings::GetMusicVolume());
 	}
 	if (menuVoiceHandle_ != 0) {
-		Audio::GetInstance()->SetVolume(menuVoiceHandle_, menuVolumeCurrent_ * kMenuBaseVolume);
+		Audio::GetInstance()->SetVolume(menuVoiceHandle_, menuVolumeCurrent_ * kMenuBaseVolume * AudioSettings::GetMusicVolume());
 	}
 }
 

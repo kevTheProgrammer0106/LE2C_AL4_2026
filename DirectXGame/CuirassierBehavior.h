@@ -35,6 +35,8 @@ protected:
 	void BehaviorRootInitialize() override;
 	void BehaviorRootUpdate() override;
 
+	bool ShouldBlockAfterStun() const override { return true; }
+
 private:
 	friend class DebugMenu;
 	enum class MeleeStage { kLunge, kCombo };
@@ -44,33 +46,45 @@ private:
 	void BehaviorMeleeInitialize();
 	void BehaviorMeleeUpdate();
 
-	void BehaviorBlockInitialize();
-	void BehaviorBlockUpdate();
-
 	EnemyCuirassier& cuirassierOwner_;
 
-	// --- kMelee: ランジ(kLunge) -> コンボ(kCombo) ---
+	// --- kMelee: [lunge] -> swings (Fighter style, twice per engagement) ---
 	MeleeStage meleeStage_ = MeleeStage::kLunge;
 	LungePhase lungePhase_ = LungePhase::kAnticipate;
 	ComboPhase comboPhase_ = ComboPhase::kAnticipate;
 	uint32_t attackParameter_ = 0;
-	int comboIndex_ = 0;
+	int comboIndex_ = 0; // persists between engagements (rotates 0->1->2->0)
 
-	// ランジ専用の予備動作/踏み込み/硬直の秒数
+	// [NEW] set by BehaviorRootUpdate right before requesting kMelee
+	bool startWithLunge_ = false;
+	// [NEW] swings left in the current engagement
+	int swingsRemaining_ = 0;
+
+	// [NEW] timers
+	float lungeCooldownTimer_ = 0.0f;
+	float comboCooldownTimer_ = 0.0f;
+	float noAttackTimer_ = 0.0f;
+
 	static inline float kLungeAnticipateDuration = 0.35f;
-	static inline float kLungeAttackDuration = 0.30f; // ここで大きく前進する
+	static inline float kLungeAttackDuration = 0.30f;
 	static inline float kLungeRecoveryDuration = 0.25f;
-	static inline float kLungeSpeed = 0.35f; // 踏み込み速度(riflemanの銃剣突撃より速い)
+	static inline float kLungeSpeed = 0.35f;
 
-	// WeaponSabreと同じ枠組みのコンボ参照用ダミー(間合い等はWeaponHeavySabre側が独自の値を持つ)
 	WeaponHeavySabre& Weapon();
 
-	static inline float kMeleeEngageRange = 6.0f; // これ以下ならkMeleeへ突入(ランジ間合いを含む)
+	static inline float kMeleeEngageRange = 6.0f; // lunge range
 
-	// --- kBlock: プレイヤーの攻撃に反応してランダムでガード ---
-	static inline float kBlockChance = 0.75f;    // プレイヤーが攻撃を開始した瞬間にガードへ入る確率
-	static inline float kBlockCheckRange = 5.0f; // この距離以内でのみガード判定を行う
-	static inline float kBlockDuration = 1.0f;   // ガード継続時間
+	// [NEW]
+	static inline float kLungeCooldown = 5.0f;      // seconds before another lunge is allowed
+	static inline float kComboEngageRange = 2.6f;   // Fighter-style swing range
+	static inline float kCooldownDuration = 0.8f;   // pause after a 2-swing engagement
+	static inline float kComboResetDuration = 3.0f; // idle time before combo index resets to 0
+	static inline int kSwingsPerEngagement = 2;     // swings per engagement ("twice")
+
+	// --- kBlock ---
+	static inline float kBlockChance = 0.75f;
+	static inline float kBlockCheckRange = 5.0f;
+	static inline float kBlockDuration = 1.0f;
 	float blockTimer_ = 0.0f;
 	bool playerWasAttackingLastFrame_ = false;
 };

@@ -53,6 +53,7 @@ void EnemyRifleman::Update() {
 
 	currentFirearm_->SetOffset(firearmOffset_.scale, firearmOffset_.rotation, firearmOffset_.translation);
 	currentFirearm_->TickRecoil();
+	currentFirearm_->SetReactionPose(GetReactionPose());
 
 	if (GetBehaviorModule().IsDeathBehavior())
 		return;
@@ -94,26 +95,31 @@ Vector2 EnemyRifleman::ComputeTargetAimPosition() {
 }
 
 void EnemyRifleman::UpdateFirearmHybrid() {
-	if (!currentFirearm_)
+	if (!currentFirearm_) {
 		return;
+	}
 
-	Behavior currentBehavior = GetBehaviorModule().GetBehavior();
+	const Behavior currentBehavior = GetBehaviorModule().GetBehavior();
 
 	if (currentBehavior == Behavior::kAiming && IsPlayerSpotted()) {
-		Vector2 aimDir = ComputeTargetAimPosition();
-		AimFacing aim = ComputeAimFacing(aimDir, isRight());
+		currentFirearm_->ClearLungePose();
+
+		const Vector2 aimDir = ComputeTargetAimPosition();
+		const AimFacing aim = ComputeAimFacing(aimDir, isRight());
+
 		if (aim.facingRight != isRight()) {
 			FaceDirection(aim.facingRight ? LRDirection::kRight : LRDirection::kLeft);
 		}
+
 		currentFirearm_->SetEquipped(true);
-		currentFirearm_->UpdateFollow(GetWorldTransform(), aim.localAngle, aim.facingRight);
+		currentFirearm_->UpdateFollow(GetModelWorldTransform(), aim.localAngle, aim.facingRight);
 	} else if (currentBehavior == Behavior::kMelee) {
 		currentFirearm_->SetEquipped(true);
-		currentFirearm_->UpdateFollow(GetWorldTransform(), 0.0f, isRight());
+		currentFirearm_->UpdateFollow(GetModelWorldTransform(), 0.0f, isRight());
 	} else {
-		bool equipped = (currentBehavior != Behavior::kReloading) && IsWeaponEquipped();
-		currentFirearm_->SetEquipped(equipped);
-		currentFirearm_->UpdateFollow(GetWorldTransform(), 0.0f, isRight());
+		currentFirearm_->ClearLungePose();
+		currentFirearm_->SetEquipped(false);
+		currentFirearm_->UpdateFollow(GetModelWorldTransform(), 0.0f, false);
 	}
 }
 

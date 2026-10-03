@@ -31,7 +31,12 @@ void BaseEnemy::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "AttenuationLanding", kAttenuationLanding);
 	gv->AddItem(kGroupName, "AttenuationWall", kAttenuationWall);
 	gv->AddItem(kGroupName, "AttenuationCeilling", kAttenuationCeilling);
-
+	gv->AddItem(kGroupName, "ModelStandLerp", kModelStandLerp);
+	gv->AddItem(kGroupName, "ModelMaxOffset", kModelMaxOffset);
+	gv->AddItem(kGroupName, "ModelProbeDepth", kModelProbeDepth);
+	gv->AddItem(kGroupName, "ModelProbeStepUp", kModelProbeStepUp);
+	gv->AddItem(kGroupName, "DropThroughDuration", kDropThroughDuration);
+	gv->AddItem(kGroupName, "DropThroughVelocity", kDropThroughVelocity);
 	BaseEnemyBehavior::RegisterGlobalVariables();
 }
 
@@ -54,7 +59,12 @@ void BaseEnemy::ApplyGlobalVariables() {
 	kAttenuationLanding = gv->GetFloatValue(kGroupName, "AttenuationLanding");
 	kAttenuationWall = gv->GetFloatValue(kGroupName, "AttenuationWall");
 	kAttenuationCeilling = gv->GetFloatValue(kGroupName, "AttenuationCeilling");
-
+	kModelStandLerp = gv->GetFloatValue(kGroupName, "ModelStandLerp");
+	kModelMaxOffset = gv->GetFloatValue(kGroupName, "ModelMaxOffset");
+	kModelProbeDepth = gv->GetFloatValue(kGroupName, "ModelProbeDepth");
+	kModelProbeStepUp = gv->GetFloatValue(kGroupName, "ModelProbeStepUp");
+	kDropThroughDuration = gv->GetFloatValue(kGroupName, "DropThroughDuration");
+	kDropThroughVelocity = gv->GetFloatValue(kGroupName, "DropThroughVelocity");
 	BaseEnemyBehavior::ApplyGlobalVariables();
 }
 
@@ -74,7 +84,10 @@ void BaseEnemy::Initialize(const std::array<PartResources, kPartCount>& partReso
 	if (!behavior_) {
 		behavior_ = CreateBehaviorModule();
 		behavior_->SetMapChipField(mapChipField_);
+		blockDetector_.SetUseDetailedTiles(false); // ルート: 全タイルを1.0セルとして扱う
+		detectorProbe_.SetUseDetailedTiles(true);  // ディテクター: タイルの実形状・オフセット
 		blockDetector_.SetIgnoreBarrier(true);
+		detectorProbe_.SetIgnoreBarrier(true);
 	}
 	behavior_->Initialize();
 
@@ -83,6 +96,11 @@ void BaseEnemy::Initialize(const std::array<PartResources, kPartCount>& partReso
 	worldTransform_.rotation_.y = -(std::numbers::pi_v<float> / 2.0f);
 	walkTimer_ = 0.0f;
 	worldTransform_.translation_ = position;
+	modelWorldTransform_.Initialize();
+	modelWorldTransform_.translation_ = position;
+	modelWorldTransform_.rotation_ = worldTransform_.rotation_;
+	modelStandOffsetY_ = 0.0f;
+	dropThroughTimer_ = 0.0f;
 	CacheAABBMarkerSize();
 
 	if (!pathfindingModule_)
@@ -95,11 +113,11 @@ void BaseEnemy::UpdateMovementState() {
 	context.velocity = velocity_;
 	context.onGround = onGround_;
 	context.isDead = behavior_->IsDeathBehavior();
-	// catch the landing transition; AnimationManager now reports all three events.
+	context.isKnockedBack = behavior_->IsKnockedBack();
+	context.isStunned = behavior_->IsStunned();
+	context.isBlocking = behavior_->GetBehavior() == Behavior::kBlock;
+	context.facingRight = isRight();
 	AnimationManager::MovementEvents events = animManager_->UpdateMovementState(context);
-
-	// Skip movement SFX during the death tumble — onGround_/velocity_ there are
-	// driven by BehaviorDieUpdate's bounce logic, not real locomotion.
 	if (!behavior_->IsDeathBehavior()) {
 		if (events.justJumped) {
 			PlayJumpSound();
@@ -130,6 +148,8 @@ void BaseEnemy::Update() {
 	if (behavior_->IsDebuffed()) 
 		RefreshWeaponVisual();
 	UpdateMovementState();
+	if (behavior_->IsDeathBehavior())
+		UpdateModelCollision(); // 死亡中は物理更新を通らないのでここでモデルを追従させる
 	UpdateBodyParts();
 }
 
@@ -203,7 +223,7 @@ void BaseEnemy::TakeDamage(int damage, const Vector3& hitDirection, float impact
 	pendingHitDirection_ = hitDirection;
 	pendingImpactPower_ = impactPower;
 
-	Vector3 effectPos = GetWorldPosition();
+	Vector3 effectPos = GetModelWorldPosition();
 	if (gameScene_)
 		gameScene_->CreateHitEffect(effectPos);
 
@@ -226,6 +246,8 @@ void BaseEnemy::OnCollision(const Player* player) {
 		return;
 	}
 	if (player->isAttack()) {
+		if (TryBlockAttack(player->GetWorldPosition()))
+			return; 
 		Vector3 dir = GetWorldPosition() - player->GetWorldPosition();
 		float len = std::sqrtf(dir.x * dir.x + dir.y * dir.y);
 		if (len > 0.0001f) {
@@ -254,6 +276,8 @@ void BaseEnemy::OnCollision(const BaseProjectile* bullet) {
 		isCollisionDisabled_ = true;
 		return;
 	}
+	if (TryBlockAttack(bullet->GetWorldPosition()))
+		return;
 	Vector3 dir = GetWorldPosition() - bullet->GetWorldPosition();
 	float len = std::sqrtf(dir.x * dir.x + dir.y * dir.y);
 	if (len > 0.0001f) {
@@ -282,13 +306,18 @@ void BaseEnemy::UpdateBodyParts() {
 	context.velocity = velocity_;
 	context.onGround = onGround_;
 	context.isDead = behavior_->IsDeathBehavior();
-	animManager_->UpdateBodyParts(worldTransform_, context, parts_);
+	context.isKnockedBack = behavior_->IsKnockedBack();
+	context.isStunned = behavior_->IsStunned();
+	context.isBlocking = behavior_->GetBehavior() == Behavior::kBlock;
+	context.facingRight = isRight();
+	animManager_->UpdateBodyParts(modelWorldTransform_, context, parts_);
 }
 
 void BaseEnemy::JumpMovement(const CollisionInfo& collisionInfo) {
 	if (!onGround_)
 		return;
-
+	if (behavior_->IsDebuffed())
+		return;
 	if (behavior_->IsRootBehavior() && std::abs(velocity_.x) > 0.0001f) {
 		LRDirection movingDirection = (velocity_.x < 0.0f) ? LRDirection::kLeft : LRDirection::kRight;
 		if (behavior_->TryJumpIfLedgeAhead(static_cast<int>(movingDirection))) {
@@ -335,6 +364,9 @@ void BaseEnemy::WallCollision(const CollisionInfo& collisionInfo) {
 }
 
 void BaseEnemy::PhysicsAndCollisionUpdate() {
+	if (dropThroughTimer_ > 0.0f) {
+		dropThroughTimer_ = std::max(0.0f, dropThroughTimer_ - 1.0f / 60.0f);
+	}
 	behavior_->ApplySeparationFromOtherEnemies();
 
 	if (!onGround_) {
@@ -350,12 +382,16 @@ void BaseEnemy::PhysicsAndCollisionUpdate() {
 		float destinationRotationY = destinationRotationYTable[static_cast<uint32_t>(lrDirection_)];
 		worldTransform_.rotation_.y = EaseInOut(turnFirstRotationY_, destinationRotationY, 1.0f - (turnTimer_ / kTimeTurn));
 	}
+	// ターン後の回転を反映してからモデル層を更新する
+	UpdateModelCollision();
 }
 void BaseEnemy::MapChipCollisionUpdate() {
 	blockDetector_.SetWorldTransform(worldTransform_);
 	blockDetector_.SetVelocity(velocity_);
 	blockDetector_.SetOnGround(onGround_);
 	blockDetector_.SetMapChipField(mapChipField_);
+	blockDetector_.SetSize(kWidth, kHeight);
+	blockDetector_.SetIgnoreOneWay(IsDroppingThrough()); // ドロップスルー中は足場への着地だけ無視
 
 	CollisionInfo horizontalInfo{};
 	horizontalInfo.move.x = velocity_.x;
@@ -380,6 +416,8 @@ void BaseEnemy::MapChipCollisionUpdate(CollisionInfo& collisionInfo) {
 	blockDetector_.SetVelocity(velocity_);
 	blockDetector_.SetOnGround(onGround_);
 	blockDetector_.SetMapChipField(mapChipField_);
+	blockDetector_.SetSize(kWidth, kHeight);
+	blockDetector_.SetIgnoreOneWay(IsDroppingThrough()); // ドロップスルー中は足場への着地だけ無視
 
 	blockDetector_.MapChipCollision(collisionInfo);
 	PositionUpdate(collisionInfo);
@@ -436,4 +474,70 @@ void BaseEnemy::SetIgnoreEquipStates(bool ignore) {
 		weaponEquipped_ = true;
 		SnapWeaponEquipState(true);
 	}
+}
+void BaseEnemy::UpdateModelCollision() {
+	// ルートとディテクターは同じ位置・同じ 0.8 x 1.6 のサイズ
+	const Vector3 rootPos = worldTransform_.translation_;
+
+	float targetOffsetY = 0.0f;
+	if (onGround_ && !isDead_ && !behavior_->IsDeathBehavior() && mapChipField_) {
+		blockDetector_.SetMapChipField(mapChipField_);
+		blockDetector_.SetSize(kWidth, kHeight);
+		detectorProbe_.SetMapChipField(mapChipField_);
+		detectorProbe_.SetSize(kWidth, kHeight);
+
+		float rootTopY = 0.0f;     // ルートが立っていると思っている面(セル全体)
+		float detectorTopY = 0.0f; // ディテクターが見つけた実際の面(タイル実形状)
+		if (blockDetector_.ProbeGroundTop(rootPos, kModelProbeStepUp, kModelProbeDepth, rootTopY) && detectorProbe_.ProbeGroundTop(rootPos, kModelProbeStepUp, kModelProbeDepth, detectorTopY)) {
+			targetOffsetY = std::clamp(detectorTopY - rootTopY, -kModelMaxOffset, kModelMaxOffset);
+		}
+	}
+	// 空中・死亡中は目標0なので、モデルはルートへ滑らかに戻る
+	modelStandOffsetY_ = Lerp(modelStandOffsetY_, targetOffsetY, kModelStandLerp);
+
+	modelWorldTransform_.translation_ = rootPos + Vector3(0.0f, modelStandOffsetY_, 0.0f);
+	modelWorldTransform_.rotation_ = worldTransform_.rotation_;
+	modelWorldTransform_.scale_ = worldTransform_.scale_;
+	WorldTransformUpdate(modelWorldTransform_);
+}
+
+bool BaseEnemy::IsStandingOnPlatform() const {
+	if (!mapChipField_ || !onGround_) {
+		return false;
+	}
+	const float checkOffset = 0.05f;
+	Vector3 leftFoot = worldTransform_.translation_ + Vector3(-kWidth * 0.5f + kBlank, -kHeight * 0.5f - checkOffset, 0.0f);
+	Vector3 rightFoot = worldTransform_.translation_ + Vector3(kWidth * 0.5f - kBlank, -kHeight * 0.5f - checkOffset, 0.0f);
+	// 左右どちらかの足元が一方通行足場なら、足場に立っている
+	return mapChipField_->IsOneWayAtPosition(leftFoot) || mapChipField_->IsOneWayAtPosition(rightFoot);
+}
+
+void BaseEnemy::RequestDropThrough() {
+	if (!IsStandingOnPlatform()) {
+		return;
+	}
+	dropThroughTimer_ = kDropThroughDuration;
+	onGround_ = false; // 接地を解除して下へ進ませる
+	velocity_.y = std::min(velocity_.y, kDropThroughVelocity);
+}
+bool BaseEnemy::TryBlockAttack(const Vector3& attackerPos) {
+	if (isDead_ || !behavior_ || behavior_->IsDeathBehavior())
+		return false;
+
+	// only the facing side is guarded
+	float dx = attackerPos.x - worldTransform_.translation_.x;
+	bool attackerInFront = isRight() ? (dx >= 0.0f) : (dx <= 0.0f);
+	if (!attackerInFront)
+		return false;
+
+	bool blocked = behavior_->IsBlocking() || behavior_->IsBlockPending() || behavior_->TryStartBlockOnHit();
+	if (!blocked)
+		return false;
+
+	wasBlocked_ = true;
+	Vector3 sparkPos = GetModelWorldPosition();
+	sparkPos.x += (isRight() ? 1.0f : -1.0f) * (kWidth * 0.5f);
+	if (gameScene_)
+		gameScene_->CreateBlockSparkEffect(sparkPos);
+	return true;
 }

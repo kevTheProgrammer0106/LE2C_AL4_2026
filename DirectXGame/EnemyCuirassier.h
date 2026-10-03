@@ -9,7 +9,6 @@ public:
 	void Update() override;
 	void Draw() override;
 
-	void OnCollision(const Player* player) override;
 	void CheckPlayerDirection() override;
 
 	WeaponHeavySabre* GetCurrentMelee() const { return currentMelee_.get(); }

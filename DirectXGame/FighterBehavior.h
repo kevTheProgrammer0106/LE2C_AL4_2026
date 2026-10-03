@@ -18,9 +18,10 @@ public:
 
 	FlankPreference GetDefaultFlankPreference() const override { return FlankPreference::kPreferShortest; }
 
-	// [FIX] kMelee中は索敵の再判定でkRootへ割り込まれないようにする。
-	// これが無いと攻撃モーションが開始した次のフレームで即座に中断される。
-	bool IsEngaged() const override { return GetBehavior() == Behavior::kMelee; }
+	bool IsEngaged() const override {
+		Behavior b = GetBehavior();
+		return b == Behavior::kMelee || b == Behavior::kBlock;
+	}
 
 	void InitializeBehaviorState(Behavior behavior) override;
 	void UpdateBehaviorState() override;
@@ -33,6 +34,9 @@ protected:
 	// 交戦判断をkRoot中に行う。
 	void BehaviorRootInitialize() override;
 	void BehaviorRootUpdate() override;
+
+	// 10% chance to guard whenever it gets hit from the front (shared block: 1.5s, then 10s cooldown)
+	float GetBlockChanceWhenHit() const override { return kBlockChanceWhenHit; }
 
 private:
 	friend class DebugMenu;
@@ -57,4 +61,6 @@ private:
 	static inline float kMeleeEngageRange = 2.2f;   // これ以下ならkMeleeへ突入
 	static inline float kCooldownDuration = 0.8f;   // 1段振った後、次に振れるようになるまでの秒数
 	static inline float kComboResetDuration = 3.0f; // これだけ攻撃せずにいるとコンボ段を0に戻す
+
+	static inline float kBlockChanceWhenHit = 0.10f;
 };

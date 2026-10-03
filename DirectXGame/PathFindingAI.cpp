@@ -66,6 +66,14 @@ void PathFindingAI::UpdatePathToPlayer() {
 
 	PathFindingAlgorithm::PathCostProfile costProfile = owner_->BuildPathCostProfile();
 	currentPath_ = PathFindingAlgorithm::FindPath(mapChipField_, startIndex, goalIndex, 4000, &costProfile);
+
+	if (currentPath_.empty() && livePlayer) {
+		MapChipField::IndexSet fallbackGoal = GetGroundedGoalIndex(livePlayer->GetWorldPosition());
+		if (fallbackGoal.xIndex != goalIndex.xIndex || fallbackGoal.yIndex != goalIndex.yIndex) {
+			currentPath_ = PathFindingAlgorithm::FindPath(mapChipField_, startIndex, fallbackGoal, 4000, &costProfile);
+		}
+	}
+
 	currentPathIndex_ = 0;
 }
 
@@ -101,7 +109,8 @@ void PathFindingAI::ChaseMovement() {
 
 		float unreachable = owner_->GetBehaviorModule().GetUnreachableTimer() + 1.0f / 60.0f;
 		owner_->GetBehaviorModule().SetUnreachableTimer(unreachable);
-		if (unreachable >= BaseEnemyBehavior::GetUnreachableGiveUpDuration()) {
+		// Enemies with persistent awareness (omniscient / arena) never give up on an unreachable player.
+		if (unreachable >= BaseEnemyBehavior::GetUnreachableGiveUpDuration() && !owner_->GetBehaviorModule().HasPersistentAwareness()) {
 			owner_->velocity_.x = 0.0f;
 			owner_->GetBehaviorModule().SetHasLastKnownPosition(false);
 			owner_->GetBehaviorModule().SetChaseTimeoutTimer(BaseEnemyBehavior::GetChaseTimeoutDuration());
@@ -120,7 +129,8 @@ void PathFindingAI::ChaseMovement() {
 
 		bool sameRow = (currentIndex.yIndex == waypointIndex.yIndex);
 		bool closeX = std::abs(waypointPos.x - currentPos.x) < BaseEnemyBehavior::GetWaypointReachThreshold();
-		if (sameRow && closeX) {
+		bool exactCell = (currentIndex.xIndex == waypointIndex.xIndex && currentIndex.yIndex == waypointIndex.yIndex);
+		if (exactCell || (sameRow && closeX)) {
 			++currentPathIndex_;
 		} else {
 			break;
@@ -183,6 +193,9 @@ void PathFindingAI::ChaseMovement() {
 
 	if (!jumpNodeTriggered && owner_->onGround_ && currentIndex.yIndex > waypoint.yIndex && (currentIndex.yIndex - waypoint.yIndex) == 1) {
 		owner_->velocity_.y += BaseEnemy::kJumpAcceleration;
+	}
+	if (!jumpNodeTriggered && owner_->onGround_ && waypoint.yIndex > currentIndex.yIndex) {
+		owner_->RequestDropThrough();
 	}
 
 	float desiredDir = 0.0f;

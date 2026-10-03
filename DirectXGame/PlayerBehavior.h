@@ -38,8 +38,8 @@ public:
 	SRTOffset GetAttackPoseOffset() const;
 
 	void RequestStun(float duration);
-	void RequestHitKnockback(const KamataEngine::Vector3& direction, float power);
-	void BeginKnockback(const KamataEngine::Vector3& velocity);
+	// hop=true: 被弾ノックバック時に小さく跳ね上がる。ガード成功時の押し戻しはhop=falseで呼ぶ。
+	void RequestHitKnockback(const KamataEngine::Vector3& direction, float power, bool hop = true);
 	void RequestDeath(const KamataEngine::Vector3& direction, float power);
 	void SetBlocking(bool blocking);
 	bool IsBlocking() const { return isBlocking_; }
@@ -108,6 +108,10 @@ private:
 	static inline float kDeathFlingSpeedScale = 0.22f;
 	static inline float kDeathFlingUpBoost = 0.3f;
 	static inline float kHitKnockbackSpeedScale = 0.1f;
+
+	// [NEW] ノックバック/スタンに入った瞬間の跳ね上がり初速
+	static inline float kHitKnockbackHopSpeed = 0.3f;
+	static inline float kStunHopSpeed = 0.2f;
 
 	Player& owner_;
 

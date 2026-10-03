@@ -7,6 +7,13 @@
 #include <cmath>
 #include <numbers>
 
+/// <summary>
+/// Firearm base. ANIMATION offsets (combat / holster / reload / knockback / stun) live here as virtual getters;
+/// each concrete firearm overrides them with its own tuned values. STATS (ammo, reload time, damage, bayonet
+/// reach, ...) stay entirely in the derived classes -- nothing here touches them.
+/// UpdateFollow is shared and built only from those getters, so any firearm can be driven the same way
+/// (player or enemy). Derived classes with per-frame state (reloading) hook in via TickReload().
+/// </summary>
 class BaseFirearm {
 public:
 	virtual ~BaseFirearm() = default;
@@ -22,6 +29,45 @@ public:
 		offset_.scale = scale;
 		offset_.rotation = rotation;
 		offset_.translation = translation;
+	}
+
+	// ============================================================
+	// [NEW] Animation offset polymorphism. Override per firearm.
+	// ============================================================
+	virtual const SRTOffset& GetCombatOffset() const { return offset_; }
+	virtual const SRTOffset& GetHolsterOffset() const { return holsterOffset_; }
+	virtual const SRTOffset& GetReloadOffset() const { return reloadOffset_; }
+	virtual const SRTOffset& GetKnockbackOffset() const { return kDefaultKnockbackOffset; }
+	virtual const SRTOffset& GetStunOffset() const { return kDefaultStunOffset; }
+	virtual const SRTOffset& GetBlockOffset() const { return kDefaultBlockOffset; }
+	// Extra yaw the model needs so that "rotation.y == 0" faces forward (musket models need +pi/2).
+	virtual float GetModelYawOffset() const { return 0.0f; }
+
+	// Fallbacks for firearms that don't override knockback/stun.
+	static inline SRTOffset kDefaultKnockbackOffset = {
+	    {1.0f, 1.0f,  1.0f },
+        {0.3f, 0.0f,  0.9f },
+        {0.4f, 0.35f, -0.1f}
+    };
+	static inline SRTOffset kDefaultStunOffset = {
+	    {1.0f,  1.0f,  1.0f },
+        {0.0f,  0.0f,  -0.9f},
+        {0.55f, -0.1f, -0.1f}
+    };
+	// [NEW] guard pose: gun held across the body (authored for a right-facing entity)
+	static inline SRTOffset kDefaultBlockOffset = {
+	    {1.0f,  1.0f,  1.0f },
+        {0.0f,  0.0f,  0.7f },
+        {0.45f, 0.25f, -0.1f}
+    };
+	// lerp factor per frame toward/away from the knockback/stun/block pose
+	static inline float kDebuffBlendSpeed = 0.2f;
+
+	// Call every frame before UpdateFollow. Pose blends in/out smoothly.
+	void SetReactionPose(ReactionPose pose) {
+		debuffPose_ = pose;
+		if (pose != ReactionPose::kNone)
+			lastReactionPose_ = pose;
 	}
 
 	void SetEquipped(bool equipped) { equipTarget_ = equipped ? 1.0f : 0.0f; }
@@ -68,13 +114,11 @@ public:
 	}
 
 	virtual float GetImpactPower() const { return kImpactPower; }
-	
 
 	static void RegisterGlobalVariables();
 	static void ApplyGlobalVariables();
 
 	// --- SFX ---
-	// GameSceneがロード後にセットする(未設定=0ならAudio呼び出しをスキップする)
 	static void SetFireSoundHandle(uint32_t handle) { sFireSoundHandle_ = handle; }
 	static void SetReloadSoundHandle(uint32_t handle) { sReloadSoundHandle_ = handle; }
 	static void SetSfxVolume(float volume) { sSfxVolume_ = volume; }
@@ -91,9 +135,33 @@ protected:
 
 	static inline float kEquipLerpSpeed = 0.15f;
 
+	// Derived classes advance their own reload/ammo state here (called at the top of UpdateFollow).
+	virtual void TickReload() {}
+
+	// Blends the combat pose toward knockback/stun. Ticks the blend once per call (once per UpdateFollow).
+	SRTOffset ComputeCombatOffset(const SRTOffset& base) {
+		float target = (debuffPose_ != ReactionPose::kNone) ? 1.0f : 0.0f;
+		reactionBlend_ = Lerp(reactionBlend_, target, kDebuffBlendSpeed);
+		if (reactionBlend_ < 0.001f) {
+			reactionBlend_ = 0.0f;
+			return base;
+		}
+		const SRTOffset* debuffPtr = &GetKnockbackOffset();
+		if (lastReactionPose_ == ReactionPose::kStun)
+			debuffPtr = &GetStunOffset();
+		else if (lastReactionPose_ == ReactionPose::kBlock)
+			debuffPtr = &GetBlockOffset();
+		const SRTOffset& debuff = *debuffPtr;
+		return LerpSRT(base, debuff, reactionBlend_);
+	}
+
 	float equipFactor_ = 1.0f;
 	float equipTarget_ = 1.0f;
 	bool isShowingReloadPose_ = false;
+
+	ReactionPose debuffPose_ = ReactionPose::kNone;
+	ReactionPose lastReactionPose_ = ReactionPose::kKnockback;
+	float reactionBlend_ = 0.0f;
 
 	uint32_t recoilTimer_ = 0;
 	bool recoilFacingRight_ = true;
@@ -103,6 +171,7 @@ protected:
 	KamataEngine::Camera* camera_ = nullptr;
 	uint32_t textureHandle_ = 0;
 
+	// Generic defaults (used by GetCombatOffset/GetHolsterOffset/GetReloadOffset unless overridden)
 	SRTOffset offset_ = {
 	    {1.0f, 1.0f, 1.0f},
         {0.0f, 0.0f, 0.0f},
@@ -130,4 +199,4 @@ protected:
 			KamataEngine::Audio::GetInstance()->PlayWave(handle, false, sSfxVolume_);
 		}
 	}
-	};
+};

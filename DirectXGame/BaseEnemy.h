@@ -147,9 +147,31 @@ public:
 	// Arena-spawned enemies: no equip states, weapon is always ready and never locks movement.
 	void SetIgnoreEquipStates(bool ignore);
 
+	// モデル層(見た目専用)。ボディパーツと武器はルートではなくこちらに追従する
+	const KamataEngine::WorldTransform& GetModelWorldTransform() const { return modelWorldTransform_; }
+	KamataEngine::Vector3 GetModelWorldPosition() const { return modelWorldTransform_.translation_; }
+
+	// 一方通行足場の下り(ドロップスルー)
+	void RequestDropThrough();
+	bool IsStandingOnPlatform() const;
+	bool IsDroppingThrough() const { return dropThroughTimer_ > 0.0f; }
+
+	bool TryBlockAttack(const KamataEngine::Vector3& attackerPos);
 protected:
 	friend class DebugMenu;
+
 	virtual SRTOffset GetActionAnimOffset() const { return {}; }
+	ReactionPose GetReactionPose() const {
+		if (!behavior_)
+			return ReactionPose::kNone;
+		if (behavior_->IsKnockedBack())
+			return ReactionPose::kKnockback;
+		if (behavior_->IsStunned())
+			return ReactionPose::kStun;
+		if (behavior_->GetBehavior() == Behavior::kBlock)
+			return ReactionPose::kBlock;
+		return ReactionPose::kNone;
+	}
 
 	int hp_ = 100;
 	int maxHP_ = 100;
@@ -226,6 +248,21 @@ protected:
 	static inline float kWidth = 0.8f;
 	static inline float kHeight = 1.6f;
 	static inline float kBlank = 0.01f;
+
+		// --- モデル層 ---
+	void UpdateModelCollision();
+	BlockDetector detectorProbe_; // 詳細タイルを読むディテクター(ルートは blockDetector_ = 簡易タイル)
+	KamataEngine::WorldTransform modelWorldTransform_;
+	float modelStandOffsetY_ = 0.0f;
+	static inline float kModelStandLerp = 0.2f;   // 毎フレームの補間率
+	static inline float kModelMaxOffset = 0.5f;   // モデルがルートから離れすぎないための上限
+	static inline float kModelProbeDepth = 1.0f;  // 足元から下をどこまで調べるか
+	static inline float kModelProbeStepUp = 0.3f; // 足元より上の面をどこまで許容するか
+
+	// --- ドロップスルー ---
+	float dropThroughTimer_ = 0.0f;
+	static inline float kDropThroughDuration = 0.15f;  // 足場を無視する時間
+	static inline float kDropThroughVelocity = -0.12f; // 落下開始の初速
 
 	static inline float kAttenuationLanding = 0.2f;
 	static inline float kAttenuationWall = 0.2f;

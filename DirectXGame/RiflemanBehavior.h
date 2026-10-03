@@ -2,6 +2,7 @@
 
 #include "BaseEnemyBehavior.h"
 #include "FirearmMusketBayonet.h"
+#include "WeaponSabre.h"
 
 class EnemyRifleman;
 
@@ -48,20 +49,31 @@ private:
 
 	EnemyRifleman& riflemanOwner_;
 
+	// プレイヤーとのXZ/Yではなく、このゲームの2D戦闘平面上の距離を取得する。
+	float GetPlayerDistance() const;
+	// 射撃中の距離に応じた横移動速度を計算する。
+	float CalculateRetreatSpeed(float distance) const;
+
+		// プレイヤーが存在しない場合はfalseを返す。
+	bool TryGetPlayerDistance(float& outDistance) const;
+
 	// --- kAiming ---
 	float aimTimer_ = 0.0f;
-	static inline float kAimDuration = 1.0f;
+
+	// 狙いを定めてから発砲するまでの時間。
+	static inline float kAimDuration = 1.2f;
 
 	// --- kReloading ---
 	float retreatTimer_ = 0.0f;
 	float retreatMoveTimer_ = 0.0f;
 
+	// リロード中および射撃中の最大後退速度。
 	static inline float kRetreatSpeed = 0.03f;
 
-	// リロード中に実際に後退する時間。
+	// リロード開始直後だけ実際に後退する時間。
 	static inline float kRetreatDuration = 0.75f;
 
-	// 崖・段差を検査する距離。
+	// 後退方向の崖・段差を検査する距離。
 	static inline float kRetreatLookAheadDistance = 0.75f;
 
 	// リロードが長引いた場合の安全弁。
@@ -75,6 +87,16 @@ private:
 	bool lungeFacingLocked_ = false;
 
 	// --- combat distance ---
-	static inline float kMeleeEngageRange = 5.0f;
+
+	// プレイヤーがこの距離以内に入ると銃剣へ移行する。
+	static inline float kBayonetRange = 5.0f;
+
+	// この距離以内では、射撃しながら徐々に後退する。
+	// FiringRangeの半分を初期値にする。
+	static inline float kRetreatRange = 20.0f;
+
+	// Riflemanが交戦を開始できる最大距離。
 	static inline float kFiringRange = 40.0f;
+
+	WeaponSabre sabreComboReference_;
 };

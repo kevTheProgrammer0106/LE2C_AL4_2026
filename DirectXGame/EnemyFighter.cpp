@@ -52,7 +52,8 @@ void EnemyFighter::UpdateMeleeVisual(const BaseMelee::GenericAttackAnimState* at
 	}
 	currentMelee_->UpdateWeaponState();
 	bool facingRight = isRight();
-	currentMelee_->SetMeleePositionGeneric(worldTransform_.translation_, worldTransform_.rotation_, facingRight, attackState);
+	currentMelee_->SetReactionPose(GetReactionPose());
+	currentMelee_->SetMeleePositionGeneric(modelWorldTransform_.translation_, modelWorldTransform_.rotation_, facingRight, attackState);
 
 	// 攻撃判定は「振っている(kAttack)」フェーズの間だけ有効
 	isSwingActive_ = (attackState != nullptr && attackState->phase == BaseMelee::AttackPhase::kAttack);

@@ -105,7 +105,7 @@ public:
 	void SetHP(int hp) { hp_ = std::clamp(hp, 0, kMaxHP); }
 	void SetMaxHP(int maxHp) { kMaxHP = maxHp; }
 
-		// --- SFX ---
+	// --- SFX ---
 	// 近接/銃火器の切り替え(DIK_Q)時に鳴らす。GameSceneがロード後にセットする。
 	static void SetWeaponSwitchSoundHandle(uint32_t handle) { sWeaponSwitchSoundHandle_ = handle; }
 	static void SetSfxVolume(float volume) { sSfxVolume_ = volume; }
@@ -114,18 +114,31 @@ public:
 	static void SetJumpSoundHandle(uint32_t handle) { sJumpSoundHandle_ = handle; }
 	static void SetLandSoundHandle(uint32_t handle) { sLandSoundHandle_ = handle; }
 
-
 	void TakeDamage(int damage, const KamataEngine::Vector3& hitDirection, float impactPower, BaseEnemy* attacker = nullptr);
 
 	void SetStunned(float duration) { behavior_.RequestStun(duration); }
 	void SetKnockback(const KamataEngine::Vector3& direction, float power) { behavior_.RequestHitKnockback(direction, power); }
-
 	void SetBlocking(bool blocking) { behavior_.SetBlocking(blocking); }
 	bool IsBlocking() const { return behavior_.IsBlocking(); }
+
+	// --- Block hitbox ---
+	// The block box is the player's AABB stretched forward (facing side) by kBlockExtraWidth.
+	// It is only live while the block button is held and the player isn't attacking/dead/stunned.
+	// Attacks must overlap it AND come from the facing side to be blocked; everything else hurts.
+	bool IsBlockActive() const;
+	AABB GetBlockAABB();
+	bool IsBlockingAttack(const AABB& attackBox, const KamataEngine::Vector3& attackerPos);
+	// Call instead of TakeDamage() when IsBlockingAttack() returned true. Latches the block direction until the button is released.
+	void OnBlocked(const KamataEngine::Vector3& hitDirection, float impactPower, BaseEnemy* attacker = nullptr);
+	bool IsBlockLatched() const { return blockLatched_; }
 	bool IsStunnedState() const { return behavior_.IsStunned(); }
 
 	void SetControlLocked(bool locked) { controlLocked_ = locked; }
 	bool IsControlLocked() const { return controlLocked_; }
+
+	void RequestDropThrough();
+	bool IsStandingOnPlatform() const;
+	bool IsDroppingThrough() const { return dropThroughTimer_ > 0.0f; }
 
 	// ============================================================
 	//  Debuff status / control (used by GameScene::debugMenu, usable from gameplay too)
@@ -159,8 +172,12 @@ public:
 	// Instantly removes stun, knockback, slow effect, control lock and squish progress.
 	void ClearAllDebuffs();
 
+	// Model layer (cosmetic). Body parts and weapons follow this, not the root.
+	const KamataEngine::WorldTransform& GetModelWorldTransform() const { return modelWorldTransform_; }
+	KamataEngine::Vector3 GetModelWorldPosition() const { return modelWorldTransform_.translation_; }
+
 private:
-	bool controlLocked_ = false; 
+	bool controlLocked_ = false;
 
 	// Slow effect state
 	bool slowActive_ = false;
@@ -235,7 +252,7 @@ private:
 
 	static inline float kGravityAcceleration = 0.05f;
 	static inline float kLimitFallSpeed = 0.5f;
-	static inline float kJumpAcceleration = 0.75f;
+	static inline float kJumpAcceleration = 0.65f;
 
 	static inline float kPushAcceleration = 0.015f;
 	static inline float kMaxPushSpeed = 0.15f;
@@ -249,19 +266,34 @@ private:
 
 	static inline float kBulletSpeed = 1.0f;
 	static inline float kBlockAttackerKnockbackScale = 2.5f; // how much harder the attacker gets pushed vs. the player's own block pushback
+	static inline float kBlockExtraWidth = 1.2f;             // how far the block box reaches past the body on the facing side
+	bool blockLatched_ = false;                              // set when an attack is blocked: facing is locked until block is released
 	PlayerBehavior behavior_{*this};
 
 	MapChipField* mapChipField_ = nullptr;
+
 	static inline float kWidth = 0.8f;
 	static inline float kHeight = 1.6f;
 	static inline float kBlank = 0.01f;
+
+		// --- Model layer ---
+	void UpdateModelCollision();
+	BlockDetector detectorProbe_;
+	KamataEngine::Vector3 detectorPosition_{};
+	KamataEngine::WorldTransform modelWorldTransform_;
+	float modelStandOffsetY_ = 0.0f;
+	static inline float kModelStandLerp = 0.2f;   // per-frame lerp toward the target offset
+	static inline float kModelMaxOffset = 0.5f;   // clamp so the model never detaches from the root
+	static inline float kModelProbeDepth = 1.0f;  // how far below the feet to look
+	static inline float kModelProbeStepUp = 0.3f; // how far above the feet a surface may be
+
 	static inline float kAttenuationLanding = 0.2f;
 	static inline float kAttenuationWall = 0.2f;
 	static inline float kAttenuationCeilling = 0.2f;
 
 	bool isDead_ = false;
 
-		// --- SFX ---
+	// --- SFX ---
 	static inline uint32_t sWeaponSwitchSoundHandle_ = 0;
 	static inline float sSfxVolume_ = 1.0f;
 	static void PlaySfxHandle(uint32_t handle) {
@@ -282,4 +314,14 @@ private:
 	SRTOffset GetAttackPoseOffset() const { return behavior_.GetAttackPoseOffset(); }
 
 	AnimationManager animManager_;
+	SRTOffset smoothedBodyAnim_ = {};
+
+	float dropThroughTimer_ = 0.0f;
+
+	// プラットフォームを通り抜けるために無視する時間
+	static inline float kDropThroughDuration = 0.15f;
+
+	// 落下開始用の小さな下向き速度
+	static inline float kDropThroughVelocity = -0.12f;
+
 };

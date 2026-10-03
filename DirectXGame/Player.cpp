@@ -66,6 +66,11 @@ void Player::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "FirearmOffsetRotation", firearmOffset_.rotation);
 	gv->AddItem(kGroupName, "FirearmOffsetScale", firearmOffset_.scale);
 	gv->AddItem(kGroupName, "BlockAttackerKnockbackScale", kBlockAttackerKnockbackScale);
+	gv->AddItem(kGroupName, "BlockExtraWidth", kBlockExtraWidth);
+	gv->AddItem(kGroupName, "ModelStandLerp", kModelStandLerp);
+	gv->AddItem(kGroupName, "ModelMaxOffset", kModelMaxOffset);
+	gv->AddItem(kGroupName, "ModelProbeDepth", kModelProbeDepth);
+	gv->AddItem(kGroupName, "ModelProbeStepUp", kModelProbeStepUp);
 }
 void Player::ApplyGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
@@ -76,9 +81,9 @@ void Player::ApplyGlobalVariables() {
 	kGravityAcceleration = gv->GetFloatValue(kGroupName, "GravityAcceleration");
 	kLimitFallSpeed = gv->GetFloatValue(kGroupName, "LimitFallSpeed");
 	kJumpAcceleration = gv->GetFloatValue(kGroupName, "JumpAcceleration");
+	kBlank = gv->GetFloatValue(kGroupName, "Blank");
 	kWidth = gv->GetFloatValue(kGroupName, "Width");
 	kHeight = gv->GetFloatValue(kGroupName, "Height");
-	kBlank = gv->GetFloatValue(kGroupName, "Blank");
 	kAttenuationLanding = gv->GetFloatValue(kGroupName, "AttenuationLanding");
 	kAttenuationWall = gv->GetFloatValue(kGroupName, "AttenuationWall");
 	kAttenuationCeilling = gv->GetFloatValue(kGroupName, "AttenuationCeilling");
@@ -94,8 +99,13 @@ void Player::ApplyGlobalVariables() {
 	firearmOffset_.translation = gv->GetVector3Value(kGroupName, "FirearmOffsetTranslation");
 	firearmOffset_.rotation = gv->GetVector3Value(kGroupName, "FirearmOffsetRotation");
 	firearmOffset_.scale = gv->GetVector3Value(kGroupName, "FirearmOffsetScale");
-
 	kBlockAttackerKnockbackScale = gv->GetFloatValue(kGroupName, "BlockAttackerKnockbackScale");
+	kBlockExtraWidth = gv->GetFloatValue(kGroupName, "BlockExtraWidth");
+
+	kModelStandLerp = gv->GetFloatValue(kGroupName, "ModelStandLerp");
+	kModelMaxOffset = gv->GetFloatValue(kGroupName, "ModelMaxOffset");
+	kModelProbeDepth = gv->GetFloatValue(kGroupName, "ModelProbeDepth");
+	kModelProbeStepUp = gv->GetFloatValue(kGroupName, "ModelProbeStepUp");
 }
 #pragma endregion
 
@@ -185,6 +195,10 @@ void Player::Initialize(
 
 	worldTransformAttack_.Initialize();
 	worldTransformAttack_.rotation_ = worldTransform_.rotation_;
+	modelWorldTransform_.Initialize();
+	modelWorldTransform_.rotation_ = worldTransform_.rotation_;
+	blockDetector_.SetUseDetailedTiles(false); // root: plain 1.0 cells
+	detectorProbe_.SetUseDetailedTiles(true);  // detector: real tile shapes/offsets
 
 	worldTransform_.translation_ = position;
 }
@@ -206,7 +220,7 @@ void Player::SetWeaponMode(WeaponMode mode) {
 Vector2 Player::ComputeMouseAimDir() const {
 	auto mouse = Input::GetInstance()->GetMousePosition();
 	Vector2 mouseScreen = {static_cast<float>(mouse.x), static_cast<float>(mouse.y)};
-	Vector3 origin = GetWorldPosition();
+	Vector3 origin = GetModelWorldPosition();
 	Matrix4x4 matViewport = MakeViewportMatrix(0.0f, 0.0f, static_cast<float>(WinApp::kWindowWidth), static_cast<float>(WinApp::kWindowHeight), 0.0f, 1.0f);
 	Matrix4x4 matVPV = Multiply(camera_->matView, Multiply(camera_->matProjection, matViewport));
 	Vector3 originScreen = TransformCoordinate(origin, matVPV);
@@ -228,14 +242,31 @@ void Player::UpdateAimAndFirearm() {
 		turnTimer_ = kTimeTurn;
 	}
 	currentFirearm_->SetEquipped(weaponMode_ == WeaponMode::kFirearm);
-	currentFirearm_->UpdateFollow(worldTransform_, aim.localAngle, aim.facingRight);
+	currentFirearm_->UpdateFollow(modelWorldTransform_, aim.localAngle, aim.facingRight);
 }
 void Player::UpdateMovementState() {
 	AnimationManager::AnimationContext context;
 	context.velocity = velocity_;
 	context.onGround = onGround_;
-	context.isDead = isDead_;
-	animManager_.UpdateMovementState(context);
+	context.isDead = isDead_ || behavior_.IsDeathBehavior();
+	context.isKnockedBack = behavior_.IsKnockback();
+	context.isStunned = behavior_.IsStunned();
+	context.isBlocking = behavior_.GetBehavior() == Behavior::kBlock;
+	context.facingRight = (lrDirection_ == LRDirection::kRight);
+
+	// アニメーションが返すイベント(ジャンプ/着地/足音)でSFXを鳴らす
+	AnimationManager::MovementEvents events = animManager_.UpdateMovementState(context);
+	if (!isDead_ && !behavior_.IsDeathBehavior()) {
+		if (events.justJumped) {
+			PlayMovementSfxHandle(sJumpSoundHandle_);
+		}
+		if (events.justLanded) {
+			PlayMovementSfxHandle(sLandSoundHandle_);
+		}
+		if (events.footstepTick) {
+			PlayMovementSfxHandle(sFootstepSoundHandle_);
+		}
+	}
 }
 void Player::KillInstant() {
 	if (isDead_ || behavior_.IsDeathBehavior())
@@ -251,7 +282,7 @@ void Player::UseFirearm() {
 	if (!currentFirearm_->TryFire())
 		return;
 
-	Vector3 origin = GetWorldPosition();
+	Vector3 origin = GetModelWorldPosition();
 	Vector2 aimDir = GetEffectiveAimDir();
 
 	if (gameScene_) {
@@ -276,6 +307,14 @@ void Player::UseMeleeWeapon() {
 void Player::Update() {
 	ApplyGlobalVariables();
 	TickDebuffs();
+
+	if (dropThroughTimer_ > 0.0f) {
+		dropThroughTimer_ -= 1.0f / 60.0f;
+		if (dropThroughTimer_ < 0.0f) {
+			dropThroughTimer_ = 0.0f;
+		}
+	}
+
 	if (currentFirearm_)
 		currentFirearm_->TickRecoil();
 
@@ -285,6 +324,7 @@ void Player::Update() {
 	if (canAct) {
 		if (Input::GetInstance()->TriggerKey(DIK_Q)) {
 			SetWeaponMode(weaponMode_ == WeaponMode::kMelee ? WeaponMode::kFirearm : WeaponMode::kMelee);
+			PlaySfxHandle(sWeaponSwitchSoundHandle_);
 		}
 		bool isBlockingNow = Input::GetInstance()->IsPressMouse(1);
 		if (isBlockingNow && !behavior_.IsAttacking()) {
@@ -298,6 +338,9 @@ void Player::Update() {
 		}
 		behavior_.SetBlocking(isBlockingNow);
 	}
+	if (canAct && Input::GetInstance()->PushKey(DIK_S)) {
+		RequestDropThrough();
+	}
 
 	behavior_.ResolveBehaviorRequest();
 
@@ -305,8 +348,20 @@ void Player::Update() {
 		return;
 
 	behavior_.UpdateCurrentBehavior();
+	UpdateModelCollision();     
 	currentMelee_->UpdateWeaponState();
 	currentMelee_->SetMeleePosition(*this);
+
+	ReactionPose reactionPose = ReactionPose::kNone;
+	if (behavior_.IsKnockback())
+		reactionPose = ReactionPose::kKnockback;
+	else if (behavior_.IsStunned())
+		reactionPose = ReactionPose::kStun;
+	else if (behavior_.GetBehavior() == Behavior::kBlock)
+		reactionPose = ReactionPose::kBlock;
+	currentMelee_->SetReactionPose(reactionPose);
+	if (currentFirearm_)
+		currentFirearm_->SetReactionPose(reactionPose);
 
 	UpdateMovementState();
 	UpdateBodyParts();
@@ -362,7 +417,6 @@ void Player::GroundMovement() {
 	float speedFactor = 1.0f;
 	if (IsOnSlowTerrain())
 		speedFactor = MapChipField::kSlowSpeedFactor;
-	// [NEW] timed/latched Slow debuff stacks by taking the stronger (smaller) factor
 	if (slowActive_)
 		speedFactor = std::min(speedFactor, slowFactor_);
 	if (Input::GetInstance()->PushKey(DIK_D) || Input::GetInstance()->PushKey(DIK_A)) {
@@ -404,12 +458,16 @@ void Player::JumpMovement() {
 }
 
 void Player::UpdateBodyParts() {
+
 	SRTOffset anim;
-	if (behavior_.IsAttacking()) {
+	const bool debuffed = behavior_.IsKnockback() || behavior_.IsStunned();
+	if (behavior_.IsDeathBehavior()) {
+		anim = SRTOffset{};
+	} else if (behavior_.IsAttacking()) {
 		anim = GetAttackPoseOffset();
 	} else {
-		anim = animManager_.GetMovementAnimOffset();
-		if (currentFirearm_) {
+		anim = animManager_.GetMovementAnimOffset(); // includes the knockback / stunned poses
+		if (currentFirearm_ && !debuffed) {
 			SRTOffset aimLean = BaseFirearm::ComputeAimLeanOffset(ComputeMouseAimDir(), lrDirection_ == LRDirection::kRight);
 			anim = {
 			    {anim.scale.x * aimLean.scale.x, anim.scale.y * aimLean.scale.y, anim.scale.z * aimLean.scale.z},
@@ -421,16 +479,19 @@ void Player::UpdateBodyParts() {
 		SRTOffset recoil = currentFirearm_->GetRecoilOffset();
 		anim.translation += recoil.translation;
 	}
+	smoothedBodyAnim_ = AnimationManager::SmoothSRT(smoothedBodyAnim_, anim);
+	anim = smoothedBodyAnim_;
 
 	Matrix4x4 worldRotMatrix = Multiply(MakeRotateXMatrix(worldTransform_.rotation_.x), Multiply(MakeRotateYMatrix(worldTransform_.rotation_.y), MakeRotateZMatrix(worldTransform_.rotation_.z)));
 	Vector3 rotatedBodyOffset = TransformNormal(bodyOffset_.translation, worldRotMatrix);
 
-	parts_[body].transform.translation_ = worldTransform_.translation_ + rotatedBodyOffset + anim.translation;
-	parts_[body].transform.rotation_ = worldTransform_.rotation_ + bodyOffset_.rotation + anim.rotation;
+	parts_[body].transform.translation_ = modelWorldTransform_.translation_ + rotatedBodyOffset + anim.translation;
+	parts_[body].transform.rotation_ = modelWorldTransform_.rotation_ + bodyOffset_.rotation + anim.rotation;
 	parts_[body].transform.scale_ = {
-	    worldTransform_.scale_.x * bodyOffset_.scale.x * anim.scale.x, worldTransform_.scale_.y * bodyOffset_.scale.y * anim.scale.y, worldTransform_.scale_.z * bodyOffset_.scale.z * anim.scale.z};
+	    modelWorldTransform_.scale_.x * bodyOffset_.scale.x * anim.scale.x, modelWorldTransform_.scale_.y * bodyOffset_.scale.y * anim.scale.y,
+	    modelWorldTransform_.scale_.z * bodyOffset_.scale.z * anim.scale.z};
 	WorldTransformUpdate(parts_[body].transform);
-
+	 
 	Matrix4x4 rotMatrix =
 	    Multiply(MakeRotateXMatrix(parts_[body].transform.rotation_.x), Multiply(MakeRotateYMatrix(parts_[body].transform.rotation_.y), MakeRotateZMatrix(parts_[body].transform.rotation_.z)));
 	Vector3 rotatedHeadOffset = TransformNormal(headOffset_.translation, rotMatrix);
@@ -449,44 +510,10 @@ void Player::UpdateBodyParts() {
 	WorldTransformUpdate(parts_[hat].transform);
 }
 
-void Player::OnCollision(const BaseEnemy* enemy) {
-	if (behavior_.IsKnockback())
-		return;
-	if (isAttack()) {
-		if (enemy->WasBlocked()) {
-			float pushDirection = (lrDirection_ == LRDirection::kRight) ? -1.0f : 1.0f;
-			behavior_.RequestKnockback(pushDirection);
-		}
-		return;
-	}
-	if (enemy->IsCollisionDisabled())
-		return;
-}
-
 void Player::TakeDamage(int damage, const Vector3& hitDirection, float impactPower, BaseEnemy* attacker) {
+	attacker;
 	if (isDead_ || behavior_.IsDeathBehavior())
 		return;
-
-	if (behavior_.IsBlocking()) {
-		Vector3 effectPos = GetWorldPosition();
-		if (gameScene_)
-			gameScene_->CreateBlockSparkEffect(effectPos);
-		behavior_.RequestHitKnockback(hitDirection, impactPower * 0.3f);
-		if (attacker) {
-			Vector3 pushDir = attacker->GetWorldPosition() - GetWorldPosition();
-			float len = std::sqrtf(pushDir.x * pushDir.x + pushDir.y * pushDir.y);
-			if (len > 0.0001f) {
-				pushDir.x /= len;
-				pushDir.y /= len;
-			} else {
-				pushDir = {isRight() ? 1.0f : -1.0f, 0.0f, 0.0f};
-			}
-			pushDir.y += 0.3f;
-			attacker->RequestKnockback(pushDir, impactPower * kBlockAttackerKnockbackScale);
-			PlayerBehavior::PlayBlockImpactSound();
-		}
-		return;
-	}
 
 	Vector3 effectPos = GetWorldPosition();
 	if (gameScene_)
@@ -500,6 +527,72 @@ void Player::TakeDamage(int damage, const Vector3& hitDirection, float impactPow
 	PlayerBehavior::PlayHurtSound();
 }
 
+#pragma region Block hitbox
+bool Player::IsBlockActive() const { return behavior_.IsBlocking() && !isDead_ && !behavior_.IsDeathBehavior() && !behavior_.IsAttacking() && !behavior_.IsStunned(); }
+
+AABB Player::GetBlockAABB() {
+	AABB box = GetAABB();
+	if (lrDirection_ == LRDirection::kRight)
+		box.max.x += kBlockExtraWidth;
+	else
+		box.min.x -= kBlockExtraWidth;
+	return box;
+}
+
+bool Player::IsBlockingAttack(const AABB& attackBox, const Vector3& attackerPos) {
+	if (!IsBlockActive())
+		return false;
+	// Only the facing side is covered: an attacker behind the player is never blocked.
+	float dx = attackerPos.x - worldTransform_.translation_.x;
+	bool attackerInFront = isRight() ? (dx >= 0.0f) : (dx <= 0.0f);
+	if (!attackerInFront)
+		return false;
+	return IsCollisionAABB(GetBlockAABB(), attackBox);
+}
+
+void Player::OnBlocked(const Vector3& hitDirection, float impactPower, BaseEnemy* attacker) {
+	if (isDead_ || behavior_.IsDeathBehavior())
+		return;
+
+	blockLatched_ = true; // block direction stays fixed until the button is released
+
+	// [CHANGED] spawn the spark from the visible body (model), not the root
+	Vector3 effectPos = GetModelWorldPosition();
+	effectPos.x += (isRight() ? 1.0f : -1.0f) * (kWidth * 0.5f);
+	if (gameScene_)
+		gameScene_->CreateBlockSparkEffect(effectPos);
+
+	behavior_.RequestHitKnockback(hitDirection, impactPower * 0.3f);
+
+	if (attacker) {
+		// gameplay direction: root to root
+		Vector3 pushDir = attacker->GetWorldPosition() - GetWorldPosition();
+		float len = std::sqrtf(pushDir.x * pushDir.x + pushDir.y * pushDir.y);
+		if (len > 0.0001f) {
+			pushDir.x /= len;
+			pushDir.y /= len;
+		} else {
+			pushDir = {isRight() ? 1.0f : -1.0f, 0.0f, 0.0f};
+		}
+		pushDir.y += 0.3f;
+		attacker->RequestKnockback(pushDir, impactPower * kBlockAttackerKnockbackScale);
+	}
+	PlayerBehavior::PlayBlockImpactSound();
+}
+
+void Player::OnCollision(const BaseEnemy* enemy) {
+	if (behavior_.IsKnockback())
+		return;
+	if (isAttack()) {
+		if (enemy->WasBlocked()) {
+			float pushDirection = (lrDirection_ == LRDirection::kRight) ? -1.0f : 1.0f;
+			behavior_.RequestKnockback(pushDirection);
+		}
+		return;
+	}
+	if (enemy->IsCollisionDisabled())
+		return;
+}
 void Player::OnCollision() {
 	if (behavior_.IsKnockback() || behavior_.IsDeathBehavior())
 		return;
@@ -521,6 +614,9 @@ void Player::MapChipCollisionUpdate() {
 	blockDetector_.SetVelocity(velocity_);
 	blockDetector_.SetOnGround(onGround_);
 	blockDetector_.SetMapChipField(mapChipField_);
+	blockDetector_.SetSize(kWidth, kHeight);
+
+	blockDetector_.SetIgnoreOneWay(IsDroppingThrough());
 
 	CollisionInfo horizontalInfo{};
 	horizontalInfo.move.x = velocity_.x;
@@ -535,28 +631,89 @@ void Player::MapChipCollisionUpdate() {
 	CeillingCollision(verticalInfo);
 
 	blockDetector_.GroundSwitch(verticalInfo);
+
 	onGround_ = blockDetector_.IsOnGround();
 	velocity_ = blockDetector_.GetVelocity();
 
 	if (isBeingPushed_ && horizontalInfo.isHitWall) {
 		++squishTimer_;
-		if (squishTimer_ >= kSquishThreshold)
+
+		if (squishTimer_ >= kSquishThreshold) {
 			isDead_ = true;
+		}
 	} else {
 		squishTimer_ = 0;
 	}
 }
+
 void Player::MapChipCollisionUpdate(CollisionInfo& collisionInfo) {
 	blockDetector_.SetWorldTransform(worldTransform_);
 	blockDetector_.SetVelocity(velocity_);
 	blockDetector_.SetOnGround(onGround_);
 	blockDetector_.SetMapChipField(mapChipField_);
+	blockDetector_.SetSize(kWidth, kHeight);
+
+	// Sでドロップスルー中はワンウェイ足場への着地だけ無視する。
+	blockDetector_.SetIgnoreOneWay(IsDroppingThrough());
 
 	blockDetector_.MapChipCollision(collisionInfo);
+
 	PositionUpdate(collisionInfo);
 	WallCollision(collisionInfo);
 	CeillingCollision(collisionInfo);
+
 	blockDetector_.GroundSwitch(collisionInfo);
+
 	onGround_ = blockDetector_.IsOnGround();
 	velocity_ = blockDetector_.GetVelocity();
+}
+bool Player::IsStandingOnPlatform() const {
+	if (!mapChipField_ || !onGround_) {
+		return false;
+	}
+
+	const float checkOffset = 0.05f;
+
+	Vector3 leftFoot = worldTransform_.translation_ + Vector3(-kWidth * 0.5f + kBlank, -kHeight * 0.5f - checkOffset, 0.0f);
+	Vector3 rightFoot = worldTransform_.translation_ + Vector3(kWidth * 0.5f - kBlank, -kHeight * 0.5f - checkOffset, 0.0f);
+
+	// 左右どちらかの足元がワンウェイ足場なら、現在その足場に立っている。
+	return mapChipField_->IsOneWayAtPosition(leftFoot) || mapChipField_->IsOneWayAtPosition(rightFoot);
+}
+
+void Player::RequestDropThrough() {
+	if (!IsStandingOnPlatform()) {
+		return;
+	}
+
+	dropThroughTimer_ = kDropThroughDuration;
+
+	// 今いる足場を一度抜けるため、接地状態を解除して下へ進ませる。
+	onGround_ = false;
+	velocity_.y = std::min(velocity_.y, kDropThroughVelocity);
+}
+void Player::UpdateModelCollision() {
+	// Root and detector share the same position and 0.8 x 1.6 size.
+	const Vector3 rootPos = worldTransform_.translation_;
+
+	float targetOffsetY = 0.0f;
+	if (onGround_ && !isDead_ && !behavior_.IsDeathBehavior() && mapChipField_) {
+		blockDetector_.SetMapChipField(mapChipField_);
+		blockDetector_.SetSize(kWidth, kHeight);
+		detectorProbe_.SetMapChipField(mapChipField_);
+		detectorProbe_.SetSize(kWidth, kHeight);
+
+		float rootTopY = 0.0f;     // surface the root thinks it stands on (full cell)
+		float detectorTopY = 0.0f; // surface the detector finds (real tile shape)
+		if (blockDetector_.ProbeGroundTop(rootPos, kModelProbeStepUp, kModelProbeDepth, rootTopY) && detectorProbe_.ProbeGroundTop(rootPos, kModelProbeStepUp, kModelProbeDepth, detectorTopY)) {
+			targetOffsetY = std::clamp(detectorTopY - rootTopY, -kModelMaxOffset, kModelMaxOffset);
+		}
+	}
+	// Airborne or dead: target is 0, so the model eases back to the root.
+	modelStandOffsetY_ = Lerp(modelStandOffsetY_, targetOffsetY, kModelStandLerp);
+
+	modelWorldTransform_.translation_ = rootPos + Vector3(0.0f, modelStandOffsetY_, 0.0f);
+	modelWorldTransform_.rotation_ = worldTransform_.rotation_;
+	modelWorldTransform_.scale_ = worldTransform_.scale_;
+	WorldTransformUpdate(modelWorldTransform_);
 }

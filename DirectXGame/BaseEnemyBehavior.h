@@ -99,6 +99,7 @@ public:
 			return;
 		knockbackDirection_ = direction;
 		knockbackPower_ = power;
+		pendingStunAfterKnockback_ = kHitStunDuration;
 		behaviorRequest_ = Behavior::kKnockback;
 	}
 	void RequestStun(float duration) {
@@ -108,6 +109,7 @@ public:
 		behaviorRequest_ = Behavior::kStunned;
 	}
 	void ClearDebuffs() {
+		pendingStunAfterKnockback_ = 0.0f; 
 		if (behavior_ == Behavior::kStunned || behavior_ == Behavior::kKnockback)
 			behaviorRequest_ = Behavior::kRoot;
 		else if (behaviorRequest_ == Behavior::kStunned || behaviorRequest_ == Behavior::kKnockback)
@@ -116,6 +118,15 @@ public:
 	bool IsStunned() const { return behavior_ == Behavior::kStunned; }
 	bool IsKnockedBack() const { return behavior_ == Behavior::kKnockback; }
 	bool IsDebuffed() const { return IsStunned() || IsKnockedBack(); }
+
+	
+	enum class PostMode { kWander, kHoldLeft, kHoldRight };
+	void SetPostMode(PostMode mode);
+	PostMode GetPostMode() const { return postMode_; }
+
+	// Instantly faces direction (0 = right, 1 = left, same as BaseEnemy::LRDirection): sets lrDirection_,
+	// cancels any turn animation and writes the matching body rotation, so body and weapons agree on frame 1.
+	void SnapFacing(int direction);
 
 	bool HasLastKnownPosition() const { return hasLastKnownPosition_; }
 	void SetHasLastKnownPosition(bool value) { hasLastKnownPosition_ = value; }
@@ -148,7 +159,22 @@ public:
 	static void SetDebugMovementFreeze(bool frozen) { kDebugMovementFreeze_ = frozen; }
 	static bool IsDebugMovementFreeze() { return kDebugMovementFreeze_; }
 
+		bool IsBlocking() const { return behavior_ == Behavior::kBlock; }
+	bool IsBlockPending() const { return behaviorRequest_ == Behavior::kBlock; }
+	// Off cooldown and not dying (usable even while stunned, e.g. "block when stun ends")
+	bool IsBlockReady() const { return !IsDeathBehavior() && behaviorRequest_ != Behavior::kDeath && blockCooldownTimer_ <= 0.0f; }
+	bool CanBlockNow() const { return IsBlockReady() && !IsBlocking() && !IsBlockPending() && !IsDebuffed(); }
+	float GetBlockCooldownRemaining() const { return blockCooldownTimer_; }
+	// Rolls GetBlockChanceWhenHit(); on success queues kBlock. Called by BaseEnemy::TryBlockAttack.
+	bool TryStartBlockOnHit();
+
+	static inline float kBlockDuration = 1.5f;
+	static inline float kBlockCooldown = 10.0f; // counted from the END of the block
 protected:
+	PostMode postMode_ = PostMode::kWander;
+
+	float pendingStunAfterKnockback_ = 0.0f;
+	static inline float kHitStunDuration = 0.6f; 
 
 	static inline bool kDebugDecisionFreeze_ = false;
 	static inline bool kDebugMovementFreeze_ = false;
@@ -261,4 +287,12 @@ protected:
 
 	float stunTimer_ = 0.0f;
 	float stunDuration_ = 0.0f;
+
+	virtual float GetBlockChanceWhenHit() const { return 0.0f; } // 0 = never blocks on hit
+	virtual bool ShouldBlockAfterStun() const { return false; }  // true = guaranteed block when stun ends
+	virtual void BehaviorBlockInitialize();
+	virtual void BehaviorBlockUpdate();
+
+	float blockTimer_ = 0.0f;
+	float blockCooldownTimer_ = 0.0f;
 };

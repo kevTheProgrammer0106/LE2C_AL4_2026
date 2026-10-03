@@ -1,6 +1,8 @@
 #include "AnimationManager.h"
 #include "GlobalVariables.h"
 
+#include <cmath>
+
 using namespace KamataEngine;
 
 namespace {
@@ -26,6 +28,15 @@ void AnimationManager::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "IdleCycleSpeed", kIdleCycleSpeed);
 	gv->AddItem(kGroupName, "RunCycleSpeed", kRunCycleSpeed);
 	gv->AddItem(kGroupName, "AirPoseBlendSpeed", kAirPoseBlendSpeed);
+	// [NEW]
+	gv->AddItem(kGroupName, "PoseTransitionSpeed", kPoseTransitionSpeed);
+	gv->AddItem(kGroupName, "KnockbackPoseBlendSpeed", kKnockbackPoseBlendSpeed);
+	gv->AddItem(kGroupName, "StunPoseBlendSpeed", kStunPoseBlendSpeed);
+	gv->AddItem(kGroupName, "BlockPoseBlendSpeed", kBlockPoseBlendSpeed);
+	gv->AddItem(kGroupName, "StunWobbleAmplitude", kStunWobbleAmplitude);
+	gv->AddItem(kGroupName, "StunWobbleSpeed", kStunWobbleSpeed);
+	gv->AddItem(kGroupName, "DeadBodyDropDistance", kDeadBodyDropDistance);
+	gv->AddItem(kGroupName, "DeadBodyDropBlendTime", kDeadBodyDropBlendTime);
 }
 void AnimationManager::ApplyGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
@@ -45,12 +56,51 @@ void AnimationManager::ApplyGlobalVariables() {
 	kIdleCycleSpeed = gv->GetFloatValue(kGroupName, "IdleCycleSpeed");
 	kRunCycleSpeed = gv->GetFloatValue(kGroupName, "RunCycleSpeed");
 	kAirPoseBlendSpeed = gv->GetFloatValue(kGroupName, "AirPoseBlendSpeed");
+	// [NEW]
+	kPoseTransitionSpeed = gv->GetFloatValue(kGroupName, "PoseTransitionSpeed");
+	kKnockbackPoseBlendSpeed = gv->GetFloatValue(kGroupName, "KnockbackPoseBlendSpeed");
+	kStunPoseBlendSpeed = gv->GetFloatValue(kGroupName, "StunPoseBlendSpeed");
+	kBlockPoseBlendSpeed = gv->GetFloatValue(kGroupName, "BlockPoseBlendSpeed");
+	kStunWobbleAmplitude = gv->GetFloatValue(kGroupName, "StunWobbleAmplitude");
+	kStunWobbleSpeed = gv->GetFloatValue(kGroupName, "StunWobbleSpeed");
+	kDeadBodyDropDistance = gv->GetFloatValue(kGroupName, "DeadBodyDropDistance");
+	kDeadBodyDropBlendTime = gv->GetFloatValue(kGroupName, "DeadBodyDropBlendTime");
 }
+
+SRTOffset AnimationManager::SmoothSRT(const SRTOffset& current, const SRTOffset& target) {
+	// frame-rate independent: 1 - e^(-speed * dt)
+	float factor = 1.0f - std::exp(-std::max(kPoseTransitionSpeed, 0.0f) * (1.0f / 60.0f));
+	return LerpSRT(current, target, factor);
+}
+
+SRTOffset AnimationManager::MirrorForFacing(const SRTOffset& pose, bool facingRight) {
+	if (facingRight)
+		return pose;
+	SRTOffset mirrored = pose;
+	mirrored.rotation.z = -mirrored.rotation.z;
+	mirrored.translation.x = -mirrored.translation.x;
+	return mirrored;
+}
+
 AnimationManager::MovementEvents AnimationManager::UpdateMovementState(const AnimationContext& context) {
 	MovementEvents events;
 	MovementState previous = movementState_;
 
-	if (!context.onGround) {
+	if (context.isDead) {
+		deadTimer_ += 1.0f / 60.0f;
+	} else {
+		deadTimer_ = 0.0f;
+	}
+
+	facingRight_ = context.facingRight;
+
+	if (context.isKnockedBack) {
+		movementState_ = MovementState::kKnockback;
+	} else if (context.isStunned) {
+		movementState_ = MovementState::kStunned;
+	} else if (context.isBlocking) {
+		movementState_ = MovementState::kBlock;
+	} else if (!context.onGround) {
 		movementState_ = (context.velocity.y > 0.0f) ? MovementState::kJump : MovementState::kFall;
 	} else if (movementState_ == MovementState::kFall && context.onGround) {
 		movementState_ = MovementState::kLanding;
@@ -66,12 +116,14 @@ AnimationManager::MovementEvents AnimationManager::UpdateMovementState(const Ani
 
 	if (movementState_ != previous) {
 		movementStateTimer_ = 0.0f;
-		footstepTimer_ = 0.0f; 
+		footstepTimer_ = 0.0f;
 	} else {
 		movementStateTimer_ += 1.0f / 60.0f;
 	}
 
-	events.justJumped = (previous != MovementState::kJump && movementState_ == MovementState::kJump);
+	// leaving knockback/stun in mid-air lands in kJump; that is not a real jump, so no jump SFX
+	bool wasDebuffed = (previous == MovementState::kKnockback || previous == MovementState::kStunned || previous == MovementState::kBlock);
+	events.justJumped = !wasDebuffed && (previous != MovementState::kJump && movementState_ == MovementState::kJump);
 	events.justLanded = (previous != MovementState::kLanding && movementState_ == MovementState::kLanding);
 
 	if (movementState_ == MovementState::kRun) {
@@ -84,10 +136,14 @@ AnimationManager::MovementEvents AnimationManager::UpdateMovementState(const Ani
 		footstepTimer_ = 0.0f;
 	}
 
+	// [NEW] chase the target pose instead of snapping to it
+	SRTOffset target = context.isDead ? kNeutralPose : ComputeTargetPose();
+	currentPose_ = SmoothSRT(currentPose_, target);
+
 	return events;
 }
 
-SRTOffset AnimationManager::GetMovementAnimOffset() const {
+SRTOffset AnimationManager::ComputeTargetPose() const {
 	switch (movementState_) {
 	case MovementState::kIdle: {
 		float t = TriangleWave(movementStateTimer_, kIdleCycleSpeed);
@@ -114,6 +170,20 @@ SRTOffset AnimationManager::GetMovementAnimOffset() const {
         };
 		return LerpSRT(landPose, kNeutralPose, t);
 	}
+	case MovementState::kKnockback: {
+		float t = std::clamp(movementStateTimer_ * kKnockbackPoseBlendSpeed, 0.0f, 1.0f);
+		return MirrorForFacing(LerpSRT(kNeutralPose, kKnockbackPose, t), facingRight_);
+	}
+	case MovementState::kStunned: {
+		float t = std::clamp(movementStateTimer_ * kStunPoseBlendSpeed, 0.0f, 1.0f);
+		SRTOffset pose = LerpSRT(kNeutralPose, kStunPose, t);
+		pose.rotation.z += std::sin(movementStateTimer_ * kStunWobbleSpeed) * kStunWobbleAmplitude * t;
+		return MirrorForFacing(pose, facingRight_);
+	}
+	case MovementState::kBlock: {
+		float t = std::clamp(movementStateTimer_ * kBlockPoseBlendSpeed, 0.0f, 1.0f);
+		return MirrorForFacing(LerpSRT(kNeutralPose, kBlockPose, t), facingRight_);
+	}
 	default:
 		return kNeutralPose;
 	}
@@ -121,14 +191,21 @@ SRTOffset AnimationManager::GetMovementAnimOffset() const {
 
 void AnimationManager::UpdateBodyParts(const WorldTransform& worldTransform, const AnimationContext& context, std::array<BodyPart, kPartCount>& parts) {
 
-	SRTOffset anim = context.isDead ? SRTOffset{} : GetMovementAnimOffset();
+	// [CHANGED] movement pose is already smoothed in UpdateMovementState (and eases to neutral when dead).
+	SRTOffset anim = GetMovementAnimOffset();
 
-	if (!context.isDead) {
-		// 移動アニメーションと戦闘中の体ポーズを合成する
-		anim.translation += context.actionPose.translation;
-		anim.rotation += context.actionPose.rotation;
+	// [NEW] action pose (aim / fire / reload etc.) is smoothed too
+	SRTOffset actionTarget = context.isDead ? SRTOffset{} : context.actionPose;
+	currentActionPose_ = SmoothSRT(currentActionPose_, actionTarget);
 
-		anim.scale = {anim.scale.x * context.actionPose.scale.x, anim.scale.y * context.actionPose.scale.y, anim.scale.z * context.actionPose.scale.z};
+	anim.translation += currentActionPose_.translation;
+	anim.rotation += currentActionPose_.rotation;
+	anim.scale = {anim.scale.x * currentActionPose_.scale.x, anim.scale.y * currentActionPose_.scale.y, anim.scale.z * currentActionPose_.scale.z};
+
+	// [NEW] dead body sinks toward the floor
+	if (context.isDead) {
+		float t = std::clamp(deadTimer_ / std::max(kDeadBodyDropBlendTime, 0.0001f), 0.0f, 1.0f);
+		anim.translation.y -= kDeadBodyDropDistance * EaseOut(0.0f, 1.0f, t);
 	}
 
 	parts[body].transform.translation_ = worldTransform.translation_ + anim.translation;

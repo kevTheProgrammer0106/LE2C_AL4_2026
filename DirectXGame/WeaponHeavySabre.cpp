@@ -101,6 +101,8 @@ void WeaponHeavySabre::SetMeleePositionGeneric(const Vector3& ownerPosition, con
 		pose = LerpSRT(holsterOffset_, readyStanceOffset_, equipTimer_);
 		break;
 	}
+	float equipWeight = (weaponState_ == WeaponState::kEquipped) ? equipTimer_ : (1.0f - equipTimer_);
+	pose = ApplyReactionPose(pose, equipWeight);
 
 	if (attackState) {
 		const ComboAttackPattern& pattern = comboPatterns_[attackState->comboIndex];

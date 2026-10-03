@@ -140,6 +140,8 @@ void WeaponSabre::SetMeleePosition(const Player& player) {
 		pose = LerpSRT(holsterOffset_, readyStanceOffset_, equipTimer_);
 		break;
 	}
+	float equipWeight = (weaponState_ == WeaponState::kEquipped) ? equipTimer_ : (1.0f - equipTimer_);
+	pose = ApplyReactionPose(pose, equipWeight);
 
 	if (player.isAttack()) {
 		Player::AttackAnimState anim = player.GetAttackAnimState();
@@ -175,7 +177,7 @@ void WeaponSabre::SetMeleePosition(const Player& player) {
 
 	Vector3 translation = pose.translation;
 	Vector3 rotation = pose.rotation;
-	Vector3 baseRotation = player.GetWorldTransform().rotation_;
+	Vector3 baseRotation = player.GetModelWorldTransform().rotation_;
 	constexpr float kFacingRotY[] = {1.570796f, 4.712389f};
 	baseRotation.y = kFacingRotY[facingRight ? 0 : 1];
 
@@ -192,7 +194,7 @@ void WeaponSabre::SetMeleePosition(const Player& player) {
 		}
 	}
 
-	Vector3 target = player.GetWorldPosition() + translation;
+	Vector3 target = player.GetModelWorldPosition() + translation;
 	SetWorldPosition(target);
 	worldTransform_.rotation_ = baseRotation + rotation;
 	worldTransform_.scale_ = pose.scale;
@@ -209,6 +211,8 @@ void WeaponSabre::SetMeleePositionGeneric(const Vector3& ownerPosition, const Ve
 		pose = LerpSRT(holsterOffset_, readyStanceOffset_, equipTimer_);
 		break;
 	}
+	float equipWeight = (weaponState_ == WeaponState::kEquipped) ? equipTimer_ : (1.0f - equipTimer_);
+	pose = ApplyReactionPose(pose, equipWeight);
 
 	if (attackState) {
 		const ComboAttackPattern& pattern = comboPatterns_[attackState->comboIndex];

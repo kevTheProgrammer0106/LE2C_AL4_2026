@@ -1,6 +1,7 @@
 #include "KamataEngine.h"
 #include <Windows.h>
 
+#include "AudioSettings.h"
 #include "GameScene.h"
 #include "GlobalVariables.h"
 #include "InputManager.h"
@@ -13,10 +14,10 @@ TitleScene* titleScene = nullptr;
 LevelSelectScene* levelSelectScene = nullptr;
 StageManager* stageManager = nullptr;
 
-#include <fstream>
-#include <sstream>
 #include <cstdlib>
 #include <ctime>
+#include <fstream>
+#include <sstream>
 
 void LoadDebugSettings() {
 	const std::string filePath = "DebugSettings.ini";
@@ -161,6 +162,11 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	stageManager = new StageManager;
 	stageManager->LoadStageDataFile();
 
+	// Audio volumes must exist before the title music starts.
+	AudioSettings::RegisterGlobalVariables();
+	GlobalVariables::GetInstance()->LoadFiles();
+	AudioSettings::ApplyGlobalVariables();
+
 #ifdef _DEBUG
 	LoadDebugSettings();
 	scene = Scene::kGame;
@@ -179,6 +185,9 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		InputManager::GetInstance()->Update();
 
 		imguiManager->Begin();
+
+		AudioSettings::ApplyGlobalVariables();
+		AudioSettings::DrawImGui(); // temporary: replaced by the settings menu later
 
 		ChangeScene();
 		GlobalVariables::GetInstance()->Update();

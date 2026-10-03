@@ -34,6 +34,47 @@ public:
 		}
 	}
 
+	// ---- Animation offsets: override per weapon ----
+	virtual const SRTOffset& GetHolsterOffset() const { return kDefaultHolsterOffset; }
+	virtual const SRTOffset& GetReadyStanceOffset() const { return kDefaultReadyStanceOffset; }
+	virtual const SRTOffset& GetKnockbackOffset() const { return kDefaultKnockbackOffset; }
+	virtual const SRTOffset& GetStunOffset() const { return kDefaultStunOffset; }
+	virtual const SRTOffset& GetBlockOffset() const { return kDefaultBlockOffset; }
+
+	static inline SRTOffset kDefaultHolsterOffset{
+	    {1,     1,     1    },
+        {0.0f,  3.14f, 0.5f },
+        {0.25f, -0.1f, 0.49f}
+    };
+	static inline SRTOffset kDefaultReadyStanceOffset{
+	    {1,     1,    1    },
+        {-0.6f, 0.0f, 0.0f },
+        {0.5f,  0.0f, 0.49f}
+    };
+	static inline SRTOffset kDefaultKnockbackOffset{
+	    {1,     1,    1    },
+        {-1.0f, 0.0f, 0.4f },
+        {0.3f,  0.2f, 0.49f}
+    };
+	static inline SRTOffset kDefaultStunOffset{
+	    {1,     1,      1    },
+        {0.9f,  0.0f,   0.2f },
+        {0.45f, -0.35f, 0.49f}
+    };
+	static inline SRTOffset kDefaultBlockOffset{
+	    {1,     1,     1    },
+        {-0.6f, 0.0f,  1.2f },
+        {0.55f, 0.15f, 0.49f}
+    };
+
+	static inline float kDebuffBlendSpeed = 0.2f;
+
+	void SetReactionPose(ReactionPose pose) {
+		debuffPose_ = pose;
+		if (pose != ReactionPose::kNone)
+			lastReactionPose_ = pose;
+	}
+
 	bool IsAttacking() const { return behavior_ == MeleeBehavior::kAttacking; }
 
 	virtual ~BaseMelee() = default;
@@ -124,6 +165,25 @@ public:
 	}
 
 protected:
+	// weight: 1 = fully equipped, 0 = holstered (so a holstered weapon doesn't jump to a combat pose)
+	SRTOffset ApplyReactionPose(const SRTOffset& base, float weight = 1.0f) {
+		float target = (debuffPose_ != ReactionPose::kNone) ? 1.0f : 0.0f;
+		reactionBlend_ = Lerp(reactionBlend_, target, kDebuffBlendSpeed);
+		if (reactionBlend_ < 0.001f) {
+			reactionBlend_ = 0.0f;
+			return base;
+		}
+		const SRTOffset* dp = &GetKnockbackOffset();
+		if (lastReactionPose_ == ReactionPose::kStun)
+			dp = &GetStunOffset();
+		else if (lastReactionPose_ == ReactionPose::kBlock)
+			dp = &GetBlockOffset();
+		return LerpSRT(base, *dp, reactionBlend_ * std::clamp(weight, 0.0f, 1.0f));
+	}
+	ReactionPose debuffPose_ = ReactionPose::kNone;
+	ReactionPose lastReactionPose_ = ReactionPose::kKnockback;
+	float reactionBlend_ = 0.0f;
+
 	static inline float kBaseImpactPower = 1.0f;
 	static inline float kImpactPowerStep = 0.4f;
 

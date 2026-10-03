@@ -10,42 +10,26 @@ using namespace KamataEngine;
 CuirassierBehavior::CuirassierBehavior(EnemyCuirassier& owner) : BaseEnemyBehavior(owner), cuirassierOwner_(owner) {}
 
 void CuirassierBehavior::InitializeBehaviorState(Behavior behavior) {
-	switch (behavior) {
-	case Behavior::kMelee:
+	if (behavior == Behavior::kMelee) {
 		BehaviorMeleeInitialize();
 		return;
-	case Behavior::kBlock:
-		BehaviorBlockInitialize();
-		return;
-	default:
-		break;
 	}
-	BaseEnemyBehavior::InitializeBehaviorState(behavior);
+	BaseEnemyBehavior::InitializeBehaviorState(behavior); // kBlock handled by the base
 }
 
 void CuirassierBehavior::UpdateBehaviorState() {
-	switch (GetBehavior()) {
-	case Behavior::kMelee:
+	if (GetBehavior() == Behavior::kMelee) {
 		BehaviorMeleeUpdate();
 		RunPhysicsAndCollisionUpdate();
 		return;
-	case Behavior::kBlock:
-		BehaviorBlockUpdate();
-		RunPhysicsAndCollisionUpdate();
-		return;
-	default:
-		break;
 	}
 	BaseEnemyBehavior::UpdateBehaviorState();
 }
 
-void CuirassierBehavior::BehaviorRootInitialize() {
-	BaseEnemyBehavior::BehaviorRootInitialize();
-	playerWasAttackingLastFrame_ = false;
-}
+void CuirassierBehavior::BehaviorRootInitialize() { BaseEnemyBehavior::BehaviorRootInitialize(); }
 
 void CuirassierBehavior::BehaviorRootUpdate() {
-	BaseEnemyBehavior::BehaviorRootUpdate(); // 通常のパスファインディング追跡・CheckPlayerDirectionはEnemyCuirassier::Update経由
+	BaseEnemyBehavior::BehaviorRootUpdate();
 
 	GameScene* scene = OwnerGameScene();
 	if (!scene || !scene->GetPlayer()) {
@@ -53,37 +37,35 @@ void CuirassierBehavior::BehaviorRootUpdate() {
 	}
 	Player* player = scene->GetPlayer();
 
-	Vector3 diff = player->GetWorldPosition() - owner_.GetWorldPosition();
-	float distance = std::sqrt(diff.x * diff.x + diff.y * diff.y);
-
-	// --- ランダムガード判定: プレイヤーが「攻撃を開始した瞬間」にのみ抽選する ---
-	bool playerIsAttacking = player->isAttack();
-	if (playerIsAttacking && !playerWasAttackingLastFrame_ && distance <= kBlockCheckRange) {
-		if (sRandom_.GetRandValue(0.0f, 1.0f) < kBlockChance) {
-			playerWasAttackingLastFrame_ = playerIsAttacking;
-			RequestBehavior(Behavior::kBlock);
-			return;
-		}
-	}
-	playerWasAttackingLastFrame_ = playerIsAttacking;
-
 	if (!IsPlayerSpotted()) {
 		return;
 	}
 	if (!IsPlayerOnSameFloor()) {
 		return;
 	}
+
+	Vector3 diff = player->GetWorldPosition() - owner_.GetWorldPosition();
+	float distance = std::sqrt(diff.x * diff.x + diff.y * diff.y);
 	if (distance <= kMeleeEngageRange) {
 		RequestBehavior(Behavior::kMelee);
 	}
 }
 
 void CuirassierBehavior::BehaviorMeleeInitialize() {
-	meleeStage_ = MeleeStage::kLunge;
-	lungePhase_ = LungePhase::kAnticipate;
 	attackParameter_ = 0;
-	comboIndex_ = 0;
+	swingsRemaining_ = kSwingsPerEngagement;
 	OwnerVelocity().x = 0.0f;
+
+	if (startWithLunge_) {
+		meleeStage_ = MeleeStage::kLunge;
+		lungePhase_ = LungePhase::kAnticipate;
+		lungeCooldownTimer_ = kLungeCooldown; // 5s starts the moment the lunge is launched
+	} else {
+		meleeStage_ = MeleeStage::kCombo;
+		comboPhase_ = ComboPhase::kAnticipate;
+	}
+	startWithLunge_ = false;
+
 	if (WeaponHeavySabre* weapon = cuirassierOwner_.GetCurrentMelee()) {
 		weapon->ResetSwingHits();
 	}
@@ -99,6 +81,9 @@ void CuirassierBehavior::BehaviorMeleeUpdate() {
 	}
 	bool facingRight = owner_.isRight();
 
+	noAttackTimer_ = 0.0f;
+
+	// ---------------- Lunge ----------------
 	if (meleeStage_ == MeleeStage::kLunge) {
 		float t = 0.0f;
 		switch (lungePhase_) {
@@ -125,9 +110,9 @@ void CuirassierBehavior::BehaviorMeleeUpdate() {
 			OwnerVelocity().x = 0.0f;
 			t = std::clamp(static_cast<float>(attackParameter_) / (kLungeRecoveryDuration * 60.0f), 0.0f, 1.0f);
 			if (static_cast<float>(attackParameter_) >= kLungeRecoveryDuration * 60.0f) {
+				// Lunge done -> unleash the two swings (Fighter rotation continues from comboIndex_)
 				meleeStage_ = MeleeStage::kCombo;
 				comboPhase_ = ComboPhase::kAnticipate;
-				comboIndex_ = 0;
 				attackParameter_ = 0;
 				if (WeaponHeavySabre* weapon = cuirassierOwner_.GetCurrentMelee()) {
 					weapon->ResetSwingHits();
@@ -144,6 +129,7 @@ void CuirassierBehavior::BehaviorMeleeUpdate() {
 		return;
 	}
 
+	// ---------------- Swings (Fighter style, kSwingsPerEngagement per engagement) ----------------
 	BaseMelee::GenericAttackAnimState animState;
 	animState.comboIndex = comboIndex_;
 
@@ -176,15 +162,19 @@ void CuirassierBehavior::BehaviorMeleeUpdate() {
 		float duration = 18.0f;
 		animState.t = std::clamp(static_cast<float>(attackParameter_) / duration, 0.0f, 1.0f);
 		if (static_cast<float>(attackParameter_) >= duration) {
-			if (comboIndex_ + 1 < 3) {
-				comboIndex_++;
+			comboIndex_ = (comboIndex_ + 1) % 3; // Fighter-style rotation 0 -> 1 -> 2 -> 0
+			--swingsRemaining_;
+
+			if (swingsRemaining_ > 0) {
+				// second swing of this engagement
 				comboPhase_ = ComboPhase::kAnticipate;
 				attackParameter_ = 0;
-				// [FIX] 次のコンボ段に入る前にヒット済みリストをリセットする。
 				if (WeaponHeavySabre* weapon = cuirassierOwner_.GetCurrentMelee()) {
-					weapon->ResetSwingHits();
+					weapon->ResetSwingHits(); // each swing may hit again
 				}
 			} else {
+				noAttackTimer_ = 0.0f;
+				comboCooldownTimer_ = kCooldownDuration;
 				RequestBehavior(Behavior::kRoot);
 			}
 		}
@@ -194,26 +184,4 @@ void CuirassierBehavior::BehaviorMeleeUpdate() {
 	cuirassierOwner_.UpdateMeleeVisual(&animState);
 }
 
-void CuirassierBehavior::BehaviorBlockInitialize() {
-	blockTimer_ = 0.0f;
-	OwnerVelocity().x = 0.0f;
-}
-
-void CuirassierBehavior::BehaviorBlockUpdate() {
-	blockTimer_ += 1.0f / 60.0f;
-	OwnerVelocity().x = 0.0f;
-
-	// ガード中も向きだけはプレイヤーへ向ける(EnemyCuirassier::OnCollisionの正面ガード判定と一致させる)
-	if (GameScene* scene = OwnerGameScene()) {
-		if (Player* player = scene->GetPlayer()) {
-			OwnerFaceDirection(player->GetWorldPosition().x < owner_.GetWorldPosition().x ? 1 : 0);
-		}
-	}
-
-	cuirassierOwner_.UpdateMeleeVisual(nullptr); // ガード中は武器を構えたまま(専用ポーズが欲しければここを拡張)
-
-	if (blockTimer_ >= kBlockDuration) {
-		RequestBehavior(Behavior::kRoot);
-	}
-}
 WeaponHeavySabre& CuirassierBehavior::Weapon() { return *cuirassierOwner_.GetCurrentMelee(); }

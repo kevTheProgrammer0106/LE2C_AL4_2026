@@ -40,6 +40,10 @@ public:
 	void SetEquipDuration(float seconds);
 	float GetEquipDuration() const { return equipDuration_; }
 
+	const SRTOffset& GetKnockbackOffset() const override { return kKnockbackOffset; }
+	const SRTOffset& GetStunOffset() const override { return kStunOffset; }
+	const SRTOffset& GetBlockOffset() const override { return kBlockOffset; }
+
 private:
 	friend class DebugMenu;
 	WeaponState weaponState_ = WeaponState::kEquipped;
@@ -88,6 +92,21 @@ private:
 	    {1.0f, 1.0f,  1.0f },
         {0.0f, -0.1f, 1.5f },
         {0.3f, -0.1f, -0.3f}
+    };
+	static inline SRTOffset kKnockbackOffset{
+	    {1.0f,  1.0f, 1.0f },
+        {-1.0f, 0.0f, 0.4f },
+        {0.3f,  0.2f, 0.45f}
+    };
+	static inline SRTOffset kStunOffset{
+	    {1.0f,  1.0f,   1.0f },
+        {0.9f,  0.0f,   0.2f },
+        {0.45f, -0.35f, 0.45f}
+    };
+	static inline SRTOffset kBlockOffset{
+	    {1.0f,  1.0f,  1.0f },
+        {-0.6f, 0.0f,  1.2f },
+        {0.55f, 0.15f, 0.49f}
     };
 
 	static inline std::array<float, 3> kComboReach = {2.0f, 2.0f, 2.4f};

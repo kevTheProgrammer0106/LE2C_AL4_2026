@@ -19,7 +19,7 @@ public:
 	// attackState==nullptrなら非攻撃時のホルスター/構えのみ更新する。
 	void UpdateMeleeVisual(const BaseMelee::GenericAttackAnimState* attackState);
 
-	// [NEW] 対プレイヤー当たり判定用。攻撃フェーズ(kAttack)の間だけtrueになる。
+	//  対プレイヤー当たり判定用。攻撃フェーズ(kAttack)の間だけtrueになる。
 	bool IsSwingActive() const { return isSwingActive_; }
 	AABB GetSwingAABB() const;
 	int GetCurrentComboIndex() const { return currentComboIndex_; }

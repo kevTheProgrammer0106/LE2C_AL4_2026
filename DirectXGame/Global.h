@@ -1,20 +1,19 @@
 #pragma once
 
+#include "AudioSettings.h"
 #include <KamataEngine.h>
 #define _USE_MATH_DEFINES
-#include <math.h>
 #include <algorithm>
 #include <cassert>
+#include <math.h>
 #include <numbers>
-
 
 class Global {};
 
 enum class Owner { kEmpty, kPlayer, kEnemy };
 
-enum class DropItemCategory { kMelee, kFirearm, kUnknown};
+enum class DropItemCategory { kMelee, kFirearm, kUnknown };
 enum class DropWeaponKind { kSabreLight, kSabreHeavy, kMusketLong, kMusketBayonet, kUnknown };
-
 
 struct AABB {
 	KamataEngine::Vector3 min; //!< 最小点
@@ -57,7 +56,6 @@ struct BodyComboPattern {
 	SRTOffset recoveryEnd;     // 硬直終了時の姿勢（通常はidle姿勢に戻す）
 };
 
-
 struct PartResources {
 	KamataEngine::Model* model = nullptr;
 	uint32_t textureHandle = 0;
@@ -66,6 +64,12 @@ struct BodyPart {
 	KamataEngine::WorldTransform transform;
 	KamataEngine::Model* model = nullptr;
 	uint32_t textureHandle = 0;
+};
+enum class ReactionPose
+{
+	kNone,
+	kKnockback,
+	kStun, kBlock
 };
 
 struct AimFacing {

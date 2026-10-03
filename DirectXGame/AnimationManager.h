@@ -13,13 +13,17 @@ class AnimationManager {
 public:
 	static void RegisterGlobalVariables();
 	static void ApplyGlobalVariables();
-	enum class MovementState { kIdle, kRun, kJump, kFall, kLanding }; // kKnockback, kStunned
+	enum class MovementState { kIdle, kRun, kJump, kFall, kLanding, kKnockback, kStunned, kBlock };
 
 	// 毎フレームBaseEnemyから渡される、アニメーション判定に必要な最小限の物理状態
 	struct AnimationContext {
 		KamataEngine::Vector3 velocity = {};
 		bool onGround = true;
 		bool isDead = false;
+		bool isKnockedBack = false; // [NEW]
+		bool isStunned = false;     // [NEW]
+		bool isBlocking = false;    // [NEW]
+		bool facingRight = true;    // [NEW] used to mirror knockback/stun/block poses
 
 		// 移動アニメーションとは別の、攻撃・照準・リロード等による体のポーズ
 		SRTOffset actionPose = {};
@@ -31,17 +35,15 @@ public:
 		bool footstepTick = false; // periodic beat while actively running on the ground
 	};
 
-	// 敵の移動アニメーション状態を更新する（onGround/velocityから状態遷移を判定）。
-	// 派生クラスで移動パターンを変えたい場合はこれをオーバーライドする
 	virtual MovementEvents UpdateMovementState(const AnimationContext& context);
-	virtual SRTOffset GetMovementAnimOffset() const;
 
-	// 現在の移動アニメ状態を外部(BaseEnemy)から参照できるようにする。
-	// 着地の瞬間(kFall->kLanding遷移)を検出して足音SFX等をトリガーするために使う。
+	virtual SRTOffset GetMovementAnimOffset() const { return currentPose_; }
+
+	// [NEW] frame-rate-independent exponential smoothing toward a target pose. Public so Player (or anything else) can reuse it.
+	static SRTOffset SmoothSRT(const SRTOffset& current, const SRTOffset& target);
+
 	MovementState GetCurrentMovementState() const { return movementState_; }
 
-	// parts_[body]/[head]/[hat]のワールドトランスフォームを、
-	// worldTransformと現在のアニメーションオフセットから計算して反映する
 	virtual void UpdateBodyParts(const KamataEngine::WorldTransform& worldTransform, const AnimationContext& context, std::array<BodyPart, static_cast<size_t>(PartSlot::kCount)>& parts);
 
 	virtual ~AnimationManager() = default;
@@ -53,7 +55,7 @@ protected:
 	static constexpr size_t head = static_cast<size_t>(PartSlot::kHead);
 	static constexpr size_t hat = static_cast<size_t>(PartSlot::kHat);
 
-		float footstepTimer_ = 0.0f;
+	float footstepTimer_ = 0.0f;
 	static inline float kFootstepInterval = 0.32f;
 
 	SRTOffset headOffset_ = {
@@ -69,6 +71,16 @@ protected:
 
 	MovementState movementState_ = MovementState::kIdle;
 	float movementStateTimer_ = 0.0f;
+	float deadTimer_ = 0.0f;  // [NEW] seconds spent in the death behavior
+	bool facingRight_ = true; // [NEW] last facing passed in via AnimationContext
+
+	// [NEW] Smoothed poses. Targets jump between states; these chase them so transitions blend instead of snapping.
+	SRTOffset currentPose_ = {};
+	SRTOffset currentActionPose_ = {};
+	// the un-smoothed pose for the current movement state (old GetMovementAnimOffset body)
+	SRTOffset ComputeTargetPose() const;
+	// higher = snappier. ~14 => ~0.07s time constant
+	static inline float kPoseTransitionSpeed = 14.0f;
 
 	// --- Idle ---
 	static inline float kIdleBreatheAmplitude = 0.03f;
@@ -94,6 +106,17 @@ protected:
 	static inline float kIdleCycleSpeed = 2.0f;
 	static inline float kRunCycleSpeed = 10.0f;
 	static inline float kAirPoseBlendSpeed = 8.0f;
+
+	// --- [NEW] Knockback / Stun ---
+	static inline float kKnockbackPoseBlendSpeed = 12.0f; // pose reaches 100% after 1/speed seconds
+	static inline float kStunPoseBlendSpeed = 10.0f;
+	static inline float kStunWobbleAmplitude = 0.08f; // radians of Z wobble while stunned
+	static inline float kStunWobbleSpeed = 18.0f;
+	static inline float kBlockPoseBlendSpeed = 12.0f;
+
+	// --- [NEW] Dead body ---
+	static inline float kDeadBodyDropDistance = 0.3f;   // how far the body sinks while dead
+	static inline float kDeadBodyDropBlendTime = 0.25f; // seconds to reach full drop
 
 	static inline SRTOffset kIdlePoseLow = {
 	    {1.0f, 1.0f, 1.0f},
@@ -125,5 +148,27 @@ protected:
         {0,     0,     0   },
         {0.0f,  0.0f,  0.0f}
     };
+	// [NEW] hit-reel: slightly squashed/stretched, leaning back
+	static inline SRTOffset kKnockbackPose = {
+	    {0.9f, 1.1f,  1.0f  },
+        {0,    0,     -0.25f},
+        {0.0f, 0.05f, 0.0f  }
+    };
+	// [NEW] dazed slump: shorter body, pitched forward (Z wobble is added on top)
+	static inline SRTOffset kStunPose = {
+	    {1.05f, 0.9f,  1.0f},
+        {0.2f,  0,     0   },
+        {0.0f,  -0.1f, 0.0f}
+    };
+	// [NEW] guard stance: braced / slightly crouched, leaning back (authored for a RIGHT-facing entity)
+	static inline SRTOffset kBlockPose = {
+	    {1.0f, 0.95f,  1.0f },
+        {0.1f, 0,      -0.1f},
+        {0.0f, -0.05f, 0.0f }
+    };
 	static inline SRTOffset kNeutralPose = {};
+
+	// [NEW] Poses are authored facing RIGHT. For a left-facing entity, mirror the world-space parts
+	// (rotation.z roll and translation.x). rotation.x pitch is applied in model space before the yaw, so it mirrors by itself.
+	static SRTOffset MirrorForFacing(const SRTOffset& pose, bool facingRight);
 };

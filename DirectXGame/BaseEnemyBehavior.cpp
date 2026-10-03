@@ -24,8 +24,11 @@ void BaseEnemyBehavior::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "xSeparationRadius", kSeparationRadius);
 	gv->AddItem(kGroupName, "xSeparationStrength", kSeparationStrength);
 	gv->AddItem(kGroupName, "xFloorLevelTolerance", kFloorLevelTolerance);
-	gv->AddItem(kGroupName, "xKnockbackDuration", static_cast<int32_t>(kKnockbackDuration)); // [NEW]
-	gv->AddItem(kGroupName, "xKnockbackSpeedScale", kKnockbackSpeedScale);                   // [NEW]
+	gv->AddItem(kGroupName, "xKnockbackDuration", static_cast<int32_t>(kKnockbackDuration));
+	gv->AddItem(kGroupName, "xKnockbackSpeedScale", kKnockbackSpeedScale);
+	gv->AddItem(kGroupName, "xHitStunDuration", kHitStunDuration);
+	gv->AddItem(kGroupName, "xBlockDuration", kBlockDuration);
+	gv->AddItem(kGroupName, "xBlockCooldown", kBlockCooldown);
 }
 
 void BaseEnemyBehavior::ApplyGlobalVariables() {
@@ -40,8 +43,11 @@ void BaseEnemyBehavior::ApplyGlobalVariables() {
 	kSeparationRadius = gv->GetFloatValue(kGroupName, "xSeparationRadius");
 	kSeparationStrength = gv->GetFloatValue(kGroupName, "xSeparationStrength");
 	kFloorLevelTolerance = gv->GetFloatValue(kGroupName, "xFloorLevelTolerance");
-	kKnockbackDuration = static_cast<uint32_t>(gv->GetIntValue(kGroupName, "xKnockbackDuration")); // [NEW]
-	kKnockbackSpeedScale = gv->GetFloatValue(kGroupName, "xKnockbackSpeedScale");                  // [NEW]
+	kKnockbackDuration = static_cast<uint32_t>(gv->GetIntValue(kGroupName, "xKnockbackDuration"));
+	kKnockbackSpeedScale = gv->GetFloatValue(kGroupName, "xKnockbackSpeedScale");
+	kHitStunDuration = gv->GetFloatValue(kGroupName, "xHitStunDuration");
+	kBlockDuration = gv->GetFloatValue(kGroupName, "xBlockDuration");
+	kBlockCooldown = gv->GetFloatValue(kGroupName, "xBlockCooldown");
 }
 
 void BaseEnemyBehavior::Initialize() {
@@ -49,6 +55,8 @@ void BaseEnemyBehavior::Initialize() {
 	chaseTimeoutTimer_ = kChaseTimeoutDuration;
 	hasLastKnownPosition_ = false;
 	flankPreference_ = GetDefaultFlankPreference();
+	blockTimer_ = 0.0f;
+	blockCooldownTimer_ = 0.0f;
 	behavior_ = Behavior::kIdle;
 	BehaviorIdleInitialize();
 }
@@ -78,7 +86,7 @@ void BaseEnemyBehavior::UpdateVisionAndChaseRequest() {
 		Vector3 baseFacingDir = owner_.isRight() ? Vector3(1.0f, 0.0f, 0.0f) : Vector3(-1.0f, 0.0f, 0.0f);
 		Vector3 facingDir = baseFacingDir;
 
-		if (owner_.gameScene_ && owner_.gameScene_->GetPlayer()) {
+		if (visionSensor_.IsPlayerSpotted() && owner_.gameScene_ && owner_.gameScene_->GetPlayer()) {
 			Vector3 toPlayer = owner_.gameScene_->GetPlayer()->GetWorldPosition() - eyePos;
 			float horizontalDist = std::sqrtf(toPlayer.x * toPlayer.x + toPlayer.y * toPlayer.y);
 			if (horizontalDist > 0.0001f) {
@@ -105,8 +113,11 @@ void BaseEnemyBehavior::UpdateVisionAndChaseRequest() {
 			} else {
 				chaseTimeoutTimer_ += 1.0f / 60.0f;
 				hasBroadcastAlertThisSighting_ = false;
-				if ((kEndlessChase || persistentAwareness_) && hasLastKnownPosition_ && owner_.gameScene_->GetPlayer()) {
-					lastKnownPlayerPos_ = owner_.gameScene_->GetPlayer()->GetWorldPosition();
+				if ((kEndlessChase || persistentAwareness_) && owner_.gameScene_->GetPlayer()) {
+					if (persistentAwareness_)
+						hasLastKnownPosition_ = true;
+					if (hasLastKnownPosition_)
+						lastKnownPlayerPos_ = owner_.gameScene_->GetPlayer()->GetWorldPosition();
 				}
 			}
 		} else {
@@ -114,8 +125,10 @@ void BaseEnemyBehavior::UpdateVisionAndChaseRequest() {
 			hasBroadcastAlertThisSighting_ = false;
 		}
 		bool shouldChase = IsChasing();
+		bool debuffPending = (behaviorRequest_ == Behavior::kKnockback || behaviorRequest_ == Behavior::kStunned);
+		bool blockPending = (behaviorRequest_ == Behavior::kBlock);
 		if (shouldChase) {
-			if (!IsDebuffed() && !IsEngaged() && (behavior_ != Behavior::kRoot || behaviorRequest_ == Behavior::kRoam || behaviorRequest_ == Behavior::kIdle)) {
+			if (!IsDebuffed() && !debuffPending && !blockPending && !IsEngaged() && (behavior_ != Behavior::kRoot || behaviorRequest_ == Behavior::kRoam || behaviorRequest_ == Behavior::kIdle)) {
 				behaviorRequest_ = Behavior::kRoot;
 			}
 		} else if (behavior_ == Behavior::kRoot && behaviorRequest_ == Behavior::kUnknown) {
@@ -124,7 +137,39 @@ void BaseEnemyBehavior::UpdateVisionAndChaseRequest() {
 	}
 }
 
+void BaseEnemyBehavior::SetPostMode(PostMode mode) {
+	postMode_ = mode;
+	switch (postMode_) {
+	case PostMode::kHoldLeft:
+		SnapFacing(static_cast<int>(BaseEnemy::LRDirection::kLeft));
+		owner_.velocity_.x = 0.0f;
+		break;
+	case PostMode::kHoldRight:
+		SnapFacing(static_cast<int>(BaseEnemy::LRDirection::kRight));
+		owner_.velocity_.x = 0.0f;
+		break;
+	case PostMode::kWander:
+	default:
+		break;
+	}
+}
+
+void BaseEnemyBehavior::SnapFacing(int direction) {
+	BaseEnemy::LRDirection dir = static_cast<BaseEnemy::LRDirection>(direction);
+	// Same destination table BaseEnemy::PhysicsAndCollisionUpdate lerps toward: {right, left}.
+	const float destinationRotationY = (dir == BaseEnemy::LRDirection::kRight) ? std::numbers::pi_v<float> / 2.0f : std::numbers::pi_v<float> * 3.0f / 2.0f;
+	owner_.lrDirection_ = dir;
+	owner_.turnTimer_ = 0.0f;
+	owner_.turnFirstRotationY_ = destinationRotationY;
+	owner_.worldTransform_.rotation_.y = destinationRotationY;
+}
+
 void BaseEnemyBehavior::ResolveBehaviorRequest() {
+	// A holding enemy never wanders: anything that would send it to Roam (idle timeout, or the
+	// pathfinder giving up on an unreachable player) drops it back to Idle at its post instead.
+	if (postMode_ != PostMode::kWander && behaviorRequest_ == Behavior::kRoam) {
+		behaviorRequest_ = Behavior::kIdle;
+	}
 	if (behaviorRequest_ != Behavior::kUnknown) {
 		behavior_ = behaviorRequest_;
 		InitializeBehaviorState(behavior_);
@@ -132,7 +177,12 @@ void BaseEnemyBehavior::ResolveBehaviorRequest() {
 	}
 }
 
-void BaseEnemyBehavior::UpdateCurrentBehavior() { UpdateBehaviorState(); }
+void BaseEnemyBehavior::UpdateCurrentBehavior() {
+	if (blockCooldownTimer_ > 0.0f) {
+		blockCooldownTimer_ = std::max(0.0f, blockCooldownTimer_ - 1.0f / 60.0f);
+	}
+	UpdateBehaviorState();
+}
 
 void BaseEnemyBehavior::InitializeBehaviorState(Behavior behavior) {
 	switch (behavior) {
@@ -144,6 +194,9 @@ void BaseEnemyBehavior::InitializeBehaviorState(Behavior behavior) {
 		break;
 	case Behavior::kStunned:
 		BehaviorStunnedInitialize();
+		break;
+	case Behavior::kBlock:
+		BehaviorBlockInitialize();
 		break;
 	case Behavior::kIdle:
 	default:
@@ -167,9 +220,13 @@ void BaseEnemyBehavior::UpdateBehaviorState() {
 	case Behavior::kKnockback:
 		BehaviorKnockbackUpdate();
 		RunPhysicsAndCollisionUpdate();
-		break; 
+		break;
 	case Behavior::kStunned:
 		BehaviorStunnedUpdate();
+		RunPhysicsAndCollisionUpdate();
+		break;
+	case Behavior::kBlock:
+		BehaviorBlockUpdate();
 		RunPhysicsAndCollisionUpdate();
 		break;
 	case Behavior::kIdle:
@@ -264,9 +321,16 @@ void BaseEnemyBehavior::BehaviorIdleInitialize() {
 	owner_.velocity_.x = 0.0f;
 	idleTimer_ = 0.0f;
 	idleDuration_ = sRandom_.GetRandValue(kIdleDurationMin, kIdleDurationMax);
+
+	if (postMode_ == PostMode::kHoldLeft)
+		owner_.FaceDirection(BaseEnemy::LRDirection::kLeft);
+	else if (postMode_ == PostMode::kHoldRight)
+		owner_.FaceDirection(BaseEnemy::LRDirection::kRight);
 }
 void BaseEnemyBehavior::BehaviorIdleUpdate() {
 	owner_.velocity_.x = 0.0f;
+	if (postMode_ != PostMode::kWander)
+		return; // holding: no look-around flip, no Idle -> Roam transition
 	IdleFacingUpdate();
 	idleTimer_ += 1.0f / 60.0f;
 	if (idleTimer_ >= idleDuration_)
@@ -325,7 +389,13 @@ void BaseEnemyBehavior::BehaviorKnockbackUpdate() {
 	owner_.velocity_ += Vector3(0, -BaseEnemy::kGravityAcceleration, 0);
 	owner_.velocity_.y = std::max(owner_.velocity_.y, -BaseEnemy::kLimitFallSpeed);
 	if (knockbackParameter_ >= kKnockbackDuration) {
-		behaviorRequest_ = Behavior::kRoot;
+		if (pendingStunAfterKnockback_ > 0.0f) {
+			stunDuration_ = pendingStunAfterKnockback_;
+			pendingStunAfterKnockback_ = 0.0f;
+			behaviorRequest_ = Behavior::kStunned;
+		} else {
+			behaviorRequest_ = Behavior::kRoot;
+		}
 	}
 }
 void BaseEnemyBehavior::BehaviorStunnedInitialize() {
@@ -334,11 +404,11 @@ void BaseEnemyBehavior::BehaviorStunnedInitialize() {
 }
 void BaseEnemyBehavior::BehaviorStunnedUpdate() {
 	stunTimer_ += 1.0f / 60.0f;
-	owner_.velocity_.x = 0.0f; // gravity is still handled by PhysicsAndCollisionUpdate
-	if (stunTimer_ >= stunDuration_)
-		behaviorRequest_ = Behavior::kRoot;
+	owner_.velocity_.x = 0.0f; 
+	if (stunTimer_ >= stunDuration_) {
+		behaviorRequest_ = (ShouldBlockAfterStun() && IsBlockReady()) ? Behavior::kBlock : Behavior::kRoot;
+	}
 }
-
 void BaseEnemyBehavior::BehaviorDieInitialize() {
 	deathParameter_ = 0;
 	hasSpawnedDrop_ = false;
@@ -354,7 +424,7 @@ void BaseEnemyBehavior::BehaviorDieInitialize() {
 void BaseEnemyBehavior::BehaviorDieUpdate() {
 	++deathParameter_;
 
-	// [FIX] stop rolling once settled, ease into a flat "lying down" pose instead of freezing mid-tumble
+	// stop rolling once settled, ease into a flat "lying down" pose instead of freezing mid-tumble
 	bool settled = (deathBounceCount_ >= kDeathMaxBounces) || (owner_.velocity_.x == 0.0f && owner_.velocity_.y == 0.0f && deathBounceCount_ > 0);
 
 	if (!settled) {
@@ -395,7 +465,7 @@ void BaseEnemyBehavior::BehaviorDieUpdate() {
 			hasSpawnedDrop_ = true;
 		}
 		if (owner_.gameScene_) {
-			owner_.gameScene_->CreateEnemyDeathParticles(owner_.GetWorldPosition()); // [NEW]
+			owner_.gameScene_->CreateEnemyDeathParticles(owner_.GetModelWorldPosition());
 		}
 		owner_.isDead_ = true;
 	}
@@ -507,3 +577,36 @@ void BaseEnemyBehavior::RunPhysicsAndCollisionUpdate() {
 	owner_.PhysicsAndCollisionUpdate();
 }
 GameScene* BaseEnemyBehavior::OwnerGameScene() const { return owner_.gameScene_; }
+bool BaseEnemyBehavior::TryStartBlockOnHit() {
+	float chance = GetBlockChanceWhenHit();
+	if (chance <= 0.0f || !CanBlockNow())
+		return false;
+	if (sRandom_.GetRandValue(0.0f, 1.0f) >= chance)
+		return false;
+	// Hit reaction, not an AI decision, so (like RequestKnockback) this bypasses the debug decision freeze.
+	behaviorRequest_ = Behavior::kBlock;
+	return true;
+}
+
+void BaseEnemyBehavior::BehaviorBlockInitialize() {
+	blockTimer_ = 0.0f;
+	owner_.velocity_.x = 0.0f;
+	// Block time + cooldown, so the cooldown always ends kBlockCooldown after the block ends.
+	blockCooldownTimer_ = kBlockDuration + kBlockCooldown;
+}
+
+void BaseEnemyBehavior::BehaviorBlockUpdate() {
+	blockTimer_ += 1.0f / 60.0f;
+	owner_.velocity_.x = 0.0f;
+
+	// keep facing the player so the guard stays up on the correct side
+	if (owner_.gameScene_) {
+		if (Player* player = owner_.gameScene_->GetPlayer()) {
+			OwnerFaceDirection(player->GetWorldPosition().x < owner_.GetWorldPosition().x ? static_cast<int>(BaseEnemy::LRDirection::kLeft) : static_cast<int>(BaseEnemy::LRDirection::kRight));
+		}
+	}
+
+	if (blockTimer_ >= kBlockDuration) {
+		behaviorRequest_ = Behavior::kRoot;
+	}
+}
