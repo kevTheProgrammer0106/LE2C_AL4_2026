@@ -21,6 +21,7 @@ void RiflemanBehavior::InitializeBehaviorState(Behavior behavior) {
 	case Behavior::kMelee:
 		BehaviorMeleeInitialize();
 		return;
+	case Behavior::kIdle:
 	case Behavior::kKnockback:
 	case Behavior::kStunned:
 	case Behavior::kDeath:

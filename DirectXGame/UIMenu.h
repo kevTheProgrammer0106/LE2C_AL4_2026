@@ -83,6 +83,7 @@ private:
 		bool wasClickedThisFrame = false;
 		float holdTimer = 0.0f;
 		bool pressStartedInside = false;
+		float scale = 1.0f;
 
 		std::function<void()> onClick;
 	};
@@ -108,6 +109,13 @@ private:
 	float buttonFadeDuration_ = 0.0f;
 	float buttonFadeTimer_ = 0.0f;
 	float buttonFadeAlpha_ = 1.0f;
+
+	// Resizes the sprite around the button's centre using button.scale. The hit area (aabb) is untouched.
+	static void ApplyButtonVisual(Button& button);
+
+	static inline float kHoverScale = 1.12f; // enlarged while hovered
+	static inline float kPressScale = 0.95f; // slightly pressed in while held
+	static inline float kScaleLerp = 0.25f;  // per-frame ease toward the target
 
 	uint32_t clickSoundDataHandle_ = 0;
 	float clickSoundVolume_ = 1.0f;

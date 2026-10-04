@@ -35,7 +35,6 @@ public:
 	float GetHeight() { return kHeight; }
 	float GetBlank() { return kBlank; }
 
-	// 当たり判定ボックスのサイズ(ルートとディテクターで同じ値を使う)
 	void SetSize(float width, float height) {
 		kWidth = width;
 		kHeight = height;
@@ -44,16 +43,15 @@ public:
 	void SetIgnoreBarrier(bool ignore) { ignoreBarrier_ = ignore; }
 	void SetIgnoreOneWay(bool ignore) { ignoreOneWay_ = ignore; }
 
-	// true  = タイルの実形状・オフセットを使う(半ブロック、薄い足場)。デフォルト＝従来の挙動(ディテクター用)
-	// false = 全ての実体タイルを1.0の正方形セルとして扱う(ルート用)
+	// true  = real tile shapes/offsets (detector). false = every solid tile is a full 1.0 cell (root).
 	void SetUseDetailedTiles(bool detailed) { useDetailedTiles_ = detailed; }
 
-	// 足元の左右2点から真下を走査し、立っている面の上端Yを返す。何も動かさない。
-	// stepUp: 足元よりどれだけ上の面まで「立てる面」と見なすか / maxDepth: 下方向の探索距離
 	bool ProbeGroundTop(const KamataEngine::Vector3& center, float stepUp, float maxDepth, float& outTopY);
 
 private:
 	bool IsSolid(const KamataEngine::Vector3& position, bool ignoreBarrier) const;
+	// Same as IsSolid, but one-way tiles (platforms) never count. Used for head/side checks.
+	bool IsSolidIgnoringOneWay(const KamataEngine::Vector3& position, bool ignoreBarrier) const;
 	MapChipField::Rect GetRect(uint32_t xIndex, uint32_t yIndex) const;
 
 	bool ignoreBarrier_ = false;

@@ -57,7 +57,7 @@ void ChangeScene() {
 			if (dest == TitleScene::NextDestination::kLevelSelect) {
 				scene = Scene::kLevelSelect;
 				levelSelectScene = new LevelSelectScene();
-				levelSelectScene->Initialize(stageManager);
+				levelSelectScene->Initialize(stageManager, false);
 			} else {
 				scene = Scene::kGame;
 				gameScene = new GameScene();
@@ -74,7 +74,7 @@ void ChangeScene() {
 			if (backToMenu) {
 				scene = Scene::kTitle;
 				titleScene = new TitleScene();
-				titleScene->Initialize();
+				titleScene->Initialize(false);
 			} else {
 				scene = Scene::kGame;
 				gameScene = new GameScene();

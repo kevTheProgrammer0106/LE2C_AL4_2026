@@ -172,11 +172,11 @@ void PlayerBehavior::BehaviorStunnedInitialize() {
 	stunTimer_ = 0.0f;
 	owner_.velocity_.x = 0.0f;
 
-	// [NEW] スタンに入った瞬間に跳ね上がる
+	// スタンに入った瞬間に跳ね上がる
 	owner_.velocity_.y = std::max(owner_.velocity_.y, kStunHopSpeed);
 	owner_.onGround_ = false;
 
-	// [FIX] 攻撃を中断されたまま攻撃状態が残らないようにする
+	//  攻撃を中断されたまま攻撃状態が残らないようにする
 	isAttacking_ = false;
 	comboIndex_ = 0;
 	comboInputBuffered_ = false;
@@ -194,6 +194,7 @@ void PlayerBehavior::BehaviorStunnedUpdate() {
 
 void PlayerBehavior::BehaviorBlockInitialize() { owner_.velocity_.x = 0.0f; }
 void PlayerBehavior::BehaviorBlockUpdate() {
+	owner_.UpdateTurnRotation();
 	owner_.velocity_.x *= 0.8f;
 	if (!owner_.onGround_) {
 		owner_.velocity_ += Vector3(0, -Player::kGravityAcceleration, 0);

@@ -82,6 +82,21 @@ void BaseEnemyBehavior::UpdateVisionAndChaseRequest() {
 	}
 
 	if (!owner_.isDead_ && behavior_ != Behavior::kDeath && behaviorRequest_ != Behavior::kDeath) {
+
+		if (owner_.gameScene_ && owner_.gameScene_->GetPlayer() && owner_.gameScene_->GetPlayer()->IsDefeated()) {
+			Vector3 eyePos = owner_.GetWorldPosition() + Vector3(0.0f, kVisionEyeHeight, 0.0f);
+			visionSensor_.CheckPlayerSpotted(eyePos, Vector3(1.0f, 0.0f, 0.0f), nullptr); // null player clears "spotted"
+			hasLastKnownPosition_ = false;
+			chaseTimeoutTimer_ = kChaseTimeoutDuration;
+			hasBroadcastAlertThisSighting_ = false;
+
+			bool fighting = behavior_ == Behavior::kRoot || behavior_ == Behavior::kAiming || behavior_ == Behavior::kReloading || behavior_ == Behavior::kMelee || behavior_ == Behavior::kBlock;
+			bool debuffPending = (behaviorRequest_ == Behavior::kKnockback || behaviorRequest_ == Behavior::kStunned);
+			if (fighting && !debuffPending) {
+				behaviorRequest_ = Behavior::kIdle;
+			}
+			return;
+		}
 		Vector3 eyePos = owner_.GetWorldPosition() + Vector3(0.0f, kVisionEyeHeight, 0.0f);
 		Vector3 baseFacingDir = owner_.isRight() ? Vector3(1.0f, 0.0f, 0.0f) : Vector3(-1.0f, 0.0f, 0.0f);
 		Vector3 facingDir = baseFacingDir;

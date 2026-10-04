@@ -131,8 +131,14 @@ public:
 	// Call instead of TakeDamage() when IsBlockingAttack() returned true. Latches the block direction until the button is released.
 	void OnBlocked(const KamataEngine::Vector3& hitDirection, float impactPower, BaseEnemy* attacker = nullptr);
 	bool IsBlockLatched() const { return blockLatched_; }
-	bool IsStunnedState() const { return behavior_.IsStunned(); }
 
+		// --- Block gauge ---
+	float GetBlockGauge() const { return blockGauge_; }
+	float GetMaxBlockGauge() const { return kMaxBlockGauge; }
+	bool IsBlockBroken() const { return blockBroken_; }
+	float GetBlockRecoverThreshold() const { return kBlockRecoverThreshold; }
+
+	bool IsStunnedState() const { return behavior_.IsStunned(); }
 	void SetControlLocked(bool locked) { controlLocked_ = locked; }
 	bool IsControlLocked() const { return controlLocked_; }
 
@@ -176,8 +182,12 @@ public:
 	const KamataEngine::WorldTransform& GetModelWorldTransform() const { return modelWorldTransform_; }
 	KamataEngine::Vector3 GetModelWorldPosition() const { return modelWorldTransform_.translation_; }
 
+	bool IsDefeated() const { return isDead_ || behavior_.IsDeathBehavior(); }
+
 private:
 	bool controlLocked_ = false;
+
+	void UpdateTurnRotation();
 
 	// Slow effect state
 	bool slowActive_ = false;
@@ -324,4 +334,14 @@ private:
 	// 落下開始用の小さな下向き速度
 	static inline float kDropThroughVelocity = -0.12f;
 
+		// --- Block gauge ---
+	void TickBlockGauge();
+	float blockGauge_ = kMaxBlockGauge;
+	bool blockBroken_ = false;          // true after the gauge hits 0, until it refills to kBlockRecoverThreshold
+	float blockRegenDelayTimer_ = 0.0f; // regen pauses briefly after each blocked hit
+	static inline float kMaxBlockGauge = 100.0f;
+	static inline float kBlockCostPerHit = 20.0f;       // 5 hits empties the bar
+	static inline float kBlockRecoverThreshold = 60.0f; // block is usable again at this value (~3 hits' worth)
+	static inline float kBlockRegenRate = 15.0f;        // per second
+	static inline float kBlockRegenDelay = 1.0f;        // seconds after a blocked hit before regen starts
 };

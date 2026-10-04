@@ -214,7 +214,12 @@ void BaseEnemy::FaceDirection(LRDirection direction) {
 	turnFirstRotationY_ = worldTransform_.rotation_.y;
 	turnTimer_ = kTimeTurn;
 }
-
+bool BaseEnemy::PerformJump() {
+	if (!onGround_)
+		return false;
+	velocity_.y = kJumpAcceleration;
+	return true;
+}
 void BaseEnemy::TakeDamage(int damage, const Vector3& hitDirection, float impactPower) {
 	if (behavior_->IsDeathBehavior() || isDead_)
 		return;
@@ -343,7 +348,7 @@ void BaseEnemy::JumpMovement(const CollisionInfo& collisionInfo) {
 		return;
 
 	if (behavior_->CanJumpOverWall(static_cast<int>(lrDirection_))) {
-		velocity_ += Vector3(0, kJumpAcceleration, 0);
+		PerformJump();
 	}
 }
 

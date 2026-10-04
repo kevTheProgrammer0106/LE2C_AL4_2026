@@ -66,6 +66,13 @@ public:
 	// jump instead of firing the enemy sideways like a cannon.
 	static inline float kMaxTargetedJumpHorizontalSpeed = 0.6f;
 
+	// Player is well below and we're standing on a platform: drop through instead of walking around.
+	bool ShouldDropThroughToPlayer(const KamataEngine::Vector3& playerPos) const;
+	// Something safe (not a kill block / void) to land on directly below this x.
+	bool IsDropLandingSafe(const KamataEngine::Vector3& pos) const;
+
+	static inline float kDropPlayerBelowThreshold = 1.2f;  // how far below the enemy the player must be
+	static inline float kDropMaxHorizontalDistance = 8.0f; // only drop if the player is roughly beneath us
 private:
 	// このAIの所有者(敵本体)。velocity_/onGround_/FaceDirection等のprotectedメンバへは
 	// BaseEnemy側の "friend class PathFindingAI;" を通じて直接アクセスする。

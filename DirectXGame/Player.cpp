@@ -71,6 +71,11 @@ void Player::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "ModelMaxOffset", kModelMaxOffset);
 	gv->AddItem(kGroupName, "ModelProbeDepth", kModelProbeDepth);
 	gv->AddItem(kGroupName, "ModelProbeStepUp", kModelProbeStepUp);
+	gv->AddItem(kGroupName, "BlockMax", kMaxBlockGauge);
+	gv->AddItem(kGroupName, "BlockCostPerHit", kBlockCostPerHit);
+	gv->AddItem(kGroupName, "BlockRecoverThreshold", kBlockRecoverThreshold);
+	gv->AddItem(kGroupName, "BlockRegenRate", kBlockRegenRate);
+	gv->AddItem(kGroupName, "BlockRegenDelay", kBlockRegenDelay);
 }
 void Player::ApplyGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
@@ -106,6 +111,12 @@ void Player::ApplyGlobalVariables() {
 	kModelMaxOffset = gv->GetFloatValue(kGroupName, "ModelMaxOffset");
 	kModelProbeDepth = gv->GetFloatValue(kGroupName, "ModelProbeDepth");
 	kModelProbeStepUp = gv->GetFloatValue(kGroupName, "ModelProbeStepUp");
+
+		kMaxBlockGauge = gv->GetFloatValue(kGroupName, "BlockMax");
+	kBlockCostPerHit = gv->GetFloatValue(kGroupName, "BlockCostPerHit");
+	kBlockRecoverThreshold = gv->GetFloatValue(kGroupName, "BlockRecoverThreshold");
+	kBlockRegenRate = gv->GetFloatValue(kGroupName, "BlockRegenRate");
+	kBlockRegenDelay = gv->GetFloatValue(kGroupName, "BlockRegenDelay");
 }
 #pragma endregion
 
@@ -304,9 +315,18 @@ void Player::UseMeleeWeapon() {
 		behavior_.RequestAttack(direction);
 	}
 }
+void Player::UpdateTurnRotation() {
+	if (turnTimer_ > 0.0f) {
+		turnTimer_ -= 1.0f / 60.0f;
+		float destinationRotationYTable[] = {std::numbers::pi_v<float> / 2.0f, std::numbers::pi_v<float> * 3.0f / 2.0f};
+		float destinationRotationY = destinationRotationYTable[static_cast<uint32_t>(lrDirection_)];
+		worldTransform_.rotation_.y = EaseInOut(turnFirstRotationY_, destinationRotationY, 1.0f - (turnTimer_ / kTimeTurn));
+	}
+}
 void Player::Update() {
 	ApplyGlobalVariables();
 	TickDebuffs();
+	TickBlockGauge();
 
 	if (dropThroughTimer_ > 0.0f) {
 		dropThroughTimer_ -= 1.0f / 60.0f;
@@ -326,7 +346,7 @@ void Player::Update() {
 			SetWeaponMode(weaponMode_ == WeaponMode::kMelee ? WeaponMode::kFirearm : WeaponMode::kMelee);
 			PlaySfxHandle(sWeaponSwitchSoundHandle_);
 		}
-		bool isBlockingNow = Input::GetInstance()->IsPressMouse(1);
+		bool isBlockingNow = Input::GetInstance()->IsPressMouse(1) && !blockBroken_;
 		if (isBlockingNow && !behavior_.IsAttacking()) {
 			Vector2 aimDir = ComputeMouseAimDir();
 			AimFacing aim = ComputeAimFacing(aimDir, lrDirection_ == LRDirection::kRight);
@@ -528,7 +548,7 @@ void Player::TakeDamage(int damage, const Vector3& hitDirection, float impactPow
 }
 
 #pragma region Block hitbox
-bool Player::IsBlockActive() const { return behavior_.IsBlocking() && !isDead_ && !behavior_.IsDeathBehavior() && !behavior_.IsAttacking() && !behavior_.IsStunned(); }
+bool Player::IsBlockActive() const { return behavior_.IsBlocking() && !blockBroken_ && !isDead_ && !behavior_.IsDeathBehavior() && !behavior_.IsAttacking() && !behavior_.IsStunned(); }
 
 AABB Player::GetBlockAABB() {
 	AABB box = GetAABB();
@@ -554,9 +574,11 @@ void Player::OnBlocked(const Vector3& hitDirection, float impactPower, BaseEnemy
 	if (isDead_ || behavior_.IsDeathBehavior())
 		return;
 
-	blockLatched_ = true; // block direction stays fixed until the button is released
-
-	// [CHANGED] spawn the spark from the visible body (model), not the root
+	blockLatched_ = true;
+	blockGauge_ = std::max(0.0f, blockGauge_ - kBlockCostPerHit);
+	blockRegenDelayTimer_ = kBlockRegenDelay;
+	if (blockGauge_ <= 0.0f)
+		blockBroken_ = true;
 	Vector3 effectPos = GetModelWorldPosition();
 	effectPos.x += (isRight() ? 1.0f : -1.0f) * (kWidth * 0.5f);
 	if (gameScene_)
@@ -716,4 +738,17 @@ void Player::UpdateModelCollision() {
 	modelWorldTransform_.rotation_ = worldTransform_.rotation_;
 	modelWorldTransform_.scale_ = worldTransform_.scale_;
 	WorldTransformUpdate(modelWorldTransform_);
+}
+void Player::TickBlockGauge() {
+	blockGauge_ = std::min(blockGauge_, kMaxBlockGauge);
+	if (blockRegenDelayTimer_ > 0.0f) {
+		blockRegenDelayTimer_ -= 1.0f / 60.0f;
+		return;
+	}
+	if (blockGauge_ < kMaxBlockGauge) {
+		blockGauge_ = std::min(kMaxBlockGauge, blockGauge_ + kBlockRegenRate * (1.0f / 60.0f));
+	}
+	if (blockBroken_ && blockGauge_ >= kBlockRecoverThreshold) {
+		blockBroken_ = false;
+	}
 }

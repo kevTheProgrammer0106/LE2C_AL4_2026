@@ -331,7 +331,8 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 
 	meleeIconTex_ = texSabreLight_;
 	firearmIconTex_ = musketLongTex_;
-	weaponStatusUI_.Initialize(meleeIconTex_, firearmIconTex_, healthBarBackgroundTex_, healthBarFillTex_);
+	weaponStatusUI_.Initialize(meleeIconTex_, firearmIconTex_);
+	playerBlockUI_.Initialize(healthBarBackgroundTex_, healthBarFillTex_);
 
 	cameraController_ = std::make_unique<CameraController>();
 	cameraController_->Initialize(&camera_);
@@ -680,6 +681,7 @@ void GameScene::ChangePhase() {
 				reloadProgress = firearm->GetReloadProgress01();
 			}
 			weaponStatusUI_.Update(isFirearmMode, isReloading, reloadProgress);
+			playerBlockUI_.Update(player_->GetBlockGauge(), player_->GetMaxBlockGauge(), player_->IsBlockBroken(), player_->GetBlockRecoverThreshold());
 		}
 		for (std::vector<BlockInstance>& line : worldTransformBlocks_) {
 			for (BlockInstance& block : line) {
@@ -1401,6 +1403,7 @@ void GameScene::Draw() {
 
 	playerHealthUI_.Draw();
 	weaponStatusUI_.Draw();
+	playerBlockUI_.Draw();
 
 	if (deathParticles_) {
 		deathParticles_->Draw();
@@ -1955,6 +1958,8 @@ void GameScene::UpdateHealthBlocks() {
 	}
 
 	if (!player_ || player_->isDead() || phase_ != Phase::kPlay)
+		return;
+	if (player_->GetHP() >= player_->GetMaxHP())
 		return;
 
 	AABB playerAABB = player_->GetAABB();

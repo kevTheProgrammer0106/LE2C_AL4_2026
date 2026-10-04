@@ -14,7 +14,7 @@ class StageManager;
 /// </summary>
 class LevelSelectScene {
 public:
-	void Initialize(StageManager* stageManager);
+	void Initialize(StageManager* stageManager, bool withScreenFadeIn = true); // LevelSelectScene
 	void Update();
 	void Draw();
 

@@ -6,12 +6,11 @@ using namespace KamataEngine;
 
 LevelSelectScene::~LevelSelectScene() { delete fade_; }
 
-void LevelSelectScene::Initialize(StageManager* stageManager) {
+void LevelSelectScene::Initialize(StageManager* stageManager, bool withScreenFadeIn) {
 	stageManager_ = stageManager;
 
 	fade_ = new Fade();
 	fade_->Initialize();
-	fade_->Start(Fade::Status::FadeIn, 1.0f);
 
 	camera_.Initialize();
 
@@ -68,6 +67,15 @@ void LevelSelectScene::Initialize(StageManager* stageManager) {
 
 	cursorTex_ = TextureManager::Load("./Resources/UserInterface/directionArrow.png");
 	menuInput_.SetCursorTexture(cursorTex_);
+
+	if (withScreenFadeIn) {
+		phase_ = Phase::kFadeIn;
+		fade_->Start(Fade::Status::FadeIn, 1.0f);
+	} else {
+		fade_->Stop();
+		phase_ = Phase::kButtonFadeIn;
+		menuInput_.StartButtonFade(true, kButtonFadeDuration);
+	}
 }
 
 void LevelSelectScene::Update() {

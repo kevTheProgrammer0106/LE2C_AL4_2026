@@ -428,4 +428,6 @@ private:
 
 	void DrawCollisionDebug();
 	bool showCollisionDebug_ = true;
+
+	PlayerBlockUI playerBlockUI_;
 };

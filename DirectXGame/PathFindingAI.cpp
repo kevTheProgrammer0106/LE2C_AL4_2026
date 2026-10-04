@@ -88,7 +88,15 @@ void PathFindingAI::ChaseMovement() {
 	if (livePlayer) {
 		owner_->FaceDirection(livePlayer->GetWorldPosition().x < currentPos.x ? LRDirection::kLeft : LRDirection::kRight);
 	}
-
+	// Player is below and we're on a platform: dropping takes priority over any computed route.
+	if (livePlayer && ShouldDropThroughToPlayer(livePlayer->GetWorldPosition())) {
+		currentPath_.clear();
+		currentPathIndex_ = 0;
+		isDirectChaseActive_ = false;
+		owner_->GetBehaviorModule().SetUnreachableTimer(0.0f);
+		owner_->RequestDropThrough();
+		return;
+	}
 	if (currentPath_.empty()) {
 		if (!livePlayer) {
 			owner_->velocity_.x = 0.0f;
@@ -184,7 +192,7 @@ void PathFindingAI::ChaseMovement() {
 					}
 				}
 				if (!usedTargetedJump) {
-					owner_->velocity_.y += BaseEnemy::kJumpAcceleration;
+					owner_->PerformJump();
 				}
 				jumpNodeTriggered = true;
 			}
@@ -192,7 +200,7 @@ void PathFindingAI::ChaseMovement() {
 	}
 
 	if (!jumpNodeTriggered && owner_->onGround_ && currentIndex.yIndex > waypoint.yIndex && (currentIndex.yIndex - waypoint.yIndex) == 1) {
-		owner_->velocity_.y += BaseEnemy::kJumpAcceleration;
+		owner_->PerformJump();
 	}
 	if (!jumpNodeTriggered && owner_->onGround_ && waypoint.yIndex > currentIndex.yIndex) {
 		owner_->RequestDropThrough();
@@ -428,4 +436,38 @@ void PathFindingAI::ApplyChaseAcceleration(float desiredDir) {
 		owner_->velocity_.x += desiredDir * BaseEnemy::kAcceleration * speedFactor;
 		owner_->velocity_.x = std::clamp(owner_->velocity_.x, -targetSpeed, targetSpeed);
 	}
+}
+bool PathFindingAI::IsDropLandingSafe(const Vector3& pos) const {
+	if (!mapChipField_) {
+		return false;
+	}
+	MapChipField::IndexSet index = mapChipField_->GetMapChipIndexSetByPosition(pos);
+	uint32_t rows = mapChipField_->GetNumBlockVertical();
+	for (uint32_t y = index.yIndex + 1; y < rows; ++y) {
+		MapChipType type = mapChipField_->GetMapChipTypeByIndex(index.xIndex, y);
+		if (type == MapChipType::kKillBlock) {
+			return false;
+		}
+		if (type == MapChipType::kPlatform) {
+			continue; // the platform we're on (or others we'd fall through)
+		}
+		if (MapChipField::IsGroundType(type)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool PathFindingAI::ShouldDropThroughToPlayer(const Vector3& playerPos) const {
+	if (!owner_ || !owner_->onGround_ || !owner_->IsStandingOnPlatform()) {
+		return false;
+	}
+	Vector3 pos = owner_->GetWorldPosition();
+	if (pos.y - playerPos.y < kDropPlayerBelowThreshold) {
+		return false;
+	}
+	if (std::abs(pos.x - playerPos.x) > kDropMaxHorizontalDistance) {
+		return false;
+	}
+	return IsDropLandingSafe(pos);
 }

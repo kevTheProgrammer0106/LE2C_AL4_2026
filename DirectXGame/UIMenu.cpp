@@ -162,9 +162,7 @@ void UIMenu::SetButtonPosition(ButtonID id, float x, float y) {
 	float width = button->aabb.right - button->aabb.left;
 	float height = button->aabb.bottom - button->aabb.top;
 	button->aabb = {x, y, x + width, y + height};
-	if (button->sprite) {
-		button->sprite->SetPosition({x, y});
-	}
+	ApplyButtonVisual(*button);
 }
 void UIMenu::SetButtonSize(ButtonID id, float width, float height) {
 	Button* button = FindButton(id);
@@ -173,9 +171,7 @@ void UIMenu::SetButtonSize(ButtonID id, float width, float height) {
 	}
 	button->aabb.right = button->aabb.left + width;
 	button->aabb.bottom = button->aabb.top + height;
-	if (button->sprite) {
-		button->sprite->SetSize({width, height});
-	}
+	ApplyButtonVisual(*button);
 }
 void UIMenu::SetButtonVisible(ButtonID id, bool visible) {
 	if (Button* button = FindButton(id)) {
@@ -232,6 +228,8 @@ void UIMenu::UpdateButtons(float mouseX, float mouseY, bool mouseDown, bool mous
 			button.isHeld = false;
 			button.holdTimer = 0.0f;
 			button.pressStartedInside = false;
+			button.scale = 1.0f;
+			ApplyButtonVisual(button);
 			continue;
 		}
 
@@ -260,7 +258,20 @@ void UIMenu::UpdateButtons(float mouseX, float mouseY, bool mouseDown, bool mous
 			button.pressStartedInside = true;
 			button.holdTimer = 0.0f;
 		}
+		float targetScale = button.isHeld ? kPressScale : (button.isHovered ? kHoverScale : 1.0f);
+		button.scale += (targetScale - button.scale) * kScaleLerp;
+		ApplyButtonVisual(button);
 	}
 }
-
+void UIMenu::ApplyButtonVisual(Button& button) {
+	if (!button.sprite) {
+		return;
+	}
+	float w = button.aabb.right - button.aabb.left;
+	float h = button.aabb.bottom - button.aabb.top;
+	float sw = w * button.scale;
+	float sh = h * button.scale;
+	button.sprite->SetSize({sw, sh});
+	button.sprite->SetPosition({button.aabb.left - (sw - w) * 0.5f, button.aabb.top - (sh - h) * 0.5f});
+}
 #pragma endregion

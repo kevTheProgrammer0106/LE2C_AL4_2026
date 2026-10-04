@@ -5,15 +5,26 @@
 
 using namespace KamataEngine;
 
-#pragma region タイルアクセス(詳細 / 簡易)
+#pragma region Tile access (detailed / simple)
 bool BlockDetector::IsSolid(const Vector3& position, bool ignoreBarrier) const {
 	if (useDetailedTiles_) {
 		return mapChipField_->IsSolidAtPosition(position, ignoreBarrier);
 	}
-	// 簡易モード: セル全体(1.0)を実体として扱い、オフセットは無視する
+	// Simple mode (root): the whole cell is solid, offsets ignored.
 	MapChipField::IndexSet index = mapChipField_->GetMapChipIndexSetByPosition(position);
 	MapChipType type = mapChipField_->GetMapChipTypeByIndex(index.xIndex, index.yIndex);
 	return MapChipField::IsGroundType(type) || (type == MapChipType::kBarrier && !ignoreBarrier);
+}
+
+// Platforms are invisible to head and side checks, in both modes.
+bool BlockDetector::IsSolidIgnoringOneWay(const Vector3& position, bool ignoreBarrier) const {
+	if (!IsSolid(position, ignoreBarrier)) {
+		return false;
+	}
+	if (mapChipField_->IsOneWayAtPosition(position)) {
+		return false;
+	}
+	return true;
 }
 
 MapChipField::Rect BlockDetector::GetRect(uint32_t xIndex, uint32_t yIndex) const {
@@ -31,7 +42,6 @@ bool BlockDetector::ProbeGroundTop(const Vector3& center, float stepUp, float ma
 	}
 
 	const float feetY = center.y - kHeight * 0.5f;
-	// 足元の左右2列を調べる
 	const float columnsX[2] = {center.x - kWidth * 0.5f + kBlank, center.x + kWidth * 0.5f - kBlank};
 	constexpr float kStep = 0.05f;
 
@@ -41,18 +51,17 @@ bool BlockDetector::ProbeGroundTop(const Vector3& center, float stepUp, float ma
 	for (float x : columnsX) {
 		for (float d = -stepUp; d <= maxDepth; d += kStep) {
 			Vector3 sample = {x, feetY - d, 0.0f};
-			if (!IsSolid(sample, ignoreBarrier_)) { // [CHANGED] バリア無視設定に従う
+			if (!IsSolid(sample, ignoreBarrier_)) {
 				continue;
 			}
 
 			MapChipField::IndexSet index = mapChipField_->GetMapChipIndexSetByPosition(sample);
 			MapChipField::Rect rect = GetRect(index.xIndex, index.yIndex);
 
-			// 段差が高すぎる壁は「立てる面」ではない
 			if (rect.top > feetY + stepUp + 0.001f) {
 				break;
 			}
-			// 自分が下にいる一方通行足場は無視する
+			// A one-way platform we are below is not a standing surface.
 			if (mapChipField_->IsOneWayAtPosition(sample) && feetY < rect.top - 0.05f) {
 				continue;
 			}
@@ -81,6 +90,7 @@ void BlockDetector::GroundSwitch(const CollisionInfo& collisionInfo) {
 				positionNew[i] = CornerPosition(worldTransform_.translation_, static_cast<Corner>(i));
 			}
 
+			// Ground hold: platforms DO count here (standing on one is their purpose).
 			bool isHit = false;
 			Vector3 checkPosLeft = positionNew[kBottomLeft] + Vector3(0.0f, -0.2f, 0.0f);
 			if (IsSolid(checkPosLeft, false)) {
@@ -118,8 +128,9 @@ void BlockDetector::TopCollision(CollisionInfo& collisionInfo) {
 		positionNew[i] = CornerPosition(worldTransform_.translation_ + collisionInfo.move, static_cast<Corner>(i));
 	}
 
-	bool hitLeft = IsSolid(positionNew[kTopLeft], ignoreBarrier_);
-	bool hitRight = IsSolid(positionNew[kTopRight], ignoreBarrier_);
+	// Jumping up into a platform's underside never stops the jump.
+	bool hitLeft = IsSolidIgnoringOneWay(positionNew[kTopLeft], ignoreBarrier_);
+	bool hitRight = IsSolidIgnoringOneWay(positionNew[kTopRight], ignoreBarrier_);
 	if (!hitLeft && !hitRight)
 		return;
 
@@ -145,6 +156,7 @@ void BlockDetector::BottomCollision(CollisionInfo& collisionInfo) {
 
 	const Vector3 center = worldTransform_.translation_;
 
+	// Sweeps one foot corner old -> new so thin platforms can't be skipped in a single frame.
 	auto resolveCorner = [&](Corner corner, float& outTop) -> bool {
 		Vector3 oldPos = CornerPosition(center, corner);
 		Vector3 newPos = CornerPosition(center + collisionInfo.move, corner);
@@ -155,58 +167,47 @@ void BlockDetector::BottomCollision(CollisionInfo& collisionInfo) {
 
 		for (int i = 0; i <= steps; ++i) {
 			float t = static_cast<float>(i) / static_cast<float>(steps);
-
 			Vector3 sample = {oldPos.x + (newPos.x - oldPos.x) * t, oldPos.y + (newPos.y - oldPos.y) * t, 0.0f};
 
-			if (!IsSolid(sample, false)) {
+			if (!IsSolid(sample, false))
 				continue;
-			}
 
 			MapChipField::IndexSet index = mapChipField_->GetMapChipIndexSetByPosition(sample);
 			MapChipField::Rect rect = GetRect(index.xIndex, index.yIndex);
 
-			const bool isOneWay = mapChipField_->IsOneWayAtPosition(sample);
-
-			if (isOneWay) {
-				if (oldPos.y < rect.top - 0.001f) {
+			if (mapChipField_->IsOneWayAtPosition(sample)) {
+				// Only land if the foot started at/above the platform's top surface.
+				if (oldPos.y < rect.top - 0.001f)
 					continue;
-				}
-				if (ignoreOneWay_) {
+				// Dropping through: ignore the platform.
+				if (ignoreOneWay_)
 					continue;
-				}
 			} else {
+				// Don't double count stacked blocks.
 				MapChipType above = mapChipField_->GetMapChipTypeByIndex(index.xIndex, index.yIndex - 1);
-				if (above == MapChipType::kBlock) {
+				if (above == MapChipType::kBlock)
 					continue;
-				}
 			}
 
 			outTop = rect.top;
 			return true;
 		}
-
 		return false;
 	};
 
 	float topLeft = 0.0f;
 	float topRight = 0.0f;
-
 	bool hitLeft = resolveCorner(kBottomLeft, topLeft);
 	bool hitRight = resolveCorner(kBottomRight, topRight);
-
 	if (!hitLeft && !hitRight)
 		return;
 
 	float footY = worldTransform_.translation_.y - (kHeight * 0.5f);
-
 	float clampedMoveY = collisionInfo.move.y;
-
-	if (hitLeft) {
+	if (hitLeft)
 		clampedMoveY = std::max(clampedMoveY, (topLeft + kBlank) - footY);
-	}
-	if (hitRight) {
+	if (hitRight)
 		clampedMoveY = std::max(clampedMoveY, (topRight + kBlank) - footY);
-	}
 
 	collisionInfo.move.y = clampedMoveY;
 	collisionInfo.isHitGround = true;
@@ -220,8 +221,9 @@ void BlockDetector::LeftCollision(CollisionInfo& collisionInfo) {
 		positionNew[i] = CornerPosition(worldTransform_.translation_ + collisionInfo.move, static_cast<Corner>(i));
 	}
 
-	bool hitTop = IsSolid(positionNew[kTopLeft], ignoreBarrier_);
-	bool hitBottom = IsSolid(positionNew[kBottomLeft], ignoreBarrier_);
+	// Platforms are pass-through from the side.
+	bool hitTop = IsSolidIgnoringOneWay(positionNew[kTopLeft], ignoreBarrier_);
+	bool hitBottom = IsSolidIgnoringOneWay(positionNew[kBottomLeft], ignoreBarrier_);
 	if (!hitTop && !hitBottom)
 		return;
 
@@ -249,8 +251,8 @@ void BlockDetector::RightCollision(CollisionInfo& collisionInfo) {
 		positionNew[i] = CornerPosition(worldTransform_.translation_ + collisionInfo.move, static_cast<Corner>(i));
 	}
 
-	bool hitTop = IsSolid(positionNew[kTopRight], ignoreBarrier_);
-	bool hitBottom = IsSolid(positionNew[kBottomRight], ignoreBarrier_);
+	bool hitTop = IsSolidIgnoringOneWay(positionNew[kTopRight], ignoreBarrier_);
+	bool hitBottom = IsSolidIgnoringOneWay(positionNew[kBottomRight], ignoreBarrier_);
 	if (!hitTop && !hitBottom)
 		return;
 

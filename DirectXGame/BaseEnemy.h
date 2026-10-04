@@ -182,6 +182,7 @@ protected:
 
 	void MapChipCollisionUpdate();
 	void MapChipCollisionUpdate(CollisionInfo& collisionInfo);
+	bool PerformJump();
 
 	bool hitWallThisFrame_ = false;
 
@@ -242,7 +243,7 @@ protected:
 
 	static inline float kGravityAcceleration = 0.05f;
 	static inline float kLimitFallSpeed = 0.5f;
-	static inline float kJumpAcceleration = 0.75f;
+	static inline float kJumpAcceleration = 0.65f;
 
 	MapChipField* mapChipField_ = nullptr;
 	static inline float kWidth = 0.8f;

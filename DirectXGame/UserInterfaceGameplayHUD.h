@@ -63,38 +63,69 @@ private:
 	static inline float kBorderThickness = 3.0f;
 };
 
-// [NEW] Melee + firearm equipped-weapon icons, shown under the health bar.
-// The active weapon mode's icon is highlighted. The firearm icon has a small
-// bar underneath it that behaves like the HP bar: full while ready, drains/
-// refills to show reload progress, and is tinted differently while reloading.
-class WeaponStatusUI final {
+// Block gauge: bottom-center, enlarged. Blue normally; red while "broken", with a marker at the recover threshold.
+class PlayerBlockUI final {
 public:
-	void Initialize(uint32_t meleeIconTexture, uint32_t firearmIconTexture, uint32_t barBackgroundTexture, uint32_t barFillTexture);
-
-	// isFirearmMode: which weapon is currently equipped (for highlighting).
-	// isReloading: whether the firearm is currently reloading.
-	// reloadProgress01: 0 = just started reloading, 1 = fully reloaded/ready.
-	void Update(bool isFirearmMode, bool isReloading, float reloadProgress01);
+	void Initialize(uint32_t backgroundTextureHandle, uint32_t fillTextureHandle);
+	void Update(float gauge, float maxGauge, bool broken, float recoverThreshold);
 	void Draw();
 
 private:
-	std::unique_ptr<KamataEngine::Sprite> meleeIcon_;
-	std::unique_ptr<KamataEngine::Sprite> firearmIcon_;
+	std::unique_ptr<KamataEngine::Sprite> border_;
+	std::unique_ptr<KamataEngine::Sprite> background_;
+	std::unique_ptr<KamataEngine::Sprite> fill_;
+	std::unique_ptr<KamataEngine::Sprite> marker_;
+	bool broken_ = false;
+	float barX_ = 0.0f;
+	float barY_ = 0.0f;
 
-	std::unique_ptr<KamataEngine::Sprite> ammoBarBorder_;
-	std::unique_ptr<KamataEngine::Sprite> ammoBarBackground_;
-	std::unique_ptr<KamataEngine::Sprite> ammoBarFill_;
+	static inline float kBarWidth = 520.0f;
+	static inline float kBarHeight = 34.0f;
+	static inline float kBorderThickness = 4.0f;
+	static inline float kBottomMargin = 56.0f;
+};
 
+// Melee + firearm icons under the health bar. No ammo bar:
+// after firing, the firearm icon goes dark, then brightens from the bottom up as it reloads.
+// When ready, it flashes white and settles back to its normal colour.
+class WeaponStatusUI final {
+public:
+	void Initialize(uint32_t meleeIconTexture, uint32_t firearmIconTexture);
+	// isMeleeCooling / meleeCooldownProgress01: placeholder for the upcoming sabre attack (0 = just used, 1 = ready).
+	void Update(bool isFirearmMode, bool isReloading, float reloadProgress01, bool isMeleeCooling = false, float meleeCooldownProgress01 = 1.0f);
+	void Draw();
+
+private:
 	static inline float kIconSize = 40.0f;
 	static inline float kIconSpacing = 12.0f;
 	static inline float kTopOffsetFromHealthBar = 14.0f;
-
-	static inline float kAmmoBarHeight = 8.0f;
-	static inline float kAmmoBarBorderThickness = 2.0f;
-	static inline float kAmmoBarTopOffset = 6.0f; // gap between firearm icon bottom and ammo bar
+	static inline float kDarkFactor = 0.25f;
+	static inline float kFlashDuration = 0.45f;
+	static inline float kFlashBoost = 2.5f;
+	static inline float kPopDuration = 0.25f; // replenish "pop" length (s)
+	static inline float kPopScale = 0.25f;    // peak enlargement (+25%)
 
 	static inline KamataEngine::Vector4 kActiveColor = {1.0f, 1.0f, 1.0f, 1.0f};
 	static inline KamataEngine::Vector4 kInactiveColor = {0.45f, 0.45f, 0.45f, 0.75f};
+
+	struct CooldownIcon {
+		std::unique_ptr<KamataEngine::Sprite> dark;   // full icon, darkened
+		std::unique_ptr<KamataEngine::Sprite> bright; // cropped from the bottom by progress
+		KamataEngine::Vector2 pos{};
+		KamataEngine::Vector2 texSize{1.0f, 1.0f};
+		bool wasCooling = false;
+		float flashTimer = 0.0f;
+		float popTimer = 0.0f;
+		bool darkVisible = false;
+		bool brightVisible = true;
+
+		void Initialize(uint32_t tex, const KamataEngine::Vector2& position);
+		void Update(const KamataEngine::Vector4& baseColor, bool cooling, float progress01);
+		void Draw();
+	};
+
+	CooldownIcon meleeIcon_;
+	CooldownIcon firearmIcon_;
 };
 
 class EquipmentStatus final : public BaseSprite {};

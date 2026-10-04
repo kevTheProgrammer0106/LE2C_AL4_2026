@@ -12,7 +12,7 @@
 /// </summary>
 class TitleScene {
 public:
-	void Initialize();
+	void Initialize(bool withScreenFadeIn = true);
 	void Update();
 	void Draw();
 

@@ -6,13 +6,11 @@ using namespace KamataEngine;
 
 TitleScene::~TitleScene() { delete fade_; }
 
-void TitleScene::Initialize() {
+void TitleScene::Initialize(bool withScreenFadeIn)
+{
 	// 初期化処理
 	fade_ = new Fade();
 	fade_->Initialize();
-
-	fade_->Start(Fade::Status::FadeIn, 1.0f); // フェードインを開始（1秒間）
-
 	camera_.Initialize();
 
 	buttonTex_[0] = TextureManager::Load("./Resources/UserInterface/buttonPlay.png");
@@ -50,6 +48,15 @@ void TitleScene::Initialize() {
 	cursorTex_ = TextureManager::Load("./Resources/UserInterface/directionArrow.png");
 
 	menuInput_.SetCursorTexture(cursorTex_);
+
+	if (withScreenFadeIn) {
+		phase_ = Phase::kFadeIn;
+		fade_->Start(Fade::Status::FadeIn, 1.0f);
+	} else {
+		fade_->Stop();
+		phase_ = Phase::kButtonFadeIn;
+		menuInput_.StartButtonFade(true, kButtonFadeDuration);
+	}
 }
 
 void TitleScene::Update() {
