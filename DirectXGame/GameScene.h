@@ -158,8 +158,11 @@ public:
 	// Returns true and fills outOffset if a per-arena camera offset override is configured.
 	static bool GetArenaCameraOffsetOverride(int32_t stageIndex, uint8_t arenaID, KamataEngine::Vector3& outOffset);
 
+	void BindAssets();
+
 private:
 	friend class DebugMenu;
+	GameAssets assets_;
 	DebugMenu debugMenu_;
 
 	static constexpr float kBlockScale = 1.0f;
@@ -173,8 +176,6 @@ private:
 
 	std::vector<std::unique_ptr<SwitchBlock>> switches_;
 	std::unique_ptr<KamataEngine::Model> modelSwitch_ = nullptr;
-	uint32_t switchTex_ = 0;
-	uint32_t switchPressedTex_ = 0;
 
 	Phase phase_;
 	bool finished_ = false;
@@ -192,68 +193,17 @@ private:
 	KamataEngine::WorldTransform originPoint{};
 
 	std::unique_ptr<Skydome> skyDome_ = nullptr;
-	uint32_t skyDomeTextureHandle_ = 0;
-	std::unique_ptr<KamataEngine::Model> modelSkyDome_ = nullptr;
 
 	std::vector<std::unique_ptr<BaseEnemy>> enemies_;
 
-	// std::unique_ptr<BaseEnemy> enemyTest;
-	std::unique_ptr<KamataEngine::Model> modelEnemyBody_ = nullptr;
-	std::unique_ptr<KamataEngine::Model> modelEnemyHead_ = nullptr;
-	std::unique_ptr<KamataEngine::Model> modelEnemyHat_ = nullptr;
-	uint32_t enemyBodyTex_ = 0;
-	uint32_t enemyHeadTex_ = 0;
-	uint32_t enemyHatTex_ = 0;
-
 	std::unique_ptr<Player> player_ = nullptr;
-
-	std::unique_ptr<KamataEngine::Model> modelPlayerHead_ = nullptr;
-	std::unique_ptr<KamataEngine::Model> modelPlayerHat_ = nullptr;
-	std::unique_ptr<KamataEngine::Model> modelPlayerBody_ = nullptr;
-	uint32_t playerBodyTex_, playerHeadTex_, playerHatTex_;
-
-	std::unique_ptr<KamataEngine::Model> modelSabreLight_ = nullptr;
-	uint32_t texSabreLight_;
-	std::unique_ptr<KamataEngine::Model> modelSabreHeavy_ = nullptr;
-	uint32_t texSabreHeavy_;
-
-	uint32_t playerTextureHandle_ = 0;
-	std::unique_ptr<KamataEngine::Model> modelPlayer_ = nullptr;
-
-	uint32_t slashEffectTex_ = 0;
-	std::unique_ptr<KamataEngine::Model> modelSlashEffect_ = nullptr;
 
 	std::vector<std::unique_ptr<BaseEffect>> visualEffects_;
 	std::unique_ptr<DeathParticles> deathParticles_ = nullptr;
-	std::vector<std::unique_ptr<DeathParticles>> enemyDeathParticles_; // [NEW]
-	uint32_t hitEffectTex_ = 0;
-	KamataEngine::Model* hitEffectModel_ = nullptr;
-	uint32_t guardEffectTex_ = 0;
-	std::unique_ptr<KamataEngine::Model> guardEffectModel_ = nullptr;
-	uint32_t deathParticleTextureHandle_ = 0;
-	std::unique_ptr<KamataEngine::Model> deathParticleModel = nullptr;
-
-	uint32_t blockTextureHandle = 0;
-	std::unique_ptr<KamataEngine::Model> blockModel = nullptr;
-	uint32_t blockPlatformTextureHandle = 0;
-	std::unique_ptr<KamataEngine::Model> blockPlatformModel = nullptr;
-	// uint32_t blockHalfUpHandle = 0;
-	// std::unique_ptr<KamataEngine::Model> blockHalfUpModel = nullptr;
-	// uint32_t blockHalfDownHandle = 0;
-	// std::unique_ptr<KamataEngine::Model> blockHalfDownModel = nullptr;
-
-	uint32_t cursorTex_[2] = {0, 0};
+	std::vector<std::unique_ptr<DeathParticles>> enemyDeathParticles_;
 
 	std::unique_ptr<MapChipField> mapChipField_ = nullptr;
 	std::vector<std::vector<BlockInstance>> worldTransformBlocks_;
-
-	// uint32_t blockDebugTextureHandle = 0;
-	// std::unique_ptr<KamataEngine::Model> blockDebugModel = nullptr;
-
-	std::unordered_map<uint8_t, uint32_t> blockTexVariants_;
-	// std::unordered_map<uint8_t, uint32_t> blockHalfUpTexVariants_;
-	// std::unordered_map<uint8_t, uint32_t> blockHalfDownTexVariants_;
-	std::unordered_map<uint8_t, uint32_t> platformTexVariants_;
 
 	uint32_t ResolveBlockTexture(const std::unordered_map<uint8_t, uint32_t>& table, uint8_t subID, uint32_t defaultTex) {
 		auto it = table.find(subID);
@@ -268,10 +218,6 @@ private:
 	bool pendingReturnToMenu_ = false;
 
 	Phase phaseBeforePause_ = Phase::kPlay;
-	uint32_t pauseButtonTex_[3] = {0, 0, 0};
-	uint32_t retryButtonTex_[3] = {0, 0, 0};
-	uint32_t victoryButtonTex_[2] = {0, 0};
-
 	UIMenu pauseMenuInput_;
 	UIMenu::ButtonID pauseResumeButton_ = UIMenu::kInvalidButton;
 	UIMenu::ButtonID pauseRetryButton_ = UIMenu::kInvalidButton;
@@ -279,7 +225,6 @@ private:
 
 	UIMenu gameplayHUDInput_;
 	UIMenu::ButtonID inGamePauseButton_ = UIMenu::kInvalidButton;
-	uint32_t inGamePauseButtonTex_ = 0;
 	void InitializeInGamePauseButton();
 	void UpdateInGamePauseButton();
 	void DrawInGamePauseButton();
@@ -309,30 +254,15 @@ private:
 	std::vector<std::unique_ptr<ProjectileBall>> playerBullets_;
 	std::vector<std::unique_ptr<ProjectileBall>> enemyBullets_;
 
-	std::unique_ptr<KamataEngine::Model> modelMusketLong_ = nullptr;
-	uint32_t musketLongTex_ = 0;
-	std::unique_ptr<KamataEngine::Model> modelMusketBayonet_ = nullptr;
-	uint32_t musketBayonetTex_ = 0;
-	std::unique_ptr<KamataEngine::Model> modelProjectileBall_ = nullptr;
-	uint32_t firearmBallTex_ = 0;
-
 	std::vector<std::unique_ptr<BaseProjectile>> firearmProjectiles_;
 
 	UIMenu cursor_;
 
 	EnemyHUD enemyHUD_;
-	uint32_t enemyIconRiflemanTex_ = 0;
-	uint32_t enemyIconCuirassierTex_ = 0;
-	uint32_t enemyIconFighterTex_ = 0;
-	uint32_t enemyIconArrowTex_ = 0;
 
 	std::unique_ptr<Goal> goal_ = nullptr;
-	std::unique_ptr<KamataEngine::Model> modelGoal_ = nullptr;
-	uint32_t goalTex_ = 0;
 
 	std::vector<std::unique_ptr<SlidingGate>> gates_;
-	std::unique_ptr<KamataEngine::Model> modelGate_ = nullptr;
-	uint32_t gateTex_ = 0;
 
 	std::vector<std::unique_ptr<DroppableItem>> droppableItems_;
 	std::vector<DroppableItem*> pendingPickups_;
@@ -364,7 +294,6 @@ private:
 	std::set<std::pair<uint32_t, uint32_t>> generatedChunkRows_;
 
 	InteractionPrompt interactionPrompt_;
-	uint32_t interactionPromptTex_ = 0;
 	static inline float kInteractionRange = 1.5f;
 	void UpdateInteractionPrompt();
 
@@ -401,30 +330,15 @@ private:
 	void UpdateCheckpointTriggers();
 
 	PlayerHealthUI playerHealthUI_;
-	uint32_t healthBarBackgroundTex_ = 0;
-	uint32_t healthBarFillTex_ = 0;
 
 	WeaponStatusUI weaponStatusUI_;
-	uint32_t meleeIconTex_ = 0;
-	uint32_t firearmIconTex_ = 0;
 
 	std::vector<std::unique_ptr<HealthBlock>> healthBlocks_;
-	std::unique_ptr<KamataEngine::Model> modelHealthBlock_ = nullptr;
-	uint32_t healthBlockTex_ = 0;
 	void UpdateHealthBlocks();
 
 	static const std::vector<ArenaFieldConfig>& GetArenaFieldConfigs();
 
-	// --- Music ---
 	MusicManager musicManager_;
-	uint32_t ingameMusicSoundDataHandle_ = 0;
-	uint32_t arenaMusicSoundDataHandle_ = 0;
-
-	// --- Misc SFX ---
-	uint32_t sfxSwitchPressHandle_ = 0;
-	uint32_t sfxGateOpenHandle_ = 0;
-	uint32_t sfxGoalReachedHandle_ = 0;
-	uint32_t sfxItemPickupHandle_ = 0;
 
 	void DrawCollisionDebug();
 	bool showCollisionDebug_ = true;

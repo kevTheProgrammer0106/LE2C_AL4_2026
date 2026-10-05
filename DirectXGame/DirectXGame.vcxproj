@@ -218,6 +218,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MapChipField.cpp" />
     <ClCompile Include="MusicManager.cpp" />
+    <ClCompile Include="ObjectBounce.cpp" />
     <ClCompile Include="PathDetector.cpp" />
     <ClCompile Include="PathFindingAI.cpp" />
     <ClCompile Include="PathFindingAlgorithm.cpp" />
@@ -277,6 +278,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClInclude Include="LevelSelectScene.h" />
     <ClInclude Include="MapChipField.h" />
     <ClInclude Include="MusicManager.h" />
+    <ClInclude Include="ObjectBounce.h" />
     <ClInclude Include="PathDetector.h" />
     <ClInclude Include="PathFindingAI.h" />
     <ClInclude Include="PathFindingAlgorithm.h" />

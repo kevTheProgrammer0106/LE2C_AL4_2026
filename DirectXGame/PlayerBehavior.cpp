@@ -2,6 +2,7 @@
 #include "BaseMelee.h"
 #include "GlobalVariables.h"
 #include "Player.h"
+#include "ObjectBounce.h"
 
 using namespace KamataEngine;
 
@@ -235,22 +236,12 @@ void PlayerBehavior::BehaviorDeathUpdate() {
 	owner_.velocity_.y -= Player::kGravityAcceleration;
 	owner_.velocity_.y = std::max(owner_.velocity_.y, -kDeathMaxFallSpeed);
 
-	Vector3 nextPos = owner_.worldTransform_.translation_ + owner_.velocity_;
-
-	bool hitGround = false;
-	if (owner_.mapChipField_) {
-		Vector3 groundCheck = nextPos - Vector3(0.0f, Player::kHeight * 0.5f, 0.0f);
-		hitGround = owner_.mapChipField_->IsSolidAtPosition(groundCheck);
-	}
-
-	if (hitGround && owner_.velocity_.y <= 0.0f) {
-		owner_.velocity_.y = -owner_.velocity_.y * kDeathBounceDamping;
-		owner_.velocity_.x *= kDeathFriction;
+	bool landed = false;
+	ObjectBounce::Step(owner_.mapChipField_, owner_.worldTransform_.translation_, owner_.velocity_, Player::kWidth, Player::kHeight, kDeathBounceDamping, kDeathFriction, false, landed);
+	if (landed) {
 		++deathBounceCount_;
 		if (deathBounceCount_ >= kDeathMaxBounces || std::abs(owner_.velocity_.y) < 0.02f)
 			owner_.velocity_ = {};
-	} else {
-		owner_.worldTransform_.translation_ = nextPos;
 	}
 
 	if (deathParameter_ >= kDeathDuration)

@@ -175,7 +175,7 @@ public:
 	void ClearSlow();
 	void ClearStun() { behavior_.ClearStun(); }
 	void ClearKnockback() { behavior_.ClearKnockback(); }
-	// Instantly removes stun, knockback, slow effect, control lock and squish progress.
+	// Instantly removes stun, knockback, slow effect, control lock and squish progress. yes
 	void ClearAllDebuffs();
 
 	// Model layer (cosmetic). Body parts and weapons follow this, not the root.

@@ -5,15 +5,9 @@
 #include <memory>
 #include <unordered_map>
 
-/// <summary>
-/// GameSceneが持っていたモデル/テクスチャのロードと所有権をここへ集約する。
-/// GameSceneはこのクラスの Load() を1回呼び、以降は公開メンバー経由で
-/// 各モデル/テクスチャハンドルを参照する。
-///
-/// [NEW] EnemyCuirassier / EnemyFighter は元々 Rifleman と同じ body/head/hat
-/// (modelEnemyBody_ 等) を使い回していたが、それぞれ専用のモデル/テクスチャを
-/// 個別に読み込むようにした (modelCuirassierBody 等 / modelFighterBody 等)。
-/// </summary>
+/// Owns every model / texture / audio handle the gameplay scene uses.
+/// GameScene calls Load() once, then reads the public members. Audio handles are only stored here;
+/// GameScene::BindAssets() hands them to the classes that play them.
 class GameAssets {
 public:
 	void Load();
@@ -50,7 +44,7 @@ public:
 	uint32_t riflemanHeadTex = 0;
 	uint32_t riflemanHatTex = 0;
 
-	// --- Enemy: Cuirassier [NEW] own body/head/hat instead of reusing Rifleman's ---
+	// --- Enemy: Cuirassier ---
 	std::unique_ptr<KamataEngine::Model> modelCuirassierBody;
 	std::unique_ptr<KamataEngine::Model> modelCuirassierHead;
 	std::unique_ptr<KamataEngine::Model> modelCuirassierHat;
@@ -58,7 +52,7 @@ public:
 	uint32_t cuirassierHeadTex = 0;
 	uint32_t cuirassierHatTex = 0;
 
-	// --- Enemy: Fighter [NEW] own body/head/hat instead of reusing Rifleman's ---
+	// --- Enemy: Fighter ---
 	std::unique_ptr<KamataEngine::Model> modelFighterBody;
 	std::unique_ptr<KamataEngine::Model> modelFighterHead;
 	std::unique_ptr<KamataEngine::Model> modelFighterHat;
@@ -69,7 +63,7 @@ public:
 	// --- Effects ---
 	std::unique_ptr<KamataEngine::Model> modelSlashEffect;
 	uint32_t slashEffectTex = 0;
-	KamataEngine::Model* hitEffectModel = nullptr; // HitEffect::SetModel が所有権を持たない生ポインタで受け取る既存仕様に合わせる
+	std::unique_ptr<KamataEngine::Model> hitEffectModel;
 	uint32_t hitEffectTex = 0;
 	std::unique_ptr<KamataEngine::Model> guardEffectModel;
 	uint32_t guardEffectTex = 0;
@@ -105,8 +99,58 @@ public:
 	uint32_t firearmIconTex = 0;
 	uint32_t interactionPromptTex = 0;
 
+	// --- Menus / cursor ---
+	uint32_t pauseButtonTex[3] = {0, 0, 0}; // play, retry, back
+	uint32_t retryButtonTex[3] = {0, 0, 0}; // retry, restart, back
+	uint32_t victoryButtonTex[2] = {0, 0};  // restart, back
+	uint32_t inGamePauseButtonTex = 0;
+	uint32_t cursorTex[2] = {0, 0}; // [0] aim (play), [1] arrow (menus)
+
+	// --- Audio: music ---
+	uint32_t musicIngame = 0;
+	uint32_t musicArena = 0;
+
+	// --- Audio: weapons ---
+	uint32_t sfxFirearmFire = 0;
+	uint32_t sfxFirearmReload = 0;
+	uint32_t sfxMusketLoaded = 0;
+	uint32_t sfxMeleeSwingDefault = 0;
+	uint32_t sfxSwingRight = 0;
+	uint32_t sfxSwingLeft = 0;
+	uint32_t sfxSwingDownward = 0;
+	uint32_t sfxBayonetLunge = 0;
+
+	// --- Audio: player ---
+	uint32_t sfxPlayerHurt = 0;
+	uint32_t sfxPlayerDeath = 0;
+	uint32_t sfxPlayerBlockStart = 0;
+	uint32_t sfxPlayerBlockImpact = 0;
+	uint32_t sfxWeaponSwitch = 0;
+
+	// --- Audio: enemies ---
+	uint32_t sfxEnemyDeath[3] = {0, 0, 0};
+	uint32_t sfxCuirassierSwing = 0;
+	uint32_t sfxCuirassierLunge = 0;
+	uint32_t sfxCuirassierMove = 0;
+	uint32_t sfxCuirassierHurt = 0;
+	uint32_t sfxCuirassierDeath[3] = {0, 0, 0};
+
+	// --- Audio: movement / world ---
+	uint32_t sfxFootstep = 0;
+	uint32_t sfxJump = 0;
+	uint32_t sfxLand = 0;
+	uint32_t sfxHealthRestore = 0;
+	uint32_t sfxSwitchPress = 0;
+	uint32_t sfxGateOpen = 0;
+	uint32_t sfxGoalReached = 0;
+	uint32_t sfxItemPickup = 0; // not loaded anywhere yet (was always 0 in GameScene); set it here when you have a file
+
 	uint32_t ResolveBlockTexture(const std::unordered_map<uint8_t, uint32_t>& table, uint8_t subID, uint32_t defaultTex) const {
 		auto it = table.find(subID);
 		return it != table.end() ? it->second : defaultTex;
 	}
+
+private:
+	void LoadModelsAndTextures();
+	void LoadAudio();
 };

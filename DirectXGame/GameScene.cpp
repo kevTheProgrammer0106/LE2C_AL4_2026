@@ -42,7 +42,41 @@ void GameScene::debugMenu() {
 	debugMenu_.Draw(this);
 #endif
 }
+void GameScene::BindAssets() {
+	BaseFirearm::SetFireSoundHandle(assets_.sfxFirearmFire);
+	BaseFirearm::SetReloadSoundHandle(assets_.sfxFirearmReload);
+	FirearmMusket::SetMusketLoadedSoundHandle(assets_.sfxMusketLoaded);
 
+	BaseMelee::SetDefaultSwingSoundHandle(assets_.sfxMeleeSwingDefault);
+	BaseMelee::SetSwingSoundHandle(0, assets_.sfxSwingRight);
+	BaseMelee::SetSwingSoundHandle(1, assets_.sfxSwingLeft);
+	BaseMelee::SetSwingSoundHandle(2, assets_.sfxSwingDownward);
+
+	for (int i = 0; i < 3; ++i)
+		BaseEnemy::SetDefaultDeathSoundHandle(i, assets_.sfxEnemyDeath[i]);
+	BaseEnemy::SetDefaultFootstepSoundHandle(assets_.sfxFootstep);
+	BaseEnemy::SetDefaultJumpSoundHandle(assets_.sfxJump);
+	BaseEnemy::SetDefaultLandSoundHandle(assets_.sfxLand);
+
+	PlayerBehavior::SetHurtSoundHandle(assets_.sfxPlayerHurt);
+	PlayerBehavior::SetDeathSoundHandle(assets_.sfxPlayerDeath);
+	PlayerBehavior::SetBlockStartSoundHandle(assets_.sfxPlayerBlockStart);
+	PlayerBehavior::SetBlockImpactSoundHandle(assets_.sfxPlayerBlockImpact);
+	Player::SetWeaponSwitchSoundHandle(assets_.sfxWeaponSwitch);
+	Player::SetFootstepSoundHandle(assets_.sfxFootstep);
+	Player::SetJumpSoundHandle(assets_.sfxJump);
+	Player::SetLandSoundHandle(assets_.sfxLand);
+
+	WeaponHeavySabre::SetSwingSoundHandle(assets_.sfxCuirassierSwing);
+	WeaponHeavySabre::SetLungeSoundHandle(assets_.sfxCuirassierLunge);
+	EnemyCuirassier::SetMovementSoundHandle(assets_.sfxCuirassierMove);
+	EnemyCuirassier::SetHurtSoundHandle(assets_.sfxCuirassierHurt);
+	for (int i = 0; i < 3; ++i)
+		EnemyCuirassier::SetDeathSoundHandle(i, assets_.sfxCuirassierDeath[i]);
+
+	EnemyRifleman::SetBayonetLungeSoundHandle(assets_.sfxBayonetLunge);
+	HealthBlock::SetConsumeSoundHandle(assets_.sfxHealthRestore);
+}
 void GameScene::Initialize(StageManager* stageDataManager) {
 	loadingCover_ = std::make_unique<Fade>();
 	loadingCover_->Initialize();
@@ -117,222 +151,31 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	fade_ = std::make_unique<Fade>();
 	fade_->Initialize();
 	fade_->Start(Fade::Status::FadeIn, 1.0f);
-
-	modelGoal_.reset(Model::CreateFromOBJ("block", true));
-	goalTex_ = TextureManager::Load("./Resources/block/block.png");
-	modelGate_.reset(Model::CreateFromOBJ("block", true));
-	gateTex_ = TextureManager::Load("./Resources/block/block.png");
-	modelSwitch_.reset(Model::CreateFromOBJ("block", true));
-	switchTex_ = TextureManager::Load("./Resources/block/block.png");
+	// --- Assets: one load, everything lives in assets_ ---
+	assets_.Load();
+	BindAssets();
 
 	skyDome_ = std::make_unique<Skydome>();
-	skyDomeTextureHandle_ = TextureManager::Load("./Resources/skydome/skydome.png");
-	modelSkyDome_.reset(Model::CreateFromOBJ("skydome", true));
-	skyDome_->Initialize(modelSkyDome_.get(), skyDomeTextureHandle_, &camera_);
-
-	modelPlayerHead_.reset(Model::CreateFromOBJ("playerhead", true));
-	modelPlayerHat_.reset(Model::CreateFromOBJ("playerhat", true));
-	modelPlayerBody_.reset(Model::CreateFromOBJ("playerbody", true));
-	playerBodyTex_ = TextureManager::Load("./Resources/playerBody/tex.png");
-	playerHeadTex_ = TextureManager::Load("./Resources/playerHead/tex.png");
-	playerHatTex_ = TextureManager::Load("./Resources/playerHat/tex.png");
-
-	modelSabreLight_.reset(Model::CreateFromOBJ("sabreLight"));
-	texSabreLight_ = TextureManager::Load("./Resources/sabreLight/sabre.png");
-	modelSabreHeavy_.reset(Model::CreateFromOBJ("sabreHeavy"));
-	texSabreHeavy_ = TextureManager::Load("./Resources/sabreHeavy/sabre.png");
-
-	modelMusketLong_.reset(Model::CreateFromOBJ("musketLong", true));
-	musketLongTex_ = TextureManager::Load("./Resources/musketLong/musketBody.png");
-	modelMusketBayonet_.reset(Model::CreateFromOBJ("musketBayonet", true));
-	musketBayonetTex_ = TextureManager::Load("./Resources/musketBayonet/musketBody.png");
-	modelProjectileBall_.reset(Model::CreateFromOBJ("firearmBall", true));
-	firearmBallTex_ = TextureManager::Load("./Resources/firearmBall/firearmBall.png");
-
-	modelEnemyBody_.reset(Model::CreateFromOBJ("riflemanBody", true));
-	modelEnemyHead_.reset(Model::CreateFromOBJ("riflemanHead", true));
-	modelEnemyHat_.reset(Model::CreateFromOBJ("riflemanHat", true));
-	enemyBodyTex_ = TextureManager::Load("./Resources/riflemanBody/riflemanTorso.png");
-	enemyHeadTex_ = TextureManager::Load("./Resources/riflemanHead/riflemanHead.png");
-	enemyHatTex_ = TextureManager::Load("./Resources/riflemanHat/riflemanShako.png");
+	skyDome_->Initialize(assets_.modelSkyDome.get(), assets_.skyDomeTex, &camera_);
 
 	deathParticles_ = std::make_unique<DeathParticles>();
-	deathParticleTextureHandle_ = TextureManager::Load("./Resources/deathParticle/white1x1.png");
-	deathParticleModel.reset(Model::CreateFromOBJ("deathParticle", true));
-	deathParticles_->Initialize(deathParticleModel.get(), deathParticleTextureHandle_, &camera_, {0.0f, 0.0f, 0.0f});
+	deathParticles_->Initialize(assets_.deathParticleModel.get(), assets_.deathParticleTex, &camera_, {0.0f, 0.0f, 0.0f});
 
-	slashEffectTex_ = TextureManager::Load("./Resources/hit_effect/hit_effect.png");
-	modelSlashEffect_.reset(Model::CreateFromOBJ("hit_effect", true));
-	hitEffectTex_ = TextureManager::Load("./Resources/particle/circle.png");
-	hitEffectModel_ = Model::CreateFromOBJ("particle");
-	HitEffect::SetModel(hitEffectModel_);
+	HitEffect::SetModel(assets_.hitEffectModel.get());
 	HitEffect::SetCamera(&camera_);
-
-	guardEffectTex_ = TextureManager::Load("./Resources/ring/ring.png");
-	guardEffectModel_.reset(Model::CreateFromOBJ("ring"));
-	GuardEffect::SetModel(guardEffectModel_.get());
+	GuardEffect::SetModel(assets_.guardEffectModel.get());
 	GuardEffect::SetCamera(&camera_);
 
-	interactionPromptTex_ = TextureManager::Load("./Resources/UserInterface/InteractionPrompt.png");
-	interactionPrompt_.Initialize(interactionPromptTex_);
+	interactionPrompt_.Initialize(assets_.interactionPromptTex);
 
-	// --- SFX loading ---
-	{
-		uint32_t sfxFirearmFire = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/gunShot.wav");
-		uint32_t sfxFirearmReload = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/gunReloading.wav");
-		BaseFirearm::SetFireSoundHandle(sfxFirearmFire);
-		BaseFirearm::SetReloadSoundHandle(sfxFirearmReload);
+	musicManager_.Initialize(assets_.musicIngame, assets_.musicArena);
+	musicManager_.StopMenuMusic();
 
-		uint32_t sfxMeleeSwingDefault = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/swing.wav");
-		BaseMelee::SetDefaultSwingSoundHandle(sfxMeleeSwingDefault);
-
-		uint32_t sfxSwingRight = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/swordSlashRight.wav");
-		uint32_t sfxSwingSlashLeft = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/swordSlashLeft.wav");
-		uint32_t sfxSwingDownward = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/swordSlashDownward.wav");
-
-		BaseMelee::SetSwingSoundHandle(0, sfxSwingRight);
-		BaseMelee::SetSwingSoundHandle(1, sfxSwingSlashLeft);
-		BaseMelee::SetSwingSoundHandle(2, sfxSwingDownward);
-
-		uint32_t sfxEnemyDeath0 = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/deathScream1.wav");
-		uint32_t sfxEnemyDeath1 = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/deathScream2.wav");
-		uint32_t sfxEnemyDeath2 = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/deathScream3.wav");
-		BaseEnemy::SetDefaultDeathSoundHandle(0, sfxEnemyDeath0);
-		BaseEnemy::SetDefaultDeathSoundHandle(1, sfxEnemyDeath1);
-		BaseEnemy::SetDefaultDeathSoundHandle(2, sfxEnemyDeath2);
-
-		uint32_t sfxPlayerHurt = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/DefaultHit.wav");
-		uint32_t sfxPlayerDeath = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
-		uint32_t sfxPlayerBlockStart = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/blockReady.wav");
-		uint32_t sfxPlayerBlockImpact = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/blockSuccess.wav");
-		PlayerBehavior::SetHurtSoundHandle(sfxPlayerHurt);
-		PlayerBehavior::SetDeathSoundHandle(sfxPlayerDeath);
-		PlayerBehavior::SetBlockStartSoundHandle(sfxPlayerBlockStart);
-		PlayerBehavior::SetBlockImpactSoundHandle(sfxPlayerBlockImpact);
-
-		// Cuirassier-specific overrides: unique melee swing/lunge, block, and movement (footstep) sounds.
-		// All other enemies keep BaseEnemy/BaseMelee defaults for now.
-		uint32_t sfxCuirassierSwing = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
-		uint32_t sfxCuirassierLunge = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/swordLunge.wav");
-		uint32_t sfxCuirassierMove = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/knightWalk.wav");
-		WeaponHeavySabre::SetSwingSoundHandle(sfxCuirassierSwing);
-		WeaponHeavySabre::SetLungeSoundHandle(sfxCuirassierLunge);
-		EnemyCuirassier::SetMovementSoundHandle(sfxCuirassierMove);
-
-		// Cuirassier-specific death SFX, 3 variations (falls back to
-		// BaseEnemy's variations automatically if these are left at 0).
-		uint32_t sfxCuirassierHurt = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/cuiHurt.wav");
-		uint32_t sfxCuirassierDeath0 = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
-		uint32_t sfxCuirassierDeath1 = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
-		uint32_t sfxCuirassierDeath2 = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
-		EnemyCuirassier::SetHurtSoundHandle(sfxCuirassierHurt);
-		EnemyCuirassier::SetDeathSoundHandle(0, sfxCuirassierDeath0);
-		EnemyCuirassier::SetDeathSoundHandle(1, sfxCuirassierDeath1);
-		EnemyCuirassier::SetDeathSoundHandle(2, sfxCuirassierDeath2);
-
-		sfxSwitchPressHandle_ = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
-		sfxGateOpenHandle_ = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
-		sfxGoalReachedHandle_ = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/victoryJingle.wav");
-
-		uint32_t sfxBayonetLunge = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/swordLunge.wav");
-		EnemyRifleman::SetBayonetLungeSoundHandle(sfxBayonetLunge);
-
-		uint32_t sfxWeaponSwitch = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/weaponSwitch.wav");
-		Player::SetWeaponSwitchSoundHandle(sfxWeaponSwitch);
-
-		uint32_t sfxFootstep = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/FootStep.wav");
-		uint32_t sfxJump = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/Jump.wav");
-		uint32_t sfxLand = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/Landing.wav");
-		BaseEnemy::SetDefaultFootstepSoundHandle(sfxFootstep);
-		BaseEnemy::SetDefaultJumpSoundHandle(sfxJump);
-		BaseEnemy::SetDefaultLandSoundHandle(sfxLand);
-		Player::SetFootstepSoundHandle(sfxFootstep);
-		Player::SetJumpSoundHandle(sfxJump);
-		Player::SetLandSoundHandle(sfxLand);
-
-		uint32_t sfxHealthRestore = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/hpHeal.wav");
-		HealthBlock::SetConsumeSoundHandle(sfxHealthRestore);
-
-		uint32_t sfxMusketLoaded = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/gunLoaded.wav");
-		FirearmMusket::SetMusketLoadedSoundHandle(sfxMusketLoaded);
-		;
-	}
-
-	{
-		ingameMusicSoundDataHandle_ = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/combatMusic.wav");
-		arenaMusicSoundDataHandle_ = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/ArenaMusic.wav");
-		musicManager_.Initialize(ingameMusicSoundDataHandle_, arenaMusicSoundDataHandle_);
-		musicManager_.StopMenuMusic();
-	}
-	blockTextureHandle = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
-	blockTexVariants_[0] = blockTextureHandle;
-	platformTexVariants_[0] = blockPlatformTextureHandle;
-
-	blockModel.reset(Model::CreateFromOBJ("blockNormal"));
-	blockPlatformTextureHandle = TextureManager::Load("./Resources/platform/block.png");
-	blockPlatformModel.reset(Model::CreateFromOBJ("platform"));
-
-	// Additional block texture variants, selected per-tile via the map chip subID.
-	// subID 1 = wood, 2 = brick, 3 = cobble, 4 = concrete, 5 = rubber.
-	// Each variant reuses the existing block/blockHalfUp/blockHalfDown/platform OBJ shapes
-	// (same models as subID 0) and only swaps the texture, following the ResolveBlockTexture
-	// lookup pattern already used for subID 0.
-	{
-		static constexpr uint8_t kSubIDGrass = 0;
-		static constexpr uint8_t kSubIDWood = 1;
-		static constexpr uint8_t kSubIDBrick = 2;
-		static constexpr uint8_t kSubIDCobble = 3;
-		static constexpr uint8_t kSubIDConcrete = 4;
-		static constexpr uint8_t kSubIDRubber = 5;
-
-		blockTexVariants_[kSubIDGrass] = TextureManager::Load("./Resources/block/grassBlock.png");
-		blockTexVariants_[kSubIDWood] = TextureManager::Load("./Resources/block/grassBlock.png");
-		blockTexVariants_[kSubIDBrick] = TextureManager::Load("./Resources/block/grassBlock.png");
-		blockTexVariants_[kSubIDCobble] = TextureManager::Load("./Resources/block/grassBlock.png");
-		blockTexVariants_[kSubIDConcrete] = TextureManager::Load("./Resources/block/grassBlock.png");
-		blockTexVariants_[kSubIDRubber] = TextureManager::Load("./Resources/block/grassBlock.png");
-
-		platformTexVariants_[kSubIDGrass] = TextureManager::Load("./Resources/block/grassBlock.png");
-		platformTexVariants_[kSubIDWood] = TextureManager::Load("./Resources/block/grassBlock.png");
-		platformTexVariants_[kSubIDBrick] = TextureManager::Load("./Resources/block/grassBlock.png");
-		platformTexVariants_[kSubIDCobble] = TextureManager::Load("./Resources/block/grassBlock.png");
-		platformTexVariants_[kSubIDConcrete] = TextureManager::Load("./Resources/block/grassBlock.png");
-		platformTexVariants_[kSubIDRubber] = TextureManager::Load("./Resources/block/grassBlock.png");
-
-		// blockTexVariants_[kSubIDGrass] = TextureManager::Load("./Resources/block/grassBlock.png");
-		// blockTexVariants_[kSubIDWood] = TextureManager::Load("./Resources/block/woodBlock.png");
-		// blockTexVariants_[kSubIDBrick] = TextureManager::Load("./Resources/block/brickBlock.png");
-		// blockTexVariants_[kSubIDCobble] = TextureManager::Load("./Resources/block/cobbleBlock.png");
-		// blockTexVariants_[kSubIDConcrete] = TextureManager::Load("./Resources/block/concreteBlock.png");
-		// blockTexVariants_[kSubIDRubber] = TextureManager::Load("./Resources/block/rubberBlock.png");
-
-		//		platformTexVariants_[kSubIDGrass] = TextureManager::Load("./Resources/block/grassBlock.png");
-		// platformTexVariants_[kSubIDWood] = TextureManager::Load("./Resources/platform/woodBlock.png");
-		// platformTexVariants_[kSubIDBrick] = TextureManager::Load("./Resources/platform/brickBlock.png");
-		// platformTexVariants_[kSubIDCobble] = TextureManager::Load("./Resources/platform/cobbleBlock.png");
-		// platformTexVariants_[kSubIDConcrete] = TextureManager::Load("./Resources/platform/concreteBlock.png");
-		// platformTexVariants_[kSubIDRubber] = TextureManager::Load("./Resources/platform/rubberBlock.png");
-	}
-	cursorTex_[0] = TextureManager::Load("./Resources/UserInterface/directionAim.png");
-	cursorTex_[1] = TextureManager::Load("./Resources/UserInterface/directionArrow.png");
-	cursor_.Initialize(cursorTex_, 2, &camera_);
-	healthBarBackgroundTex_ = TextureManager::Load("./Resources/white1x1.png");
-	healthBarFillTex_ = TextureManager::Load("./Resources/white1x1.png");
-	playerHealthUI_.Initialize(healthBarBackgroundTex_, healthBarFillTex_);
-
-	modelHealthBlock_.reset(Model::CreateFromOBJ("block"));
-	healthBlockTex_ = TextureManager::Load("./Resources/block/block.png");
-
-	enemyIconRiflemanTex_ = TextureManager::Load("./Resources/UserInterface/iconRifleman.png");
-	enemyIconCuirassierTex_ = TextureManager::Load("./Resources/UserInterface/iconCuirassier.png");
-	enemyIconFighterTex_ = TextureManager::Load("./Resources/UserInterface/iconFighter.png");
-	enemyIconArrowTex_ = TextureManager::Load("./Resources/UserInterface/enemyDirectionArrow.png");
-	enemyHUD_.Initialize(enemyIconArrowTex_, enemyIconFighterTex_);
-
-	meleeIconTex_ = texSabreLight_;
-	firearmIconTex_ = musketLongTex_;
-	weaponStatusUI_.Initialize(meleeIconTex_, firearmIconTex_);
-	playerBlockUI_.Initialize(healthBarBackgroundTex_, healthBarFillTex_);
+	cursor_.Initialize(assets_.cursorTex, 2, &camera_);
+	playerHealthUI_.Initialize(assets_.healthBarBackgroundTex, assets_.healthBarFillTex);
+	enemyHUD_.Initialize(assets_.enemyIconArrowTex, assets_.enemyIconFighterTex);
+	weaponStatusUI_.Initialize(assets_.meleeIconTex, assets_.firearmIconTex);
+	playerBlockUI_.Initialize(assets_.healthBarBackgroundTex, assets_.healthBarFillTex);
 
 	cameraController_ = std::make_unique<CameraController>();
 	cameraController_->Initialize(&camera_);
@@ -389,11 +232,7 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 }
 
 void GameScene::InitializePauseMenu() {
-	pauseButtonTex_[0] = TextureManager::Load("./Resources/UserInterface/buttonPlay.png");
-	pauseButtonTex_[1] = TextureManager::Load("./Resources/UserInterface/buttonRetry.png");
-	pauseButtonTex_[2] = TextureManager::Load("./Resources/UserInterface/buttonBack.png");
-
-	pauseMenuInput_.Initialize(pauseButtonTex_, 3, &camera_);
+	pauseMenuInput_.Initialize(assets_.pauseButtonTex, 3, &camera_);
 
 	constexpr float kButtonWidth = 220.0f;
 	constexpr float kButtonHeight = 160.0f;
@@ -401,13 +240,13 @@ void GameScene::InitializePauseMenu() {
 	float centerX = static_cast<float>(WinApp::kWindowWidth) / 2.0f - kButtonWidth / 2.0f;
 	float startY = static_cast<float>(WinApp::kWindowHeight) / 2.0f - kSpacing;
 
-	pauseResumeButton_ = pauseMenuInput_.AddButton(pauseButtonTex_[0], centerX, startY, kButtonWidth, kButtonHeight, "Resume");
+	pauseResumeButton_ = pauseMenuInput_.AddButton(assets_.pauseButtonTex[0], centerX, startY, kButtonWidth, kButtonHeight, "Resume");
 	pauseMenuInput_.SetButtonOnClick(pauseResumeButton_, [this]() { phase_ = phaseBeforePause_; });
 
-	pauseRetryButton_ = pauseMenuInput_.AddButton(pauseButtonTex_[1], centerX, startY + kSpacing, kButtonWidth, kButtonHeight, "Retry");
+	pauseRetryButton_ = pauseMenuInput_.AddButton(assets_.pauseButtonTex[1], centerX, startY + kSpacing, kButtonWidth, kButtonHeight, "Retry");
 	pauseMenuInput_.SetButtonOnClick(pauseRetryButton_, [this]() { reloadRequested_ = true; });
 
-	pauseMainMenuButton_ = pauseMenuInput_.AddButton(pauseButtonTex_[2], centerX, startY + kSpacing * 2.0f, kButtonWidth, kButtonHeight, "Main Menu");
+	pauseMainMenuButton_ = pauseMenuInput_.AddButton(assets_.pauseButtonTex[2], centerX, startY + kSpacing * 2.0f, kButtonWidth, kButtonHeight, "Main Menu");
 	pauseMenuInput_.SetButtonOnClick(pauseMainMenuButton_, [this]() {
 		pendingReturnToMenu_ = true;
 		fade_->Start(Fade::Status::FadeOut, 1.0f);
@@ -415,11 +254,7 @@ void GameScene::InitializePauseMenu() {
 }
 
 void GameScene::InitializeRetryMenu() {
-	retryButtonTex_[0] = TextureManager::Load("./Resources/UserInterface/buttonRetry.png");
-	retryButtonTex_[1] = TextureManager::Load("./Resources/UserInterface/buttonRestart.png");
-	retryButtonTex_[2] = TextureManager::Load("./Resources/UserInterface/buttonBack.png");
-
-	retryMenuInput_.Initialize(pauseButtonTex_, 3, &camera_);
+	retryMenuInput_.Initialize(assets_.pauseButtonTex, 3, &camera_);
 
 	constexpr float kButtonWidth = 220.0f;
 	constexpr float kButtonHeight = 160.0f;
@@ -428,13 +263,13 @@ void GameScene::InitializeRetryMenu() {
 	float startY = static_cast<float>(WinApp::kWindowHeight) / 2.0f - kSpacing * 0.5f;
 
 	std::string retryLabel = stageManager_->HasCheckpoint() ? "Retry (Checkpoint)" : "Retry";
-	retryButton_ = retryMenuInput_.AddButton(retryButtonTex_[0], centerX, startY, kButtonWidth, kButtonHeight, retryLabel);
+	retryButton_ = retryMenuInput_.AddButton(assets_.retryButtonTex[0], centerX, startY, kButtonWidth, kButtonHeight, retryLabel);
 	retryMenuInput_.SetButtonOnClick(retryButton_, [this]() { reloadRequested_ = true; });
 
-	restartButton_ = retryMenuInput_.AddButton(retryButtonTex_[1], centerX, startY + kSpacing, kButtonWidth, kButtonHeight, "Restart");
+	restartButton_ = retryMenuInput_.AddButton(assets_.retryButtonTex[1], centerX, startY + kSpacing, kButtonWidth, kButtonHeight, "Restart");
 	retryMenuInput_.SetButtonOnClick(restartButton_, [this]() { restartRequested_ = true; });
 
-	retryMainMenuButton_ = retryMenuInput_.AddButton(retryButtonTex_[2], centerX, startY + kSpacing * 2.0f, kButtonWidth, kButtonHeight, "Main Menu");
+	retryMainMenuButton_ = retryMenuInput_.AddButton(assets_.retryButtonTex[2], centerX, startY + kSpacing * 2.0f, kButtonWidth, kButtonHeight, "Main Menu");
 	retryMenuInput_.SetButtonOnClick(retryMainMenuButton_, [this]() {
 		pendingReturnToMenu_ = true;
 		fade_->Start(Fade::Status::FadeOut, 1.0f);
@@ -442,15 +277,14 @@ void GameScene::InitializeRetryMenu() {
 }
 
 void GameScene::InitializeInGamePauseButton() {
-	inGamePauseButtonTex_ = TextureManager::Load("./Resources/UserInterface/buttonIngamePause.png");
-	gameplayHUDInput_.Initialize(inGamePauseButtonTex_, &camera_);
+	gameplayHUDInput_.Initialize(assets_.inGamePauseButtonTex, &camera_);
 
 	constexpr float kButtonSize = 44.0f;
 	constexpr float kMargin = 16.0f;
 	float x = kMargin;
 	float y = kMargin;
 
-	inGamePauseButton_ = gameplayHUDInput_.AddButton(inGamePauseButtonTex_, x, y, kButtonSize, kButtonSize, "II");
+	inGamePauseButton_ = gameplayHUDInput_.AddButton(assets_.inGamePauseButtonTex, x, y, kButtonSize, kButtonSize, "II");
 	gameplayHUDInput_.SetButtonOnClick(inGamePauseButton_, [this]() {
 		if (phase_ == Phase::kPlay) {
 			phaseBeforePause_ = phase_;
@@ -461,14 +295,10 @@ void GameScene::InitializeInGamePauseButton() {
 }
 
 void GameScene::InitializeVictoryMenu() {
-	victoryButtonTex_[0] = TextureManager::Load("./Resources/UserInterface/buttonRestart.png");
-	victoryButtonTex_[1] = TextureManager::Load("./Resources/UserInterface/buttonBack.png");
-
-	victoryMenuInput_.Initialize(victoryButtonTex_, 2, &camera_);
+	victoryMenuInput_.Initialize(assets_.victoryButtonTex, 2, &camera_);
 	victoryMenuInput_.SetButtonGroupAlpha(0.0f);
 
-	// dim backdrop behind the buttons, faded in lockstep with the buttons below
-	victoryOverlay_.reset(Sprite::Create(healthBarBackgroundTex_, {0.0f, 0.0f}));
+	victoryOverlay_.reset(Sprite::Create(assets_.healthBarBackgroundTex, {0.0f, 0.0f}));
 	victoryOverlay_->SetSize({static_cast<float>(WinApp::kWindowWidth), static_cast<float>(WinApp::kWindowHeight)});
 	victoryOverlay_->SetColor({0.0f, 0.0f, 0.0f, 0.0f});
 
@@ -478,10 +308,10 @@ void GameScene::InitializeVictoryMenu() {
 	float centerX = static_cast<float>(WinApp::kWindowWidth) / 2.0f - kButtonWidth / 2.0f;
 	float startY = static_cast<float>(WinApp::kWindowHeight) / 2.0f - kSpacing * 0.5f;
 
-	victoryRestartButton_ = victoryMenuInput_.AddButton(victoryButtonTex_[0], centerX, startY, kButtonWidth, kButtonHeight, "Play Again");
+	victoryRestartButton_ = victoryMenuInput_.AddButton(assets_.victoryButtonTex[0], centerX, startY, kButtonWidth, kButtonHeight, "Play Again");
 	victoryMenuInput_.SetButtonOnClick(victoryRestartButton_, [this]() { restartRequested_ = true; });
 
-	victoryMainMenuButton_ = victoryMenuInput_.AddButton(victoryButtonTex_[1], centerX, startY + kSpacing, kButtonWidth, kButtonHeight, "Back to Menu");
+	victoryMainMenuButton_ = victoryMenuInput_.AddButton(assets_.victoryButtonTex[1], centerX, startY + kSpacing, kButtonWidth, kButtonHeight, "Back to Menu");
 	victoryMenuInput_.SetButtonOnClick(victoryMainMenuButton_, [this]() {
 		pendingReturnToMenu_ = true;
 		fade_->Start(Fade::Status::FadeOut, 1.0f);
@@ -533,31 +363,31 @@ GameScene::~GameScene() {
 	worldTransformBlocks_.clear();
 	worldTransformBackgroundBlocks_.clear();
 }
-
+                   
 void GameScene::CreateHitEffect(Vector3& spawnLocation, float rotationZ) {
-	HitEffect* newHitEffect = HitEffect::Create(hitEffectTex_, spawnLocation, rotationZ);
+	HitEffect* newHitEffect = HitEffect::Create(assets_.hitEffectTex, spawnLocation, rotationZ);  
 	visualEffects_.push_back(std::unique_ptr<BaseEffect>(newHitEffect));
 }
 void GameScene::CreateGuardEffect(Vector3& spawnLocation) {
-	GuardEffect* newGuardEffect = GuardEffect::Create(guardEffectTex_, spawnLocation);
+	GuardEffect* newGuardEffect = GuardEffect::Create(assets_.guardEffectTex, spawnLocation);          
 	visualEffects_.push_back(std::unique_ptr<BaseEffect>(newGuardEffect));
 }
 void GameScene::CreateMuzzleFlash(Vector3& spawnLocation) {
-	HitEffect* flash = HitEffect::Create(hitEffectTex_, spawnLocation);
+	HitEffect* flash = HitEffect::Create(assets_.hitEffectTex, spawnLocation);
 	visualEffects_.push_back(std::unique_ptr<BaseEffect>(flash));
 }
 void GameScene::CreateBlockSparkEffect(Vector3& spawnLocation) {
-	GuardEffect* spark = GuardEffect::Create(guardEffectTex_, spawnLocation);
+	HitEffect* spark = HitEffect::Create(assets_.hitEffectTex, spawnLocation);
 	visualEffects_.push_back(std::unique_ptr<BaseEffect>(spark));
 }
 void GameScene::CreateEnemyDeathParticles(const Vector3& position) {
 	auto particles = std::make_unique<DeathParticles>();
-	particles->Initialize(deathParticleModel.get(), deathParticleTextureHandle_, &camera_, position);
+	particles->Initialize(assets_.deathParticleModel.get(), assets_.deathParticleTex, &camera_, position);    
 	enemyDeathParticles_.push_back(std::move(particles));
 }
 void GameScene::CreateFirearmProjectile(Owner owner, const KamataEngine::Vector3& position, const KamataEngine::Vector2& aimDirection) {
 	auto projectile = std::make_unique<ProjectileBall>();
-	projectile->InitializeAimed(modelProjectileBall_.get(), firearmBallTex_, &camera_, position, aimDirection, owner);
+	projectile->InitializeAimed(assets_.modelProjectileBall.get(), assets_.firearmBallTex, &camera_, position, aimDirection, owner); // CreateFirearmProjectile
 	if (owner == Owner::kPlayer)
 		playerBullets_.push_back(std::move(projectile));
 	else if (owner == Owner::kEnemy)
@@ -608,8 +438,9 @@ void GameScene::ChangePhase() {
 		} else {
 			phase_ = Phase::kDeath;
 			const Vector3& deathParticlesPosition = player_->GetWorldPosition();
-			if (deathParticles_)
-				deathParticles_->Initialize(deathParticleModel.get(), deathParticleTextureHandle_, &camera_, deathParticlesPosition);
+			if (deathParticles_) {
+				deathParticles_->Initialize(assets_.deathParticleModel.get(), assets_.deathParticleTex, &camera_, deathParticlesPosition);
+			}
 		}
 
 		for (std::unique_ptr<BaseEnemy>& enemy : enemies_) {
@@ -619,9 +450,6 @@ void GameScene::ChangePhase() {
 				continue;
 			enemy->Update();
 		}
-#ifdef _DEBUG
-		// enemyTest->Update();
-#endif
 		for (auto& item : droppableItems_) {
 			if (!item)
 				continue;
@@ -708,7 +536,7 @@ void GameScene::ChangePhase() {
 		}
 		if (deathParticles_)
 			deathParticles_->Update();
-		if (deathParticleModel && deathParticles_->IsFinished())
+		if (deathParticles_ && deathParticles_->IsFinished())
 			phase_ = Phase::kRetry;
 		retryMenuInput_.StartButtonFade(true, kButtonFadeDuration);
 		cameraController_->Update();
@@ -811,8 +639,8 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 				worldTransform->Initialize();
 				worldTransform->translation_ = mapChipField_->GetMapChipPositionByIndex(j, i);
 
-				Model* shapeModel = blockModel.get();
-				uint32_t tex = blockTextureHandle;
+				Model* shapeModel = assets_.blockModel.get();
+				uint32_t tex = assets_.blockTex;
 				switch (mapChipType) {
 				case MapChipType::kBlockHalfUp:
 				//	shapeModel = blockHalfUpModel.get();
@@ -823,7 +651,7 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 				//	tex = ResolveBlockTexture(blockHalfDownTexVariants_, subID, blockHalfDownHandle);
 				//	break;
 				default: // kBlock / kSlowBlock keep the cube shape
-					tex = ResolveBlockTexture(blockTexVariants_, subID, blockTextureHandle);
+					tex = assets_.ResolveBlockTexture(assets_.blockTexVariants, subID, assets_.blockTex);
 					break;
 				}
 				worldTransformBlocks_[i][j] = {worldTransform, shapeModel, tex};
@@ -834,8 +662,8 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 				WorldTransform* worldTransform = new WorldTransform;
 				worldTransform->Initialize();
 				worldTransform->translation_ = mapChipField_->GetMapChipPositionByIndex(j, i);
-				uint32_t tex = ResolveBlockTexture(platformTexVariants_, subID, blockPlatformTextureHandle);
-				worldTransformBlocks_[i][j] = {worldTransform, blockPlatformModel.get(), tex};
+				uint32_t tex = assets_.ResolveBlockTexture(assets_.platformTexVariants, subID, assets_.blockPlatformTex);
+				worldTransformBlocks_[i][j] = {worldTransform, assets_.blockPlatformModel.get(), tex};
 			} break;
 			case MapChipType::kArenaCamera: {
 				uint8_t arenaID = mapChipField_->GetMapChipLinkIDByIndex(j, i);
@@ -853,11 +681,11 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 				player_->SetGameScene(this);
 				Vector3 playerPosition = mapChipField_->GetMapChipPositionByIndex(j, i);
 				std::array<PartResources, 3> playerParts = {
-				    {{modelPlayerBody_.get(), playerBodyTex_}, {modelPlayerHead_.get(), playerHeadTex_}, {modelPlayerHat_.get(), playerHatTex_}}
+					{{assets_.modelPlayerBody.get(), assets_.playerBodyTex}, {assets_.modelPlayerHead.get(), assets_.playerHeadTex}, {assets_.modelPlayerHat.get(), assets_.playerHatTex}}
                 };
-				player_->Initialize(playerParts, modelSlashEffect_.get(), slashEffectTex_, &camera_, playerPosition);
-				player_->SetMusketModel(modelMusketLong_.get(), musketLongTex_);
-				player_->SetMeleeModel(modelSabreLight_.get(), texSabreLight_);
+				player_->Initialize(playerParts, assets_.modelSlashEffect.get(), assets_.slashEffectTex, &camera_, playerPosition);
+				player_->SetMusketModel(assets_.modelMusketLong.get(), assets_.musketLongTex);
+				player_->SetMeleeModel(assets_.modelSabreLight.get(), assets_.texSabreLight);
 				cameraController_->SetTarget(player_.get());
 				cameraController_->Reset();
 			} break;
@@ -870,7 +698,7 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 			case MapChipType::kGoal: {
 				Vector3 goalPosition = mapChipField_->GetMapChipPositionByIndex(j, i);
 				goal_ = std::make_unique<Goal>();
-				goal_->Initialize(modelGoal_.get(), goalTex_, &camera_, goalPosition);
+				goal_->Initialize(assets_.modelGoal.get(), assets_.goalTex, &camera_, goalPosition);
 			} break;
 			case MapChipType::kGateUp:
 			case MapChipType::kGateDown:
@@ -880,7 +708,7 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 				uint8_t textureVariant = mapChipField_->GetMapChipSubIDByIndex(j, i);
 				Vector3 gatePosition = mapChipField_->GetMapChipPositionByIndex(j, i);
 				auto gate = std::make_unique<SlidingGate>();
-				gate->Initialize(modelGate_.get(), gateTex_, &camera_, gatePosition, mapChipType, textureVariant, buttonID);
+				gate->Initialize(assets_.modelGate.get(), assets_.gateTex, &camera_, gatePosition, mapChipType, textureVariant, buttonID);
 				GetOrCreateArena(buttonID)->RegisterGate(gate.get()); // [NEW] same ID doubles as arena tag
 				gates_.push_back(std::move(gate));
 			} break;
@@ -888,16 +716,15 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 				uint8_t buttonID = mapChipField_->GetMapChipSubIDByIndex(j, i);
 				Vector3 switchPosition = mapChipField_->GetMapChipPositionByIndex(j, i);
 				auto sw = std::make_unique<SwitchBlock>();
-				sw->Initialize(modelSwitch_.get(), switchTex_, &camera_, switchPosition, buttonID);
+				sw->Initialize(assets_.modelSwitch.get(), assets_.switchTex, &camera_, switchPosition, buttonID);
 				switches_.push_back(std::move(sw));
 			} break;
-			case MapChipType::kArenaTrigger: { // [NEW]
+			case MapChipType::kArenaTrigger: { 
 				uint8_t arenaID = mapChipField_->GetMapChipLinkIDByIndex(j, i);
 				Vector3 triggerPos = mapChipField_->GetMapChipPositionByIndex(j, i);
 				arenaTriggers_.push_back({triggerPos, arenaID, false});
 				ArenaManager* arena = GetOrCreateArena(arenaID);
 
-				// [NEW]
 				Vector3 offsetOverride{};
 				if (GetArenaCameraOffsetOverride(stageManager_->GetCurrentStageIndex(), arenaID, offsetOverride)) {
 					arena->SetCameraOffsetOverride(offsetOverride);
@@ -908,14 +735,6 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 				uint8_t arenaID = mapChipField_->GetMapChipLinkIDByIndex(j, i);
 				Vector3 spawnerPos = mapChipField_->GetMapChipPositionByIndex(j, i);
 
-				// [FIX] Pull the FULL wave config (enemy type, spawn interval,
-				// mode, and max count) out of the spawn table instead of
-				// hard-coding interval=5.0f/kLimited/3 and only ever applying
-				// the resolved enemy type afterward. Previously every
-				// per-arena override of interval/mode/maxSpawnCount in
-				// GetArenaFieldConfigs() was computed by ResolveArenaSpawnEntry
-				// and then silently discarded -- this is why wave customization
-				// never actually took effect in-game.
 				ArenaSpawnEntry waveEntry = ResolveArenaSpawnEntry(stageManager_->GetCurrentStageIndex(), arenaID, enemySubID);
 
 				auto spawner = std::make_unique<EnemySpawner>();
@@ -945,7 +764,7 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 				Vector3 healthBlockPos = mapChipField_->GetMapChipPositionByIndex(j, i);
 				HealthBlock::Mode mode = (subID == 0) ? HealthBlock::Mode::kLimited : HealthBlock::Mode::kTimer;
 				auto healthBlock = std::make_unique<HealthBlock>();
-				healthBlock->Initialize(modelHealthBlock_.get(), healthBlockTex_, &camera_, healthBlockPos, mode);
+				healthBlock->Initialize(assets_.modelHealthBlock.get(), assets_.healthBlockTex, &camera_, healthBlockPos, mode);
 				healthBlocks_.push_back(std::move(healthBlock));
 			} break;
 			default:
@@ -992,9 +811,8 @@ void GameScene::GenerateBackgroundChunkTileMap(uint32_t chunkX, uint32_t chunkY)
 			WorldTransformUpdate(*worldTransform);
 
 			uint8_t subID = backgroundMapChipField_->GetMapChipSubIDByIndex(j, i);
-			uint32_t tex = ResolveBlockTexture(blockTexVariants_, subID, blockTextureHandle);
-
-			worldTransformBackgroundBlocks_[i][j] = {worldTransform, blockModel.get(), tex};
+			uint32_t tex = assets_.ResolveBlockTexture(assets_.blockTexVariants, subID, assets_.blockTex);
+			worldTransformBackgroundBlocks_[i][j] = {worldTransform, assets_.blockModel.get(), tex};
 		}
 	}
 }
@@ -1046,13 +864,10 @@ void GameScene::Update() {
 			pauseMenuInput_.StartButtonFade(true, kButtonFadeDuration);
 		} else if (phase_ == Phase::kPause) {
 			phase_ = phaseBeforePause_;
-		} else {
-			cameraController_->Update();
-			if (phase_ == Phase::kPlay)
-				UpdateInGamePauseButton();
 		}
 	}
-
+	if (phase_ == Phase::kPlay)
+		UpdateInGamePauseButton();
 	if (phase_ == Phase::kPause)
 		UpdatePauseMenu();
 	else if (phase_ == Phase::kRetry)
@@ -1427,10 +1242,10 @@ void GameScene::Draw() {
 	}
 
 	if (phase_ == Phase::kPlay) {
-		cursor_.SetCursorTexture(cursorTex_[0]);
+		cursor_.SetCursorTexture(assets_.cursorTex[0]);
 		DrawInGamePauseButton();
 	} else {
-		cursor_.SetCursorTexture(cursorTex_[1]);
+		cursor_.SetCursorTexture(assets_.cursorTex[1]);
 	}
 	cursor_.Draw();
 	if (fade_) {
@@ -1446,36 +1261,41 @@ BaseEnemy* GameScene::SpawnEnemyAt(const Vector3& position, uint8_t subID) {
 	const size_t enemyCountBefore = enemies_.size();
 	switch (subID) {
 	case 0: {
-		std::array<PartResources, 3> enemyParts = {
-		    {{modelEnemyBody_.get(), enemyBodyTex_}, {modelEnemyHead_.get(), enemyHeadTex_}, {modelEnemyHat_.get(), enemyHatTex_}}
+		std::array<PartResources, 3> parts = {
+		    {{assets_.modelRiflemanBody.get(), assets_.riflemanBodyTex}, {assets_.modelRiflemanHead.get(), assets_.riflemanHeadTex}, {assets_.modelRiflemanHat.get(), assets_.riflemanHatTex}}
         };
 		auto newEnemy = std::make_unique<EnemyRifleman>();
 		newEnemy->SetMapChipField(mapChipField_.get());
 		newEnemy->SetGameScene(this);
-		newEnemy->Initialize(enemyParts, &camera_, position);
-		newEnemy->SetMusketModel(modelMusketBayonet_.get(), musketBayonetTex_);
+		newEnemy->Initialize(parts, &camera_, position);
+		newEnemy->SetMusketModel(assets_.modelMusketBayonet.get(), assets_.musketBayonetTex);
+		newEnemy->SetHUDIconTexture(assets_.enemyIconRiflemanTex);
 		enemies_.push_back(std::move(newEnemy));
 	} break;
 	case 1: {
-		std::array<PartResources, 3> enemyParts = {
-		    {{modelEnemyBody_.get(), enemyBodyTex_}, {modelEnemyHead_.get(), enemyHeadTex_}, {modelEnemyHat_.get(), enemyHatTex_}}
+		std::array<PartResources, 3> parts = {
+		    {{assets_.modelCuirassierBody.get(), assets_.cuirassierBodyTex},
+		     {assets_.modelCuirassierHead.get(), assets_.cuirassierHeadTex},
+		     {assets_.modelCuirassierHat.get(), assets_.cuirassierHatTex}}
         };
 		auto newEnemy = std::make_unique<EnemyCuirassier>();
 		newEnemy->SetMapChipField(mapChipField_.get());
 		newEnemy->SetGameScene(this);
-		newEnemy->Initialize(enemyParts, &camera_, position);
-		newEnemy->SetMeleeModel(modelSabreHeavy_.get(), texSabreHeavy_);
+		newEnemy->Initialize(parts, &camera_, position);
+		newEnemy->SetMeleeModel(assets_.modelSabreHeavy.get(), assets_.texSabreHeavy);
+		newEnemy->SetHUDIconTexture(assets_.enemyIconCuirassierTex);
 		enemies_.push_back(std::move(newEnemy));
 	} break;
 	case 2: {
-		std::array<PartResources, 3> enemyParts = {
-		    {{modelEnemyBody_.get(), enemyBodyTex_}, {modelEnemyHead_.get(), enemyHeadTex_}, {modelEnemyHat_.get(), enemyHatTex_}}
+		std::array<PartResources, 3> parts = {
+		    {{assets_.modelFighterBody.get(), assets_.fighterBodyTex}, {assets_.modelFighterHead.get(), assets_.fighterHeadTex}, {assets_.modelFighterHat.get(), assets_.fighterHatTex}}
         };
 		auto newEnemy = std::make_unique<EnemyFighter>();
 		newEnemy->SetMapChipField(mapChipField_.get());
 		newEnemy->SetGameScene(this);
-		newEnemy->Initialize(enemyParts, &camera_, position);
-		newEnemy->SetMeleeModel(modelSabreLight_.get(), texSabreLight_);
+		newEnemy->Initialize(parts, &camera_, position);
+		newEnemy->SetMeleeModel(assets_.modelSabreLight.get(), assets_.texSabreLight);
+		newEnemy->SetHUDIconTexture(assets_.enemyIconFighterTex);
 		enemies_.push_back(std::move(newEnemy));
 	} break;
 	default:
@@ -1486,56 +1306,57 @@ BaseEnemy* GameScene::SpawnEnemyAt(const Vector3& position, uint8_t subID) {
 		return nullptr;
 
 	BaseEnemy* spawned = enemies_.back().get();
-	// BaseEnemy::Initialize starts with rotation_.y facing left while lrDirection_ is kRight (Cuirassier never
-	// overrides it), and FaceDirection(kRight) early-outs, so a right-facing enemy kept a left-facing body
-	// with right-facing weapons. Snap body + direction together on spawn.
 	spawned->GetBehaviorModule().SnapFacing(static_cast<int>(BaseEnemy::LRDirection::kRight));
 	return spawned;
 }
 
-void GameScene::ApplyEnemyPlacementState(BaseEnemy* enemy, uint8_t placementState) {
+void GameScene::UpdateEnemySpawning() {
+	if (!player_ || phase_ != Phase::kPlay)
+		return;
+
+	const Vector3 playerPos = player_->GetWorldPosition();
+	for (EnemySpawnPoint& sp : enemySpawnPoints_) {
+		if (sp.spawned)
+			continue;
+
+		bool omniscient = (sp.placementState & static_cast<uint8_t>(EnemyPlacementState::kOmniscient)) != 0;
+		bool shouldSpawn = false;
+		if (omniscient) {
+			// spawns as soon as its chunk is loaded, regardless of distance
+			uint32_t chunk = static_cast<uint32_t>(std::max(0.0f, sp.position.x) / kChunkWorldWidth);
+			shouldSpawn = chunk >= oldestLoadedChunk_ && chunk < loadedChunkCount_;
+		} else {
+			float dx = std::abs(sp.position.x - playerPos.x);
+			float dy = std::abs(sp.position.y - playerPos.y);
+			shouldSpawn = dx <= kEnemySpawnActivateDistance && dy <= kEnemySpawnActivateDistance;
+		}
+
+		if (shouldSpawn) {
+			BaseEnemy* spawned = SpawnEnemyAt(sp.position, sp.subID);
+			ApplyEnemyPlacementState(spawned, sp.placementState);
+			sp.spawned = true;
+		}
+	}
+}
+
+void GameScene::ApplyEnemyPlacementState(BaseEnemy* enemy, uint8_t state) {
 	if (!enemy)
 		return;
-	switch (static_cast<EnemyPlacementState>(placementState)) {
-	case EnemyPlacementState::kHoldLeft:
+	auto has = [state](EnemyPlacementState flag) { return (state & static_cast<uint8_t>(flag)) != 0; };
+
+	// 1 = hold left, 2 = hold right (both set = original behaviour), 4 = omniscient. Flags can be combined.
+	bool holdLeft = has(EnemyPlacementState::kHoldLeft);
+	bool holdRight = has(EnemyPlacementState::kHoldRight);
+	if (holdLeft && !holdRight)
 		enemy->GetBehaviorModule().SetPostMode(BaseEnemyBehavior::PostMode::kHoldLeft);
-		break;
-	case EnemyPlacementState::kHoldRight:
+	else if (holdRight && !holdLeft)
 		enemy->GetBehaviorModule().SetPostMode(BaseEnemyBehavior::PostMode::kHoldRight);
-		break;
-	case EnemyPlacementState::kOmniscient:
-		// Same setup EnemySpawner uses for arena enemies.
+
+	if (has(EnemyPlacementState::kOmniscient)) {
 		enemy->SetIgnoreEquipStates(true);
 		if (player_)
 			enemy->ReceiveAlert(player_->GetWorldPosition());
 		enemy->SetPersistentAwareness(true);
-		break;
-	case EnemyPlacementState::kWander:
-	default: // 3 and anything else: original behavior
-		break;
-	}
-}
-
-void GameScene::UpdateEnemySpawning() {
-	if (!player_)
-		return;
-	Vector3 playerPos = player_->GetWorldPosition();
-	for (EnemySpawnPoint& spawnPoint : enemySpawnPoints_) {
-		if (spawnPoint.spawned)
-			continue;
-		bool shouldSpawn = false;
-		if (spawnPoint.placementState == static_cast<uint8_t>(EnemyPlacementState::kOmniscient)) {
-			// Omniscient enemies spawn as soon as their chunk is loaded, regardless of distance.
-			uint32_t chunk = static_cast<uint32_t>(std::max(0.0f, spawnPoint.position.x) / kChunkWorldWidth);
-			shouldSpawn = chunk >= oldestLoadedChunk_ && chunk < loadedChunkCount_;
-		} else {
-			shouldSpawn = std::abs(spawnPoint.position.x - playerPos.x) <= kEnemySpawnActivateDistance;
-		}
-		if (shouldSpawn) {
-			BaseEnemy* spawned = SpawnEnemyAt(spawnPoint.position, spawnPoint.subID);
-			ApplyEnemyPlacementState(spawned, spawnPoint.placementState);
-			spawnPoint.spawned = true;
-		}
 	}
 }
 
@@ -1551,20 +1372,20 @@ void GameScene::CreateDroppableItem(const Vector3& position, DropItemCategory ca
 	uint32_t tex = 0;
 	switch (kind) {
 	case DropWeaponKind::kSabreLight:
-		model = modelSabreLight_.get();
-		tex = texSabreLight_;
+		model = assets_.modelSabreLight.get();
+		tex = assets_.texSabreLight;
 		break;
 	case DropWeaponKind::kSabreHeavy:
-		model = modelSabreHeavy_.get();
-		tex = texSabreHeavy_;
+		model = assets_.modelSabreHeavy.get();
+		tex = assets_.texSabreHeavy;
 		break;
 	case DropWeaponKind::kMusketLong:
-		model = modelMusketLong_.get();
-		tex = musketLongTex_;
+		model = assets_.modelMusketLong.get();
+		tex = assets_.musketLongTex;
 		break;
 	case DropWeaponKind::kMusketBayonet:
-		model = modelMusketBayonet_.get();
-		tex = musketBayonetTex_;
+		model = assets_.modelMusketBayonet.get();
+		tex = assets_.musketBayonetTex;
 		break;
 	default:
 		break;
@@ -1579,32 +1400,32 @@ void GameScene::CreateDroppableItem(const Vector3& position, DropItemCategory ca
 void GameScene::ApplyItemPickup(const DroppableItem& item) {
 	Vector3 dropPos = player_->GetWorldPosition();
 
-	if (sfxItemPickupHandle_ != 0) {
-		Audio::GetInstance()->PlayWave(sfxItemPickupHandle_, false, 1.0f);
+	if (assets_.sfxItemPickup != 0) {
+		Audio::GetInstance()->PlayWave(assets_.sfxItemPickup, false, 1.0f);
 	}
 
 	switch (item.GetWeaponKind()) {
 	case DropWeaponKind::kSabreLight:
 		CreateDroppableItem(dropPos, DropItemCategory::kMelee, player_->GetCurrentMeleeKind());
-		player_->SetMeleeModel(modelSabreLight_.get(), texSabreLight_);
+		player_->SetMeleeModel(assets_.modelSabreLight.get(), assets_.texSabreLight);
 		player_->SetCurrentMeleeKind(DropWeaponKind::kSabreLight);
 		player_->SetWeaponMode(Player::WeaponMode::kMelee);
 		break;
 	case DropWeaponKind::kSabreHeavy:
 		CreateDroppableItem(dropPos, DropItemCategory::kMelee, player_->GetCurrentMeleeKind());
-		player_->SetMeleeModel(modelSabreHeavy_.get(), texSabreHeavy_);
+		player_->SetMeleeModel(assets_.modelSabreHeavy.get(), assets_.texSabreHeavy);
 		player_->SetCurrentMeleeKind(DropWeaponKind::kSabreHeavy);
 		player_->SetWeaponMode(Player::WeaponMode::kMelee);
 		break;
 	case DropWeaponKind::kMusketLong:
 		CreateDroppableItem(dropPos, DropItemCategory::kFirearm, player_->GetCurrentFirearmKind());
-		player_->SetMusketModel(modelMusketLong_.get(), musketLongTex_);
+		player_->SetMusketModel(assets_.modelMusketLong.get(), assets_.musketLongTex);
 		player_->SetCurrentFirearmKind(DropWeaponKind::kMusketLong);
 		player_->SetWeaponMode(Player::WeaponMode::kFirearm);
 		break;
 	case DropWeaponKind::kMusketBayonet:
 		CreateDroppableItem(dropPos, DropItemCategory::kFirearm, player_->GetCurrentFirearmKind());
-		player_->SetMusketModel(modelMusketBayonet_.get(), musketBayonetTex_);
+		player_->SetMusketModel(assets_.modelMusketBayonet.get(), assets_.musketBayonetTex);
 		player_->SetCurrentFirearmKind(DropWeaponKind::kMusketBayonet);
 		player_->SetWeaponMode(Player::WeaponMode::kFirearm);
 		break;
@@ -1770,8 +1591,8 @@ void GameScene::TriggerLevelClear() {
 	phase_ = Phase::kVictory;
 	victoryMenuInput_.StartButtonFade(true, kButtonFadeDuration);
 
-	if (sfxGoalReachedHandle_ != 0) {
-		Audio::GetInstance()->PlayWave(sfxGoalReachedHandle_, false, 1.0f);
+	if (assets_.sfxGoalReached != 0) {
+		Audio::GetInstance()->PlayWave(assets_.sfxGoalReached, false, 1.0f);
 	}
 	if (stageManager_)
 		stageManager_->ClearCheckpoint();
@@ -1846,15 +1667,15 @@ void GameScene::TryInteract() {
 
 	if (nearestInteractableSwitch_ && !nearestInteractableSwitch_->IsPressed()) {
 		nearestInteractableSwitch_->SetPressed(true);
-		if (sfxSwitchPressHandle_ != 0) {
-			Audio::GetInstance()->PlayWave(sfxSwitchPressHandle_, false, 1.0f);
+		if (assets_.sfxSwitchPress != 0) {
+			Audio::GetInstance()->PlayWave(assets_.sfxSwitchPress, false, 1.0f);
 		}
 		uint8_t buttonID = nearestInteractableSwitch_->GetButtonID();
 		for (auto& gate : gates_) {
 			if (gate && gate->GetButtonID() == buttonID) {
 				gate->Open();
-				if (sfxGateOpenHandle_ != 0) {
-					Audio::GetInstance()->PlayWave(sfxGateOpenHandle_, false, 1.0f);
+				if (assets_.sfxGateOpen != 0) {
+					Audio::GetInstance()->PlayWave(assets_.sfxGateOpen, false, 1.0f);
 				}
 			}
 		}
