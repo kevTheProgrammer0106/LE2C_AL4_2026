@@ -55,7 +55,7 @@ void GameAssets::LoadModelsAndTextures() {
 	modelFighterHat.reset(Model::CreateFromOBJ("fighterHat", true));
 	fighterBodyTex = TextureManager::Load("./Resources/fighterBody/fighterTorso.png");
 	fighterHeadTex = TextureManager::Load("./Resources/fighterHead/fighterHead.png");
-	fighterHatTex = TextureManager::Load("./Resources/fighterHat/fighterCap.png");
+	fighterHatTex = TextureManager::Load("./Resources/fighterHat/fighterShako.png");
 
 	// --- Effects ---
 	slashEffectTex = TextureManager::Load("./Resources/hit_effect/hit_effect.png");
