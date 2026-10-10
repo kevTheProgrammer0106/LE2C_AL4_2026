@@ -95,8 +95,11 @@ public:
 	uint32_t enemyIconArrowTex = 0;
 	uint32_t healthBarBackgroundTex = 0;
 	uint32_t healthBarFillTex = 0;
-	uint32_t meleeIconTex = 0;
-	uint32_t firearmIconTex = 0;
+	uint32_t meleeIconLightTex = 0;
+	uint32_t meleeIconHeavyTex = 0;
+	uint32_t firearmIconLongTex = 0;
+	uint32_t firearmIconBayonetTex = 0;
+	uint32_t bayonetLungeIconTex = 0;
 	uint32_t interactionPromptTex = 0;
 
 	// --- Menus / cursor ---
@@ -112,7 +115,6 @@ public:
 
 	// --- Audio: weapons ---
 	uint32_t sfxFirearmFire = 0;
-	uint32_t sfxFirearmReload = 0;
 	uint32_t sfxMusketLoaded = 0;
 	uint32_t sfxMeleeSwingDefault = 0;
 	uint32_t sfxSwingRight = 0;
@@ -144,6 +146,12 @@ public:
 	uint32_t sfxGateOpen = 0;
 	uint32_t sfxGoalReached = 0;
 	uint32_t sfxItemPickup = 0; // not loaded anywhere yet (was always 0 in GameScene); set it here when you have a file
+
+	// -- Audio: arena / wave ---
+	uint32_t sfxArenaStart = 0;
+	uint32_t sfxWaveStart = 0;
+	uint32_t sfxWaveEnd = 0;
+	uint32_t sfxArenaClear = 0;
 
 	uint32_t ResolveBlockTexture(const std::unordered_map<uint8_t, uint32_t>& table, uint8_t subID, uint32_t defaultTex) const {
 		auto it = table.find(subID);

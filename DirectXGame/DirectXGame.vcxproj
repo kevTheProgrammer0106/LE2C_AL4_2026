@@ -205,6 +205,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClCompile Include="FighterBehavior.cpp" />
     <ClCompile Include="FirearmMusket.cpp" />
     <ClCompile Include="FirearmMusketBayonet.cpp" />
+    <ClCompile Include="FirearmShotgun.cpp" />
     <ClCompile Include="GameAssets.cpp" />
     <ClCompile Include="GameScene.cpp" />
     <ClCompile Include="Global.cpp" />
@@ -266,6 +267,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClInclude Include="FighterBehavior.h" />
     <ClInclude Include="FirearmMusket.h" />
     <ClInclude Include="FirearmMusketBayonet.h" />
+    <ClInclude Include="FirearmShotgun.h" />
     <ClInclude Include="GameAssets.h" />
     <ClInclude Include="GameScene.h" />
     <ClInclude Include="Global.h" />

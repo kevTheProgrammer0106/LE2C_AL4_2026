@@ -25,8 +25,11 @@ void PlayerBehavior::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "KnockBackSpeedY", kKnockBackSpeedY);
 	gv->AddItem(kGroupName, "KnockBackDuration", static_cast<int32_t>(kKnockBackDuration));
 	gv->AddItem(kGroupName, "HitEffectOffset", kHitEffectOffset);
-	gv->AddItem(kGroupName, "HitKnockbackHopSpeed", kHitKnockbackHopSpeed); // [NEW]
-	gv->AddItem(kGroupName, "StunHopSpeed", kStunHopSpeed);                 // [NEW]
+	gv->AddItem(kGroupName, "HitKnockbackHopSpeed", kHitKnockbackHopSpeed); 
+	gv->AddItem(kGroupName, "StunHopSpeed", kStunHopSpeed);
+	RegisterBodyComboPoseSet(kGroupName, "BodyCombo", kBodyCombo);
+	RegisterBodyLungePoseSet(kGroupName, "BodyLungeHeavy", kBodyLungeHeavy);
+	RegisterBodyLungePoseSet(kGroupName, "BodyLungeBayonet", kBodyLungeBayonet);
 }
 void PlayerBehavior::ApplyGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
@@ -42,8 +45,12 @@ void PlayerBehavior::ApplyGlobalVariables() {
 	kKnockBackSpeedY = gv->GetFloatValue(kGroupName, "KnockBackSpeedY");
 	kKnockBackDuration = static_cast<uint32_t>(gv->GetIntValue(kGroupName, "KnockBackDuration"));
 	kHitEffectOffset = gv->GetFloatValue(kGroupName, "HitEffectOffset");
-	kHitKnockbackHopSpeed = gv->GetFloatValue(kGroupName, "HitKnockbackHopSpeed"); // [NEW]
-	kStunHopSpeed = gv->GetFloatValue(kGroupName, "StunHopSpeed");                 // [NEW]
+	kHitKnockbackHopSpeed = gv->GetFloatValue(kGroupName, "HitKnockbackHopSpeed"); 
+	kStunHopSpeed = gv->GetFloatValue(kGroupName, "StunHopSpeed"); 
+	ApplyBodyComboPoseSet(kGroupName, "BodyCombo", kBodyCombo);
+	// Apply:
+	ApplyBodyLungePoseSet(kGroupName, "BodyLungeHeavy", kBodyLungeHeavy);
+	ApplyBodyLungePoseSet(kGroupName, "BodyLungeBayonet", kBodyLungeBayonet);
 }
 
 void PlayerBehavior::ResolveBehaviorRequest() {
@@ -59,7 +66,8 @@ void PlayerBehavior::ResolveBehaviorRequest() {
 		break;
 	case Behavior::kAttack:
 		BehaviorAttackInitialize();
-		if (owner_.GetCurrentMelee())
+		// Combo and heavy-sabre lunge drive the melee weapon's pose; the bayonet lunge drives the firearm instead.
+		if (owner_.GetCurrentMelee() && (attackKind_ == AttackKind::kCombo || lungeSource_ == LungeSource::kHeavySabre))
 			owner_.GetCurrentMelee()->SetBehavior(BaseMelee::MeleeBehavior::kAttacking);
 		break;
 	case Behavior::kKnockback:
@@ -74,6 +82,12 @@ void PlayerBehavior::ResolveBehaviorRequest() {
 	case Behavior::kDeath:
 		BehaviorDeathInitialize();
 		break;
+	}
+	if (behavior_ != Behavior::kAttack) {
+		if (BaseMelee* melee = owner_.GetCurrentMelee())
+			melee->SetBehavior(BaseMelee::MeleeBehavior::kIdle);
+		attackKind_ = AttackKind::kCombo;
+		lungeSource_ = LungeSource::kNone;
 	}
 	behaviorRequest_ = Behavior::kUnknown;
 }
@@ -112,8 +126,6 @@ void PlayerBehavior::RequestAttack(AttackDirection direction) {
 	if (owner_.IsControlLocked()) {
 		return;
 	}
-	// [FIX] ノックバック/スタン/死亡中(およびそれらの要求が保留中)は攻撃で上書きさせない。
-	// 以前はkStunnedが抜けていて、スタン中でも攻撃でスタンを破れた。
 	if (behavior_ == Behavior::kKnockback || behavior_ == Behavior::kStunned || behavior_ == Behavior::kDeath) {
 		return;
 	}
@@ -124,13 +136,10 @@ void PlayerBehavior::RequestAttack(AttackDirection direction) {
 		comboIndex_ = 0;
 		isAttacking_ = true;
 		attackDirection_ = direction;
+		attackKind_ = AttackKind::kCombo;
+		lungeSource_ = LungeSource::kNone;
 		behaviorRequest_ = Behavior::kAttack;
-	} else if (attackPhase_ == AttackPhase::kAnticipate) {
-		comboIndex_ = 0;
-		comboInputBuffered_ = false;
-		attackDirection_ = direction;
-		behaviorRequest_ = Behavior::kAttack;
-	} else if (attackPhase_ == AttackPhase::kRecovery) {
+	} else if (attackPhase_ != AttackPhase::kAnticipate) {
 		comboInputBuffered_ = true;
 	}
 }
@@ -159,7 +168,23 @@ void PlayerBehavior::RequestDeath(const Vector3& direction, float power) {
 	deathPower_ = power;
 	behaviorRequest_ = Behavior::kDeath;
 }
-
+void PlayerBehavior::RequestLunge(LungeSource source) {
+	if (owner_.IsControlLocked())
+		return;
+	if (behavior_ == Behavior::kKnockback || behavior_ == Behavior::kStunned || behavior_ == Behavior::kDeath)
+		return;
+	if (behaviorRequest_ == Behavior::kKnockback || behaviorRequest_ == Behavior::kStunned || behaviorRequest_ == Behavior::kDeath)
+		return;
+	if (isAttacking_)
+		return;
+	comboIndex_ = 0;
+	comboInputBuffered_ = false;
+	isAttacking_ = true;
+	attackDirection_ = AttackDirection::kSide;
+	attackKind_ = AttackKind::kLunge;
+	lungeSource_ = source;
+	behaviorRequest_ = Behavior::kAttack;
+}
 void PlayerBehavior::SetBlocking(bool blocking) {
 	isBlocking_ = blocking;
 	if (blocking && behavior_ == Behavior::kRoot) {
@@ -259,41 +284,35 @@ void PlayerBehavior::RequestKnockback(float pushDirectionSign) {
 
 PlayerBehavior::AttackAnimState PlayerBehavior::GetAttackAnimState() const {
 	float duration = 1.0f;
-	const BaseMelee* melee = owner_.GetCurrentMelee();
-	switch (attackPhase_) {
-	case AttackPhase::kAnticipate:
-		duration = melee ? melee->GetComboAnticipateDuration(comboIndex_) : duration;
-		break;
-	case AttackPhase::kAttack:
-		duration = melee ? melee->GetComboAttackDuration(comboIndex_) : duration;
-		break;
-	case AttackPhase::kRecovery:
-		duration = melee ? melee->GetComboRecoveryDuration(comboIndex_) : duration;
-		break;
+	if (attackKind_ == AttackKind::kLunge) {
+		const LungeSpec spec = owner_.GetLungeSpec(lungeSource_);
+		duration = (attackPhase_ == AttackPhase::kAnticipate) ? spec.anticipateFrames : (attackPhase_ == AttackPhase::kAttack) ? spec.attackFrames : spec.recoveryFrames;
+	} else {
+		const BaseMelee* melee = owner_.GetCurrentMelee();
+		switch (attackPhase_) {
+		case AttackPhase::kAnticipate:
+			duration = melee ? melee->GetComboAnticipateDuration(comboIndex_, Owner::kPlayer) : duration;
+			break;
+		case AttackPhase::kAttack:
+			duration = melee ? melee->GetComboAttackDuration(comboIndex_, Owner::kPlayer) : duration;
+			break;
+		case AttackPhase::kRecovery:
+			duration = melee ? melee->GetComboRecoveryDuration(comboIndex_, Owner::kPlayer) : duration;
+			break;
+		}
 	}
 	float t = (duration > 0.0f) ? static_cast<float>(attackParameter_) / duration : 0.0f;
 	return {attackPhase_, std::clamp(t, 0.0f, 1.0f), comboIndex_};
 }
 
 SRTOffset PlayerBehavior::GetAttackPoseOffset() const {
-	AttackAnimState state = GetAttackAnimState();
-	int idx = std::clamp(state.comboIndex, 0, static_cast<int>(kComboPosePeak.size()) - 1);
-	switch (state.phase) {
-	case AttackPhase::kAnticipate: {
-		float te = EaseIn(0.0f, 1.0f, state.t);
-		return LerpSRT(kNeutralPose, kComboPoseAnticipate[idx], te);
+	AttackAnimState s = GetAttackAnimState();
+	BodyAttackPhase phase = static_cast<BodyAttackPhase>(static_cast<int>(s.phase));
+	if (attackKind_ == AttackKind::kLunge) {
+		const BodyLungePoseSet& set = (lungeSource_ == LungeSource::kBayonet) ? kBodyLungeBayonet : kBodyLungeHeavy;
+		return EvaluateBodyLungePose(set, phase, s.t);
 	}
-	case AttackPhase::kAttack: {
-		float te = EaseOut(0.0f, 1.0f, state.t);
-		return LerpSRT(kComboPoseAnticipate[idx], kComboPosePeak[idx], te);
-	}
-	case AttackPhase::kRecovery: {
-		float te = EaseInOut(0.0f, 1.0f, state.t);
-		return LerpSRT(kComboPoseRecovery[idx], kNeutralPose, te);
-	}
-	default:
-		return kNeutralPose;
-	}
+	return EvaluateBodyComboPose(kBodyCombo, phase, s.t, s.comboIndex);
 }
 
 #pragma region BehaviorStates
@@ -309,12 +328,22 @@ void PlayerBehavior::BehaviorAttackInitialize() {
 	attackParameter_ = 0;
 	attackPhase_ = AttackPhase::kAnticipate;
 	attackVelocity_ = {0.0f, 0.0f, 0.0f};
+
+	if (attackKind_ == AttackKind::kLunge) {
+		owner_.ResetLungeHits();
+		owner_.BeginLungeCooldown(lungeSource_); // cooldown starts the moment the lunge is launched
+		return;
+	}
 	if (BaseMelee* melee = owner_.GetCurrentMelee()) {
 		melee->ResetSwingHits();
 		melee->PlaySwingSound(comboIndex_);
 	}
 }
 void PlayerBehavior::BehaviorAttackUpdate() {
+	if (attackKind_ == AttackKind::kLunge) {
+		BehaviorLungeUpdate();
+		return;
+	}
 	++attackParameter_;
 
 	BaseMelee* melee = owner_.GetCurrentMelee();
@@ -328,7 +357,7 @@ void PlayerBehavior::BehaviorAttackUpdate() {
 	case AttackPhase::kAnticipate:
 	default: {
 		attackVelocity_ = {0.0f, 0.0f, 0.0f};
-		float anticipateDuration = melee ? melee->GetComboAnticipateDuration(comboIndex_) : 10.0f;
+		float anticipateDuration = melee ? melee->GetComboAnticipateDuration(comboIndex_, Owner::kPlayer) : 10.0f;
 		if (static_cast<float>(attackParameter_) >= anticipateDuration) {
 			attackPhase_ = AttackPhase::kAttack;
 			attackParameter_ = 0;
@@ -337,7 +366,7 @@ void PlayerBehavior::BehaviorAttackUpdate() {
 	}
 	case AttackPhase::kAttack: {
 		if (attackDirection_ == AttackDirection::kSide) {
-			float speed = melee ? melee->GetComboAttackSpeed(comboIndex_) : 0.25f;
+			float speed = melee ? melee->GetComboAttackSpeed(comboIndex_, Owner::kPlayer) : 0.25f;
 			attackVelocity_.x = (owner_.lrDirection_ == Player::LRDirection::kRight) ? speed : -speed;
 		} else {
 			attackVelocity_ = {0.0f, 0.0f, 0.0f};
@@ -351,7 +380,7 @@ void PlayerBehavior::BehaviorAttackUpdate() {
 		owner_.worldTransformAttack_.translation_ = owner_.worldTransform_.translation_ + facingOffset;
 		owner_.worldTransformAttack_.rotation_ = owner_.worldTransform_.rotation_;
 
-		float attackDuration = melee ? melee->GetComboAttackDuration(comboIndex_) : 8.0f;
+		float attackDuration = melee ? melee->GetComboAttackDuration(comboIndex_, Owner::kPlayer) : 8.0f;
 		if (static_cast<float>(attackParameter_) >= attackDuration) {
 			attackPhase_ = AttackPhase::kRecovery;
 			attackParameter_ = 0;
@@ -360,7 +389,7 @@ void PlayerBehavior::BehaviorAttackUpdate() {
 	}
 	case AttackPhase::kRecovery: {
 		attackVelocity_ = {0.0f, 0.0f, 0.0f};
-		float recoveryDuration = melee ? melee->GetComboRecoveryDuration(comboIndex_) : 15.0f;
+		float recoveryDuration = melee ? melee->GetComboRecoveryDuration(comboIndex_, Owner::kPlayer) : 15.0f;
 		if (static_cast<float>(attackParameter_) >= recoveryDuration) {
 			if (comboInputBuffered_ && comboIndex_ + 1 < maxCombo) {
 				comboIndex_++;
@@ -404,7 +433,54 @@ void PlayerBehavior::BehaviorAttackUpdate() {
 	WorldTransformUpdate(owner_.worldTransform_);
 	WorldTransformUpdate(owner_.worldTransformAttack_);
 }
+void PlayerBehavior::BehaviorLungeUpdate() {
+	++attackParameter_; 
 
+	const LungeSpec spec = owner_.GetLungeSpec(lungeSource_);
+	const bool right = (owner_.lrDirection_ == Player::LRDirection::kRight);
+	owner_.worldTransform_.rotation_.y = right ? 1.570796f : 4.712389f;
+
+	switch (attackPhase_) {
+	case AttackPhase::kAnticipate:
+	default:
+		attackVelocity_ = {0.0f, 0.0f, 0.0f};
+		if (static_cast<float>(attackParameter_) >= spec.anticipateFrames) {
+			attackPhase_ = AttackPhase::kAttack;
+			attackParameter_ = 0;
+			owner_.PlayLungeSound(lungeSource_);
+		}
+		break;
+	case AttackPhase::kAttack:
+		// stop pushing forward once the lunge has connected
+		if (owner_.HasLungeHits())
+			attackVelocity_ = {0.0f, 0.0f, 0.0f};
+		else
+			attackVelocity_ = {right ? spec.speed : -spec.speed, 0.0f, 0.0f};
+		if (static_cast<float>(attackParameter_) >= spec.attackFrames) {
+			attackPhase_ = AttackPhase::kRecovery;
+			attackParameter_ = 0;
+		}
+		break;
+	case AttackPhase::kRecovery:
+		attackVelocity_ = {0.0f, 0.0f, 0.0f};
+		if (static_cast<float>(attackParameter_) >= spec.recoveryFrames) {
+			behaviorRequest_ = Behavior::kRoot;
+			isAttacking_ = false;
+			comboIndex_ = 0;
+			comboInputBuffered_ = false;
+		}
+		break;
+	}
+
+	if (!owner_.onGround_) {
+		owner_.velocity_.y -= Player::kGravityAcceleration;
+		owner_.velocity_.y = std::max(owner_.velocity_.y, -Player::kLimitFallSpeed);
+	}
+	CollisionInfo collisionMapInfo;
+	collisionMapInfo.move = {attackVelocity_.x, owner_.velocity_.y, 0.0f};
+	owner_.MapChipCollisionUpdate(collisionMapInfo);
+	WorldTransformUpdate(owner_.worldTransform_);
+}
 void PlayerBehavior::BehaviorKnockbackInitialize() {
 	owner_.worldTransform_.scale_ = {1.0f, 1.0f, 1.0f};
 	knockBackParameter_ = 0;
@@ -422,7 +498,8 @@ void PlayerBehavior::BehaviorKnockbackUpdate() {
 
 	CollisionInfo collisionMapInfo;
 	collisionMapInfo.move = owner_.velocity_;
-	owner_.MapChipCollisionUpdate(collisionMapInfo);
+	owner_.MapChipCollisionUpdate(collisionMapInfo, true); 
+
 
 	if (knockBackParameter_ >= kKnockBackDuration)
 		behaviorRequest_ = Behavior::kRoot;

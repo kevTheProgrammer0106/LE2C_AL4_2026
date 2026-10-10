@@ -1,12 +1,29 @@
 #pragma once
 
+#define NOMINMAX
+
 #include "Global.h"
 #include <KamataEngine.h>
+#include <algorithm>
+#include <array>
+#include <vector>
+
+class Player; // FIX: was used below without any declaration
 
 enum class WeaponState { kHolstered, kEquipped };
 
+/// Melee weapon base.
+/// Equip state, pose blending (player + enemy), swing AABBs are all implemented HERE once.
+/// Derived weapons (WeaponSabre / WeaponHeavySabre) only supply their data through the pure-virtual getters.
 class BaseMelee {
 public:
+	enum class AttackPhase { kAnticipate, kAttack, kRecovery };
+	struct GenericAttackAnimState {
+		AttackPhase phase = AttackPhase::kAnticipate;
+		float t = 0.0f;
+		int comboIndex = 0;
+	};
+
 	enum class MeleeBehavior { kIdle, kAttacking };
 	MeleeBehavior behavior_ = MeleeBehavior::kIdle;
 
@@ -19,6 +36,8 @@ public:
 	virtual void BehaviorAttackingInitialize() {}
 	virtual void BehaviorAttackingUpdate() {}
 
+	// FIX: no longer plays the default swing sound here. Every caller already calls PlaySwingSound(comboIndex),
+	// so the swing used to play twice.
 	void SetBehavior(MeleeBehavior behavior) {
 		if (behavior_ == behavior)
 			return;
@@ -29,10 +48,28 @@ public:
 			break;
 		case MeleeBehavior::kAttacking:
 			BehaviorAttackingInitialize();
-			PlayDefaultSwingSound();
 			break;
 		}
 	}
+
+	// ---------------- Equip state (was duplicated in both sabres; base versions were declared but never defined) ----------------
+	virtual void SetWeaponState(WeaponState state);
+	virtual void UpdateWeaponState();
+	virtual void SnapWeaponState(WeaponState state);
+	void SetEquipDuration(float seconds);
+	float GetEquipDuration() const { return equipDuration_; }
+	WeaponState GetWeaponState() const { return weaponState_; }
+
+	// ---------------- Pose / hitbox (shared) ----------------
+	// Player-driven
+	virtual void SetMeleePosition(const Player& player);
+	virtual AABB GetSwingAABB(const Player& player, int comboIndex) const;
+	// Enemy-driven (any owner)
+	virtual void SetMeleePositionGeneric(const KamataEngine::Vector3& ownerPosition, const KamataEngine::Vector3& ownerRotation, bool facingRight, const GenericAttackAnimState* attackState);
+	virtual AABB GetSwingAABBGeneric(const KamataEngine::Vector3& ownerPosition, bool facingRight, int comboIndex) const;
+
+	// Dropped mid-swing = on cooldown. Picking it up again restarts the draw animation instead of resuming the swing.
+	virtual DropItemState GetDropState() const { return IsAttacking() ? DropItemState::kOnCooldown : DropItemState::kReady; }
 
 	// ---- Animation offsets: override per weapon ----
 	virtual const SRTOffset& GetHolsterOffset() const { return kDefaultHolsterOffset; }
@@ -107,18 +144,26 @@ public:
 	void SetHalfDepthMax(float& v) { kHalfDepthMax = v; }
 
 	int GetMaxCombo() const { return kMaxCombo; }
-	float GetComboAttackSpeed(int comboIndex) const { return kComboAttackSpeed[comboIndex]; }
-	float GetComboAnticipateDuration(int comboIndex) const { return kComboAnticipateDuration[comboIndex]; }
-	float GetComboAttackDuration(int comboIndex) const { return kComboAttackDuration[comboIndex]; }
-	float GetComboRecoveryDuration(int comboIndex) const { return kComboRecoveryDuration[comboIndex]; }
 
-	enum class AttackPhase { kAnticipate, kAttack, kRecovery };
-	struct GenericAttackAnimState {
-		AttackPhase phase = AttackPhase::kAnticipate;
-		float t = 0.0f;
-		int comboIndex = 0;
-	};
-	virtual float GetImpactPower(int comboIndex) const { return kBaseImpactPower + static_cast<float>(comboIndex) * kImpactPowerStep; }
+	// ---- コンボの前進速度・各フェーズ時間(フレーム): プレイヤー用/敵用を分離 ----
+	float GetComboAttackSpeed(int comboIndex, Owner owner) const { return (owner == Owner::kPlayer) ? kComboAttackSpeedPlayer[comboIndex] : kComboAttackSpeedEnemy[comboIndex]; }
+	float GetComboAnticipateDuration(int comboIndex, Owner owner) const { return (owner == Owner::kPlayer) ? kComboAnticipateDurationPlayer[comboIndex] : kComboAnticipateDurationEnemy[comboIndex]; }
+	float GetComboAttackDuration(int comboIndex, Owner owner) const { return (owner == Owner::kPlayer) ? kComboAttackDurationPlayer[comboIndex] : kComboAttackDurationEnemy[comboIndex]; }
+	float GetComboRecoveryDuration(int comboIndex, Owner owner) const { return (owner == Owner::kPlayer) ? kComboRecoveryDurationPlayer[comboIndex] : kComboRecoveryDurationEnemy[comboIndex]; }
+
+	// 旧シグネチャ(Ownerなし)は敵用として残す。プレイヤー側の呼び出しは必ずOwner::kPlayerを渡すこと
+	float GetComboAttackSpeed(int comboIndex) const { return GetComboAttackSpeed(comboIndex, Owner::kEnemy); }
+	float GetComboAnticipateDuration(int comboIndex) const { return GetComboAnticipateDuration(comboIndex, Owner::kEnemy); }
+	float GetComboAttackDuration(int comboIndex) const { return GetComboAttackDuration(comboIndex, Owner::kEnemy); }
+	float GetComboRecoveryDuration(int comboIndex) const { return GetComboRecoveryDuration(comboIndex, Owner::kEnemy); }
+
+	// 衝撃力もプレイヤー用/敵用で分離
+	virtual float GetImpactPower(int comboIndex, Owner owner) const {
+		return (owner == Owner::kPlayer) ? kBaseImpactPowerPlayer + static_cast<float>(comboIndex) * kImpactPowerStepPlayer
+		                                 : kBaseImpactPowerEnemy + static_cast<float>(comboIndex) * kImpactPowerStepEnemy;
+	}
+	float GetImpactPower(int comboIndex) const { return GetImpactPower(comboIndex, Owner::kEnemy); } // 旧シグネチャ(敵用)
+
 
 	virtual int GetDamage(int comboIndex) const { return kComboDamageEnemy[comboIndex]; }
 	virtual int GetDamage(int comboIndex, Owner owner) const { return (owner == Owner::kPlayer) ? kComboDamagePlayer[comboIndex] : kComboDamageEnemy[comboIndex]; }
@@ -127,44 +172,47 @@ public:
 	static void ApplyGlobalVariables();
 
 	// --- SFX ---
-	// デフォルトの振りSFX(WeaponSabre系全般で共有)。GameSceneがロード後にセットする。
 	static void SetDefaultSwingSoundHandle(uint32_t handle) { sDefaultSwingSoundHandle_ = handle; }
 	static void SetSwingSoundHandle(int comboIndex, uint32_t handle) {
-		// コンボ番号が範囲外なら何もしない
 		if (comboIndex < 0 || comboIndex >= kMaxCombo) {
 			return;
 		}
-
 		sComboSwingHandle[comboIndex] = handle;
 	}
 	static void SetSfxVolume(float volume) { sSfxVolume_ = volume; }
-	// virtualにしておき、WeaponHeavySabre等が独自の音を鳴らしたい場合はoverride可能
 	virtual void PlayDefaultSwingSound() {
 		if (sDefaultSwingSoundHandle_ != 0) {
-			KamataEngine::Audio::GetInstance()->PlayWave(sDefaultSwingSoundHandle_, false, sSfxVolume_);
+			AudioSettings::PlaySfx(sDefaultSwingSoundHandle_, false, sSfxVolume_);
 		}
 	}
-	// virtualにしておき、WeaponHeavySabre等が独自の音を鳴らしたい場合はoverride可能
+	// Per-combo sound, falling back to the (overridable) default sound.
 	virtual void PlaySwingSound(int comboIndex) {
-		// コンボ番号が範囲外なら何もしない
 		if (comboIndex < 0 || comboIndex >= kMaxCombo) {
 			return;
 		}
-
 		uint32_t handle = sComboSwingHandle[comboIndex];
-
-		// 個別のコンボSFXが設定されていればそれを使い、
-		// 未設定ならデフォルトSFXを使う
 		if (handle == 0) {
-			handle = sDefaultSwingSoundHandle_;
+			PlayDefaultSwingSound();
+			return;
 		}
-
-		if (handle != 0) {
-			KamataEngine::Audio::GetInstance()->PlayWave(handle, false, sSfxVolume_);
-		}
+		AudioSettings::PlaySfx(handle, false, sSfxVolume_);
 	}
 
 protected:
+	// ---- Data every melee weapon must provide ----
+	virtual const std::array<ComboAttackPattern, 3>& GetComboPatterns() const = 0;
+	virtual const std::array<float, 3>& GetComboReach() const = 0;
+	virtual const std::array<float, 3>& GetComboSwingHeight() const = 0;
+	virtual const std::array<float, 3>& GetUpDownReach() const = 0;
+	virtual const std::array<float, 3>& GetUpDownWidth() const = 0;
+	virtual const SRTOffset& GetDownAttackOffset() const = 0;
+
+	// Holster <-> ready blend for the current equip state, with the reaction (knockback/stun/block) pose on top.
+	SRTOffset ComputeEquipPose();
+	static SRTOffset BlendComboPose(const ComboAttackPattern& pattern, AttackPhase phase, float t);
+	// Writes pose into worldTransform_. mirrorFull=false mirrors only translation.x (player down attack).
+	void ApplyPoseToWorld(const SRTOffset& pose, const KamataEngine::Vector3& basePos, const KamataEngine::Vector3& baseRot, bool facingRight, bool mirrorFull);
+
 	// weight: 1 = fully equipped, 0 = holstered (so a holstered weapon doesn't jump to a combat pose)
 	SRTOffset ApplyReactionPose(const SRTOffset& base, float weight = 1.0f) {
 		float target = (debuffPose_ != ReactionPose::kNone) ? 1.0f : 0.0f;
@@ -184,11 +232,32 @@ protected:
 	ReactionPose lastReactionPose_ = ReactionPose::kKnockback;
 	float reactionBlend_ = 0.0f;
 
-	static inline float kBaseImpactPower = 1.0f;
-	static inline float kImpactPowerStep = 0.4f;
+	// ---- Equip state (shared) ----
+	WeaponState weaponState_ = WeaponState::kEquipped;
+	float equipTimer_ = 1.0f;
+	float equipDuration_ = 0.25f;
+	bool isTransitioning_ = false;
+
+	// ---- 衝撃力: プレイヤー用 / 敵用 ----
+	static inline float kBaseImpactPowerPlayer = 1.0f;
+	static inline float kImpactPowerStepPlayer = 0.4f;
+	static inline float kBaseImpactPowerEnemy = 1.0f;
+	static inline float kImpactPowerStepEnemy = 0.4f;
 
 	static inline std::array<int, 3> kComboDamagePlayer = {45, 45, 75};
 	static inline std::array<int, 3> kComboDamageEnemy = {10, 10, 20};
+
+	static inline int kMaxCombo = 3;
+	// ---- コンボ時間(フレーム)・前進速度: プレイヤー用 ----
+	static inline std::array<float, 3> kComboAttackSpeedPlayer = {0.25f, 0.25f, 0.7f};
+	static inline std::array<float, 3> kComboAnticipateDurationPlayer = {10.0f, 10.0f, 15.0f};
+	static inline std::array<float, 3> kComboAttackDurationPlayer = {8.0f, 8.0f, 15.0f};
+	static inline std::array<float, 3> kComboRecoveryDurationPlayer = {15.0f, 15.0f, 30.0f};
+	// ---- コンボ時間(フレーム)・前進速度: 敵用 ----
+	static inline std::array<float, 3> kComboAttackSpeedEnemy = {0.25f, 0.25f, 0.7f};
+	static inline std::array<float, 3> kComboAnticipateDurationEnemy = {10.0f, 10.0f, 15.0f};
+	static inline std::array<float, 3> kComboAttackDurationEnemy = {8.0f, 8.0f, 15.0f};
+	static inline std::array<float, 3> kComboRecoveryDurationEnemy = {15.0f, 15.0f, 30.0f};
 
 	std::vector<const void*> hitTargetsThisSwing_;
 
@@ -211,11 +280,7 @@ protected:
 	float kHalfDepthMin = 0.2f;
 	float kHalfDepthMax = 0.2f;
 
-	static inline int kMaxCombo = 3;
-	static inline std::array<float, 3> kComboAttackSpeed = {0.25f, 0.25f, 0.7f};
-	static inline std::array<float, 3> kComboAnticipateDuration = {10.0f, 10.0f, 15.0f};
-	static inline std::array<float, 3> kComboAttackDuration = {8.0f, 8.0f, 15.0f};
-	static inline std::array<float, 3> kComboRecoveryDuration = {15.0f, 15.0f, 30.0f};
+
 
 	// --- SFX ---
 	static inline uint32_t sDefaultSwingSoundHandle_ = 0;

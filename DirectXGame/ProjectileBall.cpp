@@ -26,6 +26,10 @@ void ProjectileBall::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "Speed", kSpeed);
 	gv->AddItem(kGroupName, "Width", kWidth);
 	gv->AddItem(kGroupName, "Height", kHeight);
+	gv->AddItem(kGroupName, "DamageToEnemy", kDamageToEnemy);
+	gv->AddItem(kGroupName, "DamageToPlayer", kDamageToPlayer);
+	gv->AddItem(kGroupName, "ImpactPowerToEnemy", kImpactPowerToEnemy);
+	gv->AddItem(kGroupName, "ImpactPowerToPlayer", kImpactPowerToPlayer);
 }
 
 void ProjectileBall::ApplyGlobalVariables() {
@@ -33,4 +37,8 @@ void ProjectileBall::ApplyGlobalVariables() {
 	kSpeed = gv->GetFloatValue(kGroupName, "Speed");
 	kWidth = gv->GetFloatValue(kGroupName, "Width");
 	kHeight = gv->GetFloatValue(kGroupName, "Height");
+	kDamageToEnemy = gv->GetIntValue(kGroupName, "DamageToEnemy");
+	kDamageToPlayer = gv->GetIntValue(kGroupName, "DamageToPlayer");
+	kImpactPowerToEnemy = gv->GetFloatValue(kGroupName, "ImpactPowerToEnemy");
+	kImpactPowerToPlayer = gv->GetFloatValue(kGroupName, "ImpactPowerToPlayer");
 }

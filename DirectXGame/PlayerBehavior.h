@@ -64,6 +64,13 @@ public:
 	static void RegisterGlobalVariables();
 	static void ApplyGlobalVariables();
 
+	enum class AttackKind { kCombo, kLunge };
+
+	bool IsLunge() const { return behavior_ == Behavior::kAttack && attackKind_ == AttackKind::kLunge; }
+	AttackKind GetAttackKind() const { return attackKind_; }
+	LungeSource GetLungeSource() const { return lungeSource_; }
+	void RequestLunge(LungeSource source);
+
 	// --- SFX ---
 	// GameSceneがロード後にセットする。プレイヤーの被弾/死亡/ブロック開始SFX。
 	static void SetHurtSoundHandle(uint32_t handle) { sHurtSoundHandle_ = handle; }
@@ -133,22 +140,26 @@ private:
 	static inline float kKnockBackSpeedY = 0.35f;
 	static inline uint32_t kKnockBackDuration = 25;
 
-	static inline std::array<SRTOffset, 3> kComboPoseAnticipate = {
-	    SRTOffset{{1, 1, 1}, {-0.1f, -0.7f, 0}, {0, 0, 0}},
-	    SRTOffset{{1, 1, 1}, {-0.1f, 1.0f, 0},  {0, 0, 0}},
-	    SRTOffset{{1, 1, 1}, {-0.4f, -0.7f, 0}, {0, 0, 0}},
-	};
-	static inline std::array<SRTOffset, 3> kComboPosePeak = {
-	    SRTOffset{{1, 1, 1},    {0.2f, 0.2f, 0},  {0, 0, 0}},
-	    SRTOffset{{1.1f, 1, 1}, {0.3f, 0, 0},     {0, 0, 0}},
-	    SRTOffset{{1, 1, 1},    {0.4f, -0.1f, 0}, {0, 0, 0}},
-	};
-	static inline std::array<SRTOffset, 3> kComboPoseRecovery = {
-	    SRTOffset{{1, 1, 1}, {0.3f, 1.0f, 0}, {0, 0, 0}},
-	    SRTOffset{{1, 1, 1}, {0.4f, 0, 0},    {0, 0, 0}},
-	    SRTOffset{{1, 1, 1}, {0.5f, 0, 0},    {0, 0, 0}},
+static inline BodyComboPoseSet kBodyCombo = {
+	    {MakeBodyPose(-0.1f, -0.7f, 0.0f), MakeBodyPose(-0.1f, 1.0f, 0.0f), MakeBodyPose(-0.4f, -0.7f, 0.0f)},
+	    {MakeBodyPose(0.2f, 0.2f, 0.0f), MakeBodyPose(0.3f, 0.0f, 0.0f, {1.1f, 1.0f, 1.0f}), MakeBodyPose(0.4f, -0.1f, 0.0f)},
+	    {MakeBodyPose(0.3f, 1.0f, 0.0f), MakeBodyPose(0.4f, 0.0f, 0.0f), MakeBodyPose(0.5f, 0.0f, 0.0f)},
 	};
 	static inline SRTOffset kNeutralPose = {};
+
+		void BehaviorLungeUpdate();
+
+	AttackKind attackKind_ = AttackKind::kCombo;
+	LungeSource lungeSource_ = LungeSource::kNone;
+
+	static inline BodyLungePoseSet kBodyLungeHeavy = {
+	    MakeBodyPose(-0.3f, -0.5f, 0.0f, {0.97f, 1.03f, 1.0f}),
+	    MakeBodyPose(0.55f, 0.35f, 0.0f, {1.05f, 0.95f, 1.0f}, {0.0f, -0.05f, 0.0f}),
+	};
+	static inline BodyLungePoseSet kBodyLungeBayonet = {
+	    MakeBodyPose(-0.2f, -0.3f, 0.0f, {1.0f, 0.97f, 1.0f}, {0.0f, -0.05f, 0.0f}),
+	    MakeBodyPose(0.35f, 0.25f, 0.0f, {1.02f, 0.98f, 1.0f}),
+	};
 
 	// --- SFX ---
 	static inline uint32_t sHurtSoundHandle_ = 0;
@@ -158,7 +169,7 @@ private:
 	static inline float sSfxVolume_ = 1.0f;
 	static void PlaySfxHandle(uint32_t handle) {
 		if (handle != 0) {
-			KamataEngine::Audio::GetInstance()->PlayWave(handle, false, sSfxVolume_);
+			AudioSettings::PlaySfx(handle, false, sSfxVolume_);
 		}
 	}
 };

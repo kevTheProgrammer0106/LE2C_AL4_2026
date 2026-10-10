@@ -79,10 +79,9 @@ void FighterBehavior::BehaviorUseMeleeInitialize() {
 void FighterBehavior::BehaviorUseMeleeUpdate() {
 	++meleeAttackParameter_;
 
-	if (GameScene* scene = OwnerGameScene()) {
-		if (Player* player = scene->GetPlayer()) {
-			OwnerFaceDirection(player->GetWorldPosition().x < owner_.GetWorldPosition().x ? 1 : 0);
-		}
+	// only track the player while winding up; the swing itself is committed
+	if (meleePhase_ == MeleePhase::kAnticipate) {
+		FacePlayer();
 	}
 
 	BaseMelee::GenericAttackAnimState animState;
@@ -98,12 +97,13 @@ void FighterBehavior::BehaviorUseMeleeUpdate() {
 			meleePhase_ = MeleePhase::kAttack;
 			meleeAttackParameter_ = 0;
 			if (BaseMelee* melee = fighterOwner_.GetCurrentMelee()) {
-				fighterOwner_.GetCurrentMelee()->PlaySwingSound(comboIndex_);
+				melee->PlaySwingSound(comboIndex_);
 			}
 		}
 		break;
 	}
 	case MeleePhase::kAttack: {
+		AdvanceTowardFacing(sabreComboReference_.GetComboAttackSpeed(comboIndex_));
 		float duration = sabreComboReference_.GetComboAttackDuration(comboIndex_);
 		animState.phase = BaseMelee::AttackPhase::kAttack;
 		animState.t = std::clamp(static_cast<float>(meleeAttackParameter_) / duration, 0.0f, 1.0f);
@@ -115,6 +115,7 @@ void FighterBehavior::BehaviorUseMeleeUpdate() {
 	}
 	case MeleePhase::kRecovery:
 	default: {
+		OwnerVelocity().x = 0.0f;
 		float duration = sabreComboReference_.GetComboRecoveryDuration(comboIndex_);
 		animState.phase = BaseMelee::AttackPhase::kRecovery;
 		animState.t = std::clamp(static_cast<float>(meleeAttackParameter_) / duration, 0.0f, 1.0f);

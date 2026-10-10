@@ -28,9 +28,9 @@ private:
 	uint8_t buttonID_ = 0;
 	bool isPressed_ = false;
 
-	static inline float kHalfWidth = 0.8f;
-	static inline float kHalfHeight = 0.3f;
-	static inline float kHalfDepth = 0.8f;
+	static inline float kHalfWidth = 0.4f;
+	static inline float kHalfHeight = 0.4f;
+	static inline float kHalfDepth = 0.4f;
 
 	static inline float kPressedScaleY = 0.4f; // 押されると平べったくなる(見た目のフィードバック)
 

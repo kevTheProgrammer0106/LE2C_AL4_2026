@@ -7,6 +7,9 @@
 
 class EnemyRifleman final : public BaseEnemy {
 public:
+	static void RegisterGlobalVariables();
+	static void ApplyGlobalVariables();
+
 	void Initialize(const std::array<PartResources, static_cast<size_t>(PartSlot::kCount)>& partResources, KamataEngine::Camera* camera, const KamataEngine::Vector3& position);
 	void Update() override;
 	void Draw() override;
@@ -36,15 +39,12 @@ public:
 		gunPoseTimer_ = 0.0f;
 	}
 
-	static void RegisterGlobalVariables();
-	static void ApplyGlobalVariables();
 	// --- SFX ---
 	// bayonetがfalse->trueに切り替わった瞬間(踏み込み開始)に鳴らす。未設定なら無音。
 	static void SetBayonetLungeSoundHandle(uint32_t handle) { sBayonetLungeSoundHandle_ = handle; }
 	static void SetSfxVolume(float volume) { sSfxVolume_ = volume; }
 
 	SRTOffset GetActionAnimOffset() const override;
-
 private:
 	friend class DebugMenu;
 
@@ -82,9 +82,15 @@ private:
 	static inline float sSfxVolume_ = 1.0f;
 	static void PlayBayonetLungeSound() {
 		if (sBayonetLungeSoundHandle_ != 0) {
-			KamataEngine::Audio::GetInstance()->PlayWave(sBayonetLungeSoundHandle_, false, sSfxVolume_);
+			AudioSettings::PlaySfx(sBayonetLungeSoundHandle_, false, sSfxVolume_);
 		}
 	}
+
+	// Crouch back, then drive the shoulder into the bayonet thrust.
+	static inline BodyLungePoseSet kBodyLunge = {
+	    MakeBodyPose(-0.2f, -0.3f, 0.0f, {1.0f, 0.97f, 1.0f}, {0.0f, -0.05f, 0.0f}),
+	    MakeBodyPose(0.35f, 0.25f, 0.0f, {1.02f, 0.98f, 1.0f}),
+	};
 
 protected:
 	void RefreshWeaponVisual() override {

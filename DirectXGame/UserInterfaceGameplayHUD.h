@@ -90,9 +90,33 @@ private:
 // When ready, it flashes white and settles back to its normal colour.
 class WeaponStatusUI final {
 public:
-	void Initialize(uint32_t meleeIconTexture, uint32_t firearmIconTexture);
-	// isMeleeCooling / meleeCooldownProgress01: placeholder for the upcoming sabre attack (0 = just used, 1 = ready).
-	void Update(bool isFirearmMode, bool isReloading, float reloadProgress01, bool isMeleeCooling = false, float meleeCooldownProgress01 = 1.0f);
+	struct Textures {
+		uint32_t meleeLight = 0;
+		uint32_t meleeHeavy = 0;
+		uint32_t firearmLong = 0;
+		uint32_t firearmBayonet = 0;
+		uint32_t bayonetLunge = 0;
+
+		// uint32_t firearmBlunderbuss = 0;
+		// uint32_t firearmDualPistols = 0;
+	
+		// uint32_t meleeSpontoon = 0;
+		// uint32_t meleeAxe = 0;
+	};
+	struct State {
+		bool isFirearmMode = false;
+		DropWeaponKind meleeKind = DropWeaponKind::kSabreLight;
+		DropWeaponKind firearmKind = DropWeaponKind::kMusketLong;
+		bool isMeleeCooling = false; // heavy sabre lunge cooldown
+		float meleeCooldownProgress01 = 1.0f;
+		bool isReloading = false;
+		float reloadProgress01 = 1.0f;
+		bool isLungeCooling = false; // bayonet lunge cooldown (own icon)
+		float lungeCooldownProgress01 = 1.0f;
+	};
+
+	void Initialize(const Textures& textures);
+	void Update(const State& state);
 	void Draw();
 
 private:
@@ -124,8 +148,13 @@ private:
 		void Draw();
 	};
 
-	CooldownIcon meleeIcon_;
-	CooldownIcon firearmIcon_;
+	CooldownIcon meleeLight_;
+	CooldownIcon meleeHeavy_;
+	CooldownIcon firearmLong_;
+	CooldownIcon firearmBayonet_;
+	CooldownIcon bayonetLunge_;
+	DropWeaponKind shownMelee_ = DropWeaponKind::kSabreLight;
+	DropWeaponKind shownFirearm_ = DropWeaponKind::kMusketLong;
 };
 
 class EquipmentStatus final : public BaseSprite {};

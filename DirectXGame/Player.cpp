@@ -76,6 +76,7 @@ void Player::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "BlockRecoverThreshold", kBlockRecoverThreshold);
 	gv->AddItem(kGroupName, "BlockRegenRate", kBlockRegenRate);
 	gv->AddItem(kGroupName, "BlockRegenDelay", kBlockRegenDelay);
+	gv->AddItem(kGroupName, "LungeHoldTime", kLungeHoldTime);
 }
 void Player::ApplyGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
@@ -117,6 +118,8 @@ void Player::ApplyGlobalVariables() {
 	kBlockRecoverThreshold = gv->GetFloatValue(kGroupName, "BlockRecoverThreshold");
 	kBlockRegenRate = gv->GetFloatValue(kGroupName, "BlockRegenRate");
 	kBlockRegenDelay = gv->GetFloatValue(kGroupName, "BlockRegenDelay");
+
+	kLungeHoldTime = gv->GetFloatValue(kGroupName, "LungeHoldTime");
 }
 #pragma endregion
 
@@ -214,15 +217,6 @@ void Player::Initialize(
 	worldTransform_.translation_ = position;
 }
 
-void Player::SetMusketModel(Model* model, uint32_t textureHandle) {
-	currentFirearm_ = std::make_unique<FirearmMusket>();
-	currentFirearm_->Initialize(model, textureHandle, camera_);
-}
-
-void Player::SetMeleeModel(Model* model, uint32_t textureHandle) {
-	currentMelee_ = std::make_unique<WeaponSabre>();
-	currentMelee_->Initialize(model, textureHandle, camera_, worldTransform_.translation_);
-}
 void Player::SetWeaponMode(WeaponMode mode) {
 	weaponMode_ = mode;
 	if (currentMelee_)
@@ -245,12 +239,21 @@ Vector2 Player::GetEffectiveAimDir() const {
 void Player::UpdateAimAndFirearm() {
 	if (!currentFirearm_)
 		return;
-	Vector2 aimDir = GetEffectiveAimDir();
+	const bool lunging = behavior_.IsLunge() && behavior_.GetLungeSource() == LungeSource::kBayonet;
+	Vector2 aimDir = lunging ? ((lrDirection_ == LRDirection::kRight) ? Vector2{1.0f, 0.0f} : Vector2{-1.0f, 0.0f}) : GetEffectiveAimDir();
 	AimFacing aim = ComputeAimFacing(aimDir, lrDirection_ == LRDirection::kRight);
 	if (!behavior_.IsAttacking() && aim.facingRight != (lrDirection_ == LRDirection::kRight)) {
 		lrDirection_ = aim.facingRight ? LRDirection::kRight : LRDirection::kLeft;
 		turnFirstRotationY_ = worldTransform_.rotation_.y;
 		turnTimer_ = kTimeTurn;
+	}
+	if (FirearmMusketBayonet* bayonet = dynamic_cast<FirearmMusketBayonet*>(currentFirearm_.get())) {
+		if (lunging) {
+			AttackAnimState anim = behavior_.GetAttackAnimState();
+			bayonet->SetPlayerLungePose(static_cast<FirearmMusketBayonet::LungePhase>(static_cast<int>(anim.phase)), anim.t);
+		} else {
+			bayonet->ClearLungePose();
+		}
 	}
 	currentFirearm_->SetEquipped(weaponMode_ == WeaponMode::kFirearm);
 	currentFirearm_->UpdateFollow(modelWorldTransform_, aim.localAngle, aim.facingRight);
@@ -290,29 +293,77 @@ void Player::UseFirearm() {
 		return;
 	if (!Input::GetInstance()->IsTriggerMouse(0))
 		return;
-	if (!currentFirearm_->TryFire())
+	if (!currentFirearm_->TryFire()) {
+		// unloaded: with a bayonet musket the click becomes a lunge while it reloads
+		UseBayonetLungeIfReloading();
 		return;
+	}
 
 	Vector3 origin = GetModelWorldPosition();
 	Vector2 aimDir = GetEffectiveAimDir();
 
 	if (gameScene_) {
-		gameScene_->CreateFirearmProjectile(Owner::kPlayer, origin, aimDir);
+		// 銃ごとの発射パターンに従ってペレットを撃つ(通常の銃は1発・角度0)
+		const int pelletCount = std::max(1, currentFirearm_->GetPelletCount());
+		for (int i = 0; i < pelletCount; ++i) {
+			const float angle = currentFirearm_->GetPelletAngle(i);
+			const float c = std::cos(angle);
+			const float s = std::sin(angle);
+			Vector2 dir = {aimDir.x * c - aimDir.y * s, aimDir.x * s + aimDir.y * c};
+			gameScene_->CreateFirearmProjectile(Owner::kPlayer, origin, dir, currentFirearm_->GetBulletDamage(), currentFirearm_->GetProjectileLifeFrames());
+		}
 		Vector3 muzzlePos = origin;
-		gameScene_->CreateMuzzleFlash(muzzlePos);
+		gameScene_->CreateMuzzleFlash(muzzlePos); // マズルフラッシュは1回だけ
 	}
 	currentFirearm_->TriggerRecoil(lrDirection_ == LRDirection::kRight);
 	BaseFirearm::PlayFireSound();
 }
+
 void Player::UseMeleeWeapon() {
-	if (weaponMode_ != WeaponMode::kMelee)
+	if (weaponMode_ != WeaponMode::kMelee) {
+		meleePressPending_ = false;
+		meleeHoldTimer_ = 0.0f;
 		return;
-	if (Input::GetInstance()->IsTriggerMouse(0)) {
+	}
+	Input* input = Input::GetInstance();
+
+	auto normalAttack = [&]() {
 		currentMelee_->SetWeaponState(WeaponState::kEquipped);
 		PlayerBehavior::AttackDirection direction = PlayerBehavior::AttackDirection::kSide;
-		if (Input::GetInstance()->PushKey(DIK_S))
+		if (input->PushKey(DIK_S))
 			direction = PlayerBehavior::AttackDirection::kDown;
 		behavior_.RequestAttack(direction);
+	};
+
+	// Light sabre: unchanged, attacks on press.
+	if (!dynamic_cast<WeaponHeavySabre*>(currentMelee_.get())) {
+		if (input->IsTriggerMouse(0))
+			normalAttack();
+		return;
+	}
+
+	// Heavy sabre: tap = combo (on release), hold = lunge.
+	if (input->IsTriggerMouse(0)) {
+		meleePressPending_ = true;
+		meleeHoldTimer_ = 0.0f;
+	}
+	if (!meleePressPending_)
+		return;
+
+	if (input->IsPressMouse(0)) {
+		meleeHoldTimer_ += 1.0f / 60.0f;
+		if (meleeHoldTimer_ >= kLungeHoldTime) {
+			meleePressPending_ = false;
+			if (meleeLungeCooldown_ <= 0.0f && !behavior_.IsAttacking() && !input->PushKey(DIK_S)) {
+				currentMelee_->SetWeaponState(WeaponState::kEquipped);
+				behavior_.RequestLunge(LungeSource::kHeavySabre);
+			} else {
+				normalAttack(); // lunge on cooldown: the held click becomes a normal swing
+			}
+		}
+	} else {
+		meleePressPending_ = false; // released early = tap
+		normalAttack();
 	}
 }
 void Player::UpdateTurnRotation() {
@@ -327,6 +378,8 @@ void Player::Update() {
 	ApplyGlobalVariables();
 	TickDebuffs();
 	TickBlockGauge();
+	TickLungeCooldowns();
+
 
 	if (dropThroughTimer_ > 0.0f) {
 		dropThroughTimer_ -= 1.0f / 60.0f;
@@ -342,7 +395,7 @@ void Player::Update() {
 		behavior_.SetBlocking(false);
 	const bool canAct = !controlLocked_ && !behavior_.IsStunned();
 	if (canAct) {
-		if (Input::GetInstance()->TriggerKey(DIK_Q)) {
+		if (Input::GetInstance()->TriggerKey(DIK_Q) && !behavior_.IsAttacking()) {
 			SetWeaponMode(weaponMode_ == WeaponMode::kMelee ? WeaponMode::kFirearm : WeaponMode::kMelee);
 			PlaySfxHandle(sWeaponSwitchSoundHandle_);
 		}
@@ -369,8 +422,7 @@ void Player::Update() {
 
 	behavior_.UpdateCurrentBehavior();
 	UpdateModelCollision();     
-	currentMelee_->UpdateWeaponState();
-	currentMelee_->SetMeleePosition(*this);
+	UpdateMeleeVisual();
 
 	ReactionPose reactionPose = ReactionPose::kNone;
 	if (behavior_.IsKnockback())
@@ -392,6 +444,7 @@ void Player::Update() {
 	}
 
 	if (canAct) {
+		if (!behavior_.IsKnockback() && !behavior_.IsDeathBehavior())
 		UseFirearm();
 		UseMeleeWeapon();
 	}
@@ -668,17 +721,19 @@ void Player::MapChipCollisionUpdate() {
 	}
 }
 
-void Player::MapChipCollisionUpdate(CollisionInfo& collisionInfo) {
+void Player::MapChipCollisionUpdate(CollisionInfo& collisionInfo, bool ledgeGuard) {
 	blockDetector_.SetWorldTransform(worldTransform_);
 	blockDetector_.SetVelocity(velocity_);
 	blockDetector_.SetOnGround(onGround_);
 	blockDetector_.SetMapChipField(mapChipField_);
 	blockDetector_.SetSize(kWidth, kHeight);
 
-	// Sでドロップスルー中はワンウェイ足場への着地だけ無視する。
 	blockDetector_.SetIgnoreOneWay(IsDroppingThrough());
 
 	blockDetector_.MapChipCollision(collisionInfo);
+	if (ledgeGuard) {
+		blockDetector_.LedgeGuard(collisionInfo, kLimitRunSpeed); // knockback slower than max run speed stops at the edge
+	}
 
 	PositionUpdate(collisionInfo);
 	WallCollision(collisionInfo);
@@ -751,4 +806,130 @@ void Player::TickBlockGauge() {
 	if (blockBroken_ && blockGauge_ >= kBlockRecoverThreshold) {
 		blockBroken_ = false;
 	}
+}
+
+void Player::SetMusketModel(Model* model, uint32_t textureHandle, DropWeaponKind kind) {
+	if (kind == DropWeaponKind::kMusketBayonet) {
+		currentFirearm_ = std::make_unique<FirearmMusketBayonet>();
+	} else if (kind == DropWeaponKind::kShotgun) {
+		currentFirearm_ = std::make_unique<FirearmShotgun>();
+	} else {
+		kind = DropWeaponKind::kMusketLong;
+		currentFirearm_ = std::make_unique<FirearmMusket>();
+	}
+	currentFirearm_->SetOwner(Owner::kPlayer);
+	currentFirearm_->Initialize(model, textureHandle, camera_);
+	currentFirearm_->SnapEquipped(weaponMode_ == WeaponMode::kFirearm);
+	currentFirearmKind_ = kind;
+	bayonetLungeCooldown_ = 0.0f;
+	bayonetLungeCooldownMax_ = 0.0f;
+}
+
+void Player::SetMeleeModel(Model* model, uint32_t textureHandle, DropWeaponKind kind) {
+	if (kind == DropWeaponKind::kSabreHeavy) {
+		currentMelee_ = std::make_unique<WeaponHeavySabre>();
+	} else {
+		kind = DropWeaponKind::kSabreLight;
+		currentMelee_ = std::make_unique<WeaponSabre>();
+	}
+	currentMelee_->Initialize(model, textureHandle, camera_, worldTransform_.translation_);
+	currentMelee_->SnapWeaponState(weaponMode_ == WeaponMode::kMelee ? WeaponState::kEquipped : WeaponState::kHolstered);
+	currentMeleeKind_ = kind;
+	meleeLungeCooldown_ = 0.0f;
+	meleeLungeCooldownMax_ = 0.0f;
+}
+
+DropItemState Player::GetCurrentMeleeState() const {
+	if (!currentMelee_)
+		return DropItemState::kReady;
+	return (currentMelee_->GetDropState() == DropItemState::kOnCooldown || meleeLungeCooldown_ > 0.0f) ? DropItemState::kOnCooldown : DropItemState::kReady;
+}
+
+DropItemState Player::GetCurrentFirearmState() const {
+	if (!currentFirearm_)
+		return DropItemState::kReady;
+	return (currentFirearm_->GetDropState() == DropItemState::kOnCooldown || bayonetLungeCooldown_ > 0.0f) ? DropItemState::kOnCooldown : DropItemState::kReady;
+}
+
+void Player::RestoreFirearmState(DropItemState state) {
+	if (!currentFirearm_)
+		return;
+	currentFirearm_->RestoreDropState(state);
+	// premature re-pickup: the lunge cooldown restarts from full too
+	if (state == DropItemState::kOnCooldown && dynamic_cast<FirearmMusketBayonet*>(currentFirearm_.get()))
+		BeginLungeCooldown(LungeSource::kBayonet);
+}
+
+void Player::RestoreMeleeState(DropItemState state) {
+	if (!currentMelee_ || state != DropItemState::kOnCooldown)
+		return;
+	currentMelee_->SnapWeaponState(WeaponState::kHolstered); // replays the draw animation
+	if (dynamic_cast<WeaponHeavySabre*>(currentMelee_.get()))
+		BeginLungeCooldown(LungeSource::kHeavySabre);
+}
+
+LungeSpec Player::GetLungeSpec(LungeSource source) const {
+	if (source == LungeSource::kHeavySabre) {
+		if (auto* heavy = dynamic_cast<WeaponHeavySabre*>(currentMelee_.get()))
+			return heavy->GetPlayerLungeSpec();
+	} else if (source == LungeSource::kBayonet) {
+		if (auto* bayonet = dynamic_cast<FirearmMusketBayonet*>(currentFirearm_.get()))
+			return bayonet->GetPlayerLungeSpec();
+	}
+	return LungeSpec{};
+}
+
+AABB Player::GetLungeAABB() {
+	const AABB playerBody = GetAABB();
+	if (behavior_.GetLungeSource() == LungeSource::kHeavySabre) {
+		if (auto* heavy = dynamic_cast<WeaponHeavySabre*>(currentMelee_.get()))
+			return heavy->GetPlayerLungeAABB(playerBody, isRight());
+	} else if (behavior_.GetLungeSource() == LungeSource::kBayonet) {
+		if (auto* bayonet = dynamic_cast<FirearmMusketBayonet*>(currentFirearm_.get()))
+			return bayonet->GetPlayerLungeAABB(playerBody, isRight());
+	}
+	return playerBody;
+}
+
+void Player::BeginLungeCooldown(LungeSource source) {
+	const float cooldown = GetLungeSpec(source).cooldown;
+	if (source == LungeSource::kHeavySabre) {
+		meleeLungeCooldown_ = meleeLungeCooldownMax_ = cooldown;
+	} else if (source == LungeSource::kBayonet) {
+		bayonetLungeCooldown_ = bayonetLungeCooldownMax_ = cooldown;
+	}
+}
+
+void Player::PlayLungeSound(LungeSource source) {
+	if (source == LungeSource::kHeavySabre)
+		WeaponHeavySabre::PlayLungeSound();
+	else if (source == LungeSource::kBayonet)
+		FirearmMusketBayonet::PlayLungeSound();
+}
+
+void Player::TickLungeCooldowns() {
+	constexpr float kDt = 1.0f / 60.0f;
+	meleeLungeCooldown_ = std::max(0.0f, meleeLungeCooldown_ - kDt);
+	bayonetLungeCooldown_ = std::max(0.0f, bayonetLungeCooldown_ - kDt);
+}
+
+void Player::UseBayonetLungeIfReloading() {
+	auto* bayonet = dynamic_cast<FirearmMusketBayonet*>(currentFirearm_.get());
+	if (!bayonet || !bayonet->IsReloading())
+		return;
+	if (bayonetLungeCooldown_ > 0.0f || behavior_.IsAttacking())
+		return;
+	behavior_.RequestLunge(LungeSource::kBayonet);
+}
+
+void Player::UpdateMeleeVisual() {
+	currentMelee_->UpdateWeaponState();
+	if (behavior_.IsLunge() && behavior_.GetLungeSource() == LungeSource::kHeavySabre) {
+		if (auto* heavy = dynamic_cast<WeaponHeavySabre*>(currentMelee_.get())) {
+			AttackAnimState anim = behavior_.GetAttackAnimState();
+			heavy->SetPlayerLungePosition(*this, static_cast<BaseMelee::AttackPhase>(static_cast<int>(anim.phase)), anim.t);
+			return;
+		}
+	}
+	currentMelee_->SetMeleePosition(*this);
 }

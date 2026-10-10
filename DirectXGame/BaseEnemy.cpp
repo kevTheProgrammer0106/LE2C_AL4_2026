@@ -108,7 +108,7 @@ void BaseEnemy::Initialize(const std::array<PartResources, kPartCount>& partReso
 	pathfindingModule_->Initialize(this, mapChipField_);
 }
 
-void BaseEnemy::UpdateMovementState() {
+AnimationManager::AnimationContext BaseEnemy::BuildAnimationContext() const {
 	AnimationManager::AnimationContext context;
 	context.velocity = velocity_;
 	context.onGround = onGround_;
@@ -117,18 +117,25 @@ void BaseEnemy::UpdateMovementState() {
 	context.isStunned = behavior_->IsStunned();
 	context.isBlocking = behavior_->GetBehavior() == Behavior::kBlock;
 	context.facingRight = isRight();
-	AnimationManager::MovementEvents events = animManager_->UpdateMovementState(context);
+	context.isAttacking = behavior_->GetBehavior() == Behavior::kMelee;
+	context.actionPose = GetActionAnimOffset();
+	return context;
+}
+
+void BaseEnemy::UpdateMovementState() {
+	AnimationManager::MovementEvents events = animManager_->UpdateMovementState(BuildAnimationContext());
 	if (!behavior_->IsDeathBehavior()) {
-		if (events.justJumped) {
+		if (events.justJumped)
 			PlayJumpSound();
-		}
-		if (events.justLanded) {
-			PlayMovementSound(); // land sfx — Cuirassier overrides this, unaffected
-		}
-		if (events.footstepTick) {
+		if (events.justLanded)
+			PlayMovementSound();
+		if (events.footstepTick)
 			PlayFootstepSound();
-		}
 	}
+}
+
+void BaseEnemy::UpdateBodyParts() {
+	animManager_->UpdateBodyParts(modelWorldTransform_, BuildAnimationContext(), parts_); 
 }
 
 SRTOffset BaseEnemy::GetMovementAnimOffset() const { return animManager_->GetMovementAnimOffset(); }
@@ -173,13 +180,7 @@ void BaseEnemy::SetWorldTransform(const WorldTransform& worldTransform) {
 
 Vector3 BaseEnemy::GetWorldPosition() const { return {worldTransform_.translation_.x, worldTransform_.translation_.y, worldTransform_.translation_.z}; }
 
-AABB BaseEnemy::GetAABB() {
-	Vector3 worldPos = GetWorldPosition();
-	AABB aabb;
-	aabb.min = {worldPos.x - kWidth / 2.0f, worldPos.y - kHeight / 2.0f, worldPos.z - kWidth / 2.0f};
-	aabb.max = {worldPos.x + kWidth / 2.0f, worldPos.y + kHeight / 2.0f, worldPos.z + kWidth / 2.0f};
-	return aabb;
-}
+AABB BaseEnemy::GetAABB() { return static_cast<const BaseEnemy*>(this)->GetAABB(); }
 AABB BaseEnemy::GetAABB() const {
 	Vector3 worldPos = GetWorldPosition();
 	AABB aabb;
@@ -267,7 +268,7 @@ void BaseEnemy::OnCollision(const Player* player) {
 		float power = 1.0f;
 		if (const BaseMelee* melee = player->GetCurrentMelee()) {
 			damage = melee->GetDamage(player->GetComboIndex(), Owner::kPlayer); 
-			power = melee->GetImpactPower(player->GetComboIndex());
+			power = melee->GetImpactPower(player->GetComboIndex(), Owner::kPlayer);
 		}
 
 		TakeDamage(damage, dir, power);
@@ -306,22 +307,10 @@ void BaseEnemy::KillInstant() {
 	PlayDeathSound();
 }
 
-void BaseEnemy::UpdateBodyParts() {
-	AnimationManager::AnimationContext context;
-	context.velocity = velocity_;
-	context.onGround = onGround_;
-	context.isDead = behavior_->IsDeathBehavior();
-	context.isKnockedBack = behavior_->IsKnockedBack();
-	context.isStunned = behavior_->IsStunned();
-	context.isBlocking = behavior_->GetBehavior() == Behavior::kBlock;
-	context.facingRight = isRight();
-	animManager_->UpdateBodyParts(modelWorldTransform_, context, parts_);
-}
-
 void BaseEnemy::JumpMovement(const CollisionInfo& collisionInfo) {
 	if (!onGround_)
 		return;
-	if (behavior_->IsDebuffed())
+	if (behavior_->IsDebuffed() || behavior_->IsEngaged())
 		return;
 	if (behavior_->IsRootBehavior() && std::abs(velocity_.x) > 0.0001f) {
 		LRDirection movingDirection = (velocity_.x < 0.0f) ? LRDirection::kLeft : LRDirection::kRight;
@@ -401,6 +390,12 @@ void BaseEnemy::MapChipCollisionUpdate() {
 	CollisionInfo horizontalInfo{};
 	horizontalInfo.move.x = velocity_.x;
 	blockDetector_.MapChipCollision(horizontalInfo);
+	if (behavior_) {
+		BaseEnemyBehavior::LedgeGuardRequest guard = behavior_->GetLedgeGuardRequest();
+		if (guard.active) {
+			blockDetector_.LedgeGuard(horizontalInfo, guard.speedLimit);
+		}
+	}
 	worldTransform_.translation_ += horizontalInfo.move;
 	WallCollision(horizontalInfo);
 
@@ -439,8 +434,9 @@ void BaseEnemy::SpawnDropItem() {
 		return;
 	DropItemCategory category;
 	DropWeaponKind kind;
+	DropItemState state = DropItemState::kReady;
 	if (GetDropInfo(category, kind)) {
-		gameScene_->CreateDroppableItem(GetWorldPosition(), category, kind);
+		gameScene_->CreateDroppableItem(GetWorldPosition(), category, kind, state);
 	}
 }
 bool BaseEnemy::ShouldWeaponBeEquipped() const {

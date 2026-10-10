@@ -102,6 +102,6 @@ void HealthBlock::Consume() {
 	isActive_ = false;
 	respawnTimer_ = 0.0f;
 	if (sConsumeSoundHandle_ != 0) {
-		Audio::GetInstance()->PlayWave(sConsumeSoundHandle_, false, sSfxVolume_);
+		AudioSettings::PlaySfx(sConsumeSoundHandle_, false, sSfxVolume_);
 	}
 }

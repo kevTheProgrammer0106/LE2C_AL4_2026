@@ -20,15 +20,30 @@ public:
 	const KamataEngine::WorldTransform& GetWorldTransform() const { return worldTransform_; }
 	KamataEngine::Vector3 GetWorldPosition() const { return worldTransform_.translation_; }
 
-	virtual float GetImpactPower() const { return kImpactPower; }
+	// 撃った側(owner_)に応じた衝撃力。プレイヤーの弾=敵に当てる値、敵の弾=プレイヤーに当てる値
+	virtual float GetImpactPower() const { return GetImpactPower(owner_); }
+	virtual float GetImpactPower(Owner shooter) const { return (shooter == Owner::kPlayer) ? kImpactPowerToEnemy : kImpactPowerToPlayer; }
 
-virtual int GetDamage() const { return kDamage; }
-	virtual int GetDamage(Owner owner) const { return (owner == Owner::kPlayer) ? kDamageToEnemy : kDamageToPlayer; }
+	virtual int GetDamage(Owner owner) const {
+		// 銃から値を渡されていればそれを使う。無ければ従来の共通値
+		if (damageOverride_ >= 0)
+			return damageOverride_;
+		return (owner == Owner::kPlayer) ? kDamageToEnemy : kDamageToPlayer;
+	}
+	// 発射した銃のダメージを設定する
+	void SetDamage(int damage) { damageOverride_ = damage; }
+	// 射程を変えたい弾用(フレーム数)
+	void SetLifeFrames(int32_t frames) { deathTimer_ = frames; }
 	protected:
+	int damageOverride_ = -1; // -1 = 未設定(共通値を使う)
 	static inline int kDamageToEnemy = 160;
 	static inline int kDamageToPlayer = 30;
 	static inline int kDamage = 50;
+	float damageScale_ = 1.0f;
+
 	static inline float kImpactPower = 1.2f;
+	static inline float kImpactPowerToEnemy = 1.2f;  // プレイヤーの弾が敵に当たったとき
+	static inline float kImpactPowerToPlayer = 1.2f; // 敵の弾がプレイヤーに当たったとき
 
 	KamataEngine::WorldTransform worldTransform_;
 	KamataEngine::Model* model_ = nullptr;

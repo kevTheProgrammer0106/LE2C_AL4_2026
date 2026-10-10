@@ -2,6 +2,7 @@
 #include "WeaponHeavySabre.h"
 #include "BaseEnemy.h"
 #include "GlobalVariables.h"
+#include "Player.h"
 
 using namespace KamataEngine;
 
@@ -23,6 +24,15 @@ void WeaponHeavySabre::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "HolsterOffsetRotation", holsterOffset_.rotation);
 	gv->AddItem(kGroupName, "LungeDamage", kLungeDamage);
 	gv->AddItem(kGroupName, "LungeImpactPower", kLungeImpactPower);
+	gv->AddItem(kGroupName, "PlayerLungeAnticipate", kPlayerLungeAnticipate);
+	gv->AddItem(kGroupName, "PlayerLungeAttack", kPlayerLungeAttack);
+	gv->AddItem(kGroupName, "PlayerLungeRecovery", kPlayerLungeRecovery);
+	gv->AddItem(kGroupName, "PlayerLungeSpeed", kPlayerLungeSpeed);
+	gv->AddItem(kGroupName, "PlayerLungeDamage", kPlayerLungeDamage);
+	gv->AddItem(kGroupName, "PlayerLungeImpact", kPlayerLungeImpact);
+	gv->AddItem(kGroupName, "PlayerLungeCooldown", kPlayerLungeCooldown);
+	gv->AddItem(kGroupName, "PlayerLungeReach", kPlayerLungeReach);
+	gv->AddItem(kGroupName, "PlayerLungeHeight", kPlayerLungeHeight);
 }
 
 void WeaponHeavySabre::ApplyGlobalVariables() {
@@ -36,10 +46,18 @@ void WeaponHeavySabre::ApplyGlobalVariables() {
 	kLungeReach = gv->GetFloatValue(kGroupName, "LungeReach");
 	holsterOffset_.translation = gv->GetVector3Value(kGroupName, "HolsterOffsetTranslation");
 	holsterOffset_.rotation = gv->GetVector3Value(kGroupName, "HolsterOffsetRotation");
-	kLungeDamage = gv->GetIntValue(kGroupName, "LungeDamage");             // [NEW]
-	kLungeImpactPower = gv->GetFloatValue(kGroupName, "LungeImpactPower"); // [NEW]
+	kLungeDamage = gv->GetIntValue(kGroupName, "LungeDamage");
+	kLungeImpactPower = gv->GetFloatValue(kGroupName, "LungeImpactPower");
+	kPlayerLungeAnticipate = gv->GetFloatValue(kGroupName, "PlayerLungeAnticipate");
+	kPlayerLungeAttack = gv->GetFloatValue(kGroupName, "PlayerLungeAttack");
+	kPlayerLungeRecovery = gv->GetFloatValue(kGroupName, "PlayerLungeRecovery");
+	kPlayerLungeSpeed = gv->GetFloatValue(kGroupName, "PlayerLungeSpeed");
+	kPlayerLungeDamage = gv->GetIntValue(kGroupName, "PlayerLungeDamage");
+	kPlayerLungeImpact = gv->GetFloatValue(kGroupName, "PlayerLungeImpact");
+	kPlayerLungeCooldown = gv->GetFloatValue(kGroupName, "PlayerLungeCooldown");
+	kPlayerLungeReach = gv->GetFloatValue(kGroupName, "PlayerLungeReach");
+	kPlayerLungeHeight = gv->GetFloatValue(kGroupName, "PlayerLungeHeight");
 }
-void WeaponHeavySabre::SetWorldPosition(Vector3& TargetPosition) { worldTransform_.translation_ = TargetPosition; }
 
 AABB WeaponHeavySabre::GetAABB() const {
 	Vector3 pos = worldTransform_.translation_;
@@ -47,96 +65,6 @@ AABB WeaponHeavySabre::GetAABB() const {
 	aabb.min = {pos.x - kHalfWidthMin / 2.0f, pos.y - kHalfHeightMin / 2.0f, pos.z - kHalfDepthMin / 2.0f};
 	aabb.max = {pos.x + kHalfWidthMax / 2.0f, pos.y + kHalfHeightMax / 2.0f, pos.z + kHalfDepthMax / 2.0f};
 	return aabb;
-}
-
-AABB WeaponHeavySabre::GetSwingAABBGeneric(const Vector3& ownerPosition, bool facingRight, int comboIndex) const {
-	constexpr float kOverlapMargin = 0.1f;
-	const float ownerHalfWidth = BaseEnemy::GetBodyWidth() * 0.5f;
-
-	float reach = kComboReach[comboIndex];
-	float swingHeight = kComboSwingHeight[comboIndex];
-
-	AABB aabb;
-	if (facingRight) {
-		aabb.min.x = ownerPosition.x + ownerHalfWidth - kOverlapMargin;
-		aabb.max.x = ownerPosition.x + ownerHalfWidth + reach;
-	} else {
-		aabb.min.x = ownerPosition.x - ownerHalfWidth - reach;
-		aabb.max.x = ownerPosition.x - ownerHalfWidth + kOverlapMargin;
-	}
-	aabb.min.y = ownerPosition.y - swingHeight * 0.5f;
-	aabb.max.y = ownerPosition.y + swingHeight * 0.5f;
-	aabb.min.z = ownerPosition.z - ownerHalfWidth;
-	aabb.max.z = ownerPosition.z + ownerHalfWidth;
-	return aabb;
-}
-
-void WeaponHeavySabre::SetWeaponState(WeaponState state) {
-	if (weaponState_ == state) {
-		return;
-	}
-	weaponState_ = state;
-	equipTimer_ = 0.0f;
-	isTransitioning_ = true;
-}
-
-void WeaponHeavySabre::UpdateWeaponState() {
-	if (!isTransitioning_) {
-		return;
-	}
-	equipTimer_ += (1.0f / 60.0f) / equipDuration_;
-	if (equipTimer_ >= 1.0f) {
-		equipTimer_ = 1.0f;
-		isTransitioning_ = false;
-	}
-}
-
-void WeaponHeavySabre::SetMeleePositionGeneric(const Vector3& ownerPosition, const Vector3& ownerRotation, bool facingRight, const GenericAttackAnimState* attackState) {
-	SRTOffset pose;
-	switch (weaponState_) {
-	case WeaponState::kHolstered:
-		pose = LerpSRT(readyStanceOffset_, holsterOffset_, equipTimer_);
-		break;
-	case WeaponState::kEquipped:
-		pose = LerpSRT(holsterOffset_, readyStanceOffset_, equipTimer_);
-		break;
-	}
-	float equipWeight = (weaponState_ == WeaponState::kEquipped) ? equipTimer_ : (1.0f - equipTimer_);
-	pose = ApplyReactionPose(pose, equipWeight);
-
-	if (attackState) {
-		const ComboAttackPattern& pattern = comboPatterns_[attackState->comboIndex];
-		switch (attackState->phase) {
-		case AttackPhase::kAnticipate:
-			pose = LerpSRT(pattern.anticipateStart, pattern.anticipateEnd, attackState->t);
-			break;
-		case AttackPhase::kAttack:
-			pose = LerpSRT(pattern.anticipateEnd, pattern.attackEnd, attackState->t);
-			break;
-		case AttackPhase::kRecovery:
-			pose = LerpSRT(pattern.attackEnd, pattern.recoveryEnd, attackState->t);
-			break;
-		}
-	}
-
-	Vector3 translation = pose.translation;
-	Vector3 rotation = pose.rotation;
-	Vector3 baseRotation = ownerRotation;
-	constexpr float kFacingRotY[] = {1.570796f, 4.712389f};
-	baseRotation.y = kFacingRotY[facingRight ? 0 : 1];
-
-	if (!facingRight) {
-		translation.x = -translation.x;
-		translation.z = -translation.z;
-		rotation.y = -rotation.y;
-		rotation.z = -rotation.z;
-	}
-
-	Vector3 target = ownerPosition + translation;
-	SetWorldPosition(target);
-	worldTransform_.rotation_ = baseRotation + rotation;
-	worldTransform_.scale_ = pose.scale;
-	WorldTransformUpdate(worldTransform_);
 }
 
 void WeaponHeavySabre::SetLungePositionGeneric(const Vector3& ownerPosition, const Vector3& ownerRotation, bool facingRight, AttackPhase lungePhase, float t) {
@@ -153,28 +81,9 @@ void WeaponHeavySabre::SetLungePositionGeneric(const Vector3& ownerPosition, con
 		pose = LerpSRT(kLungeExtend, readyStanceOffset_, t);
 		break;
 	}
-
-	Vector3 translation = pose.translation;
-	Vector3 rotation = pose.rotation;
-	Vector3 baseRotation = ownerRotation;
-	constexpr float kFacingRotY[] = {1.570796f, 4.712389f};
-	baseRotation.y = kFacingRotY[facingRight ? 0 : 1];
-
-	if (!facingRight) {
-		translation.x = -translation.x;
-		translation.z = -translation.z;
-		rotation.y = -rotation.y;
-		rotation.z = -rotation.z;
-	}
-
-	Vector3 target = ownerPosition + translation;
-	SetWorldPosition(target);
-	worldTransform_.rotation_ = baseRotation + rotation;
-	worldTransform_.scale_ = pose.scale;
-	WorldTransformUpdate(worldTransform_);
+	ApplyPoseToWorld(pose, ownerPosition, ownerRotation, facingRight, true);
 }
 
-// WeaponHeavySabre.cpp
 AABB WeaponHeavySabre::GetLungeAABBGeneric(const Vector3& ownerPosition, bool facingRight) const {
 	constexpr float kOverlapMargin = 0.1f;
 	// 1.4 / 1.6 with the default body height: same value as before, but now scales with the body.
@@ -196,5 +105,40 @@ AABB WeaponHeavySabre::GetLungeAABBGeneric(const Vector3& ownerPosition, bool fa
 	aabb.max.z = ownerPosition.z + ownerHalfWidth;
 	return aabb;
 }
+void WeaponHeavySabre::SetPlayerLungePosition(const Player& player, AttackPhase phase, float t) {
+	t = std::clamp(t, 0.0f, 1.0f);
+	SRTOffset pose;
+	switch (phase) {
+	case AttackPhase::kAnticipate:
+		pose = LerpSRT(readyStanceOffset_, kPlayerLungeAnticipatePose, t);
+		break;
+	case AttackPhase::kAttack:
+		pose = LerpSRT(kPlayerLungeAnticipatePose, kPlayerLungeExtendPose, t);
+		break;
+	case AttackPhase::kRecovery:
+	default:
+		pose = LerpSRT(kPlayerLungeExtendPose, readyStanceOffset_, t);
+		break;
+	}
+	const bool facingRight = (player.GetLRDirection() == Player::LRDirection::kRight);
+	ApplyPoseToWorld(pose, player.GetModelWorldPosition(), player.GetModelWorldTransform().rotation_, facingRight, true);
+}
 
-	void WeaponHeavySabre::SetEquipDuration(float seconds) { equipDuration_ = std::max(seconds, 0.01f); }
+AABB WeaponHeavySabre::GetPlayerLungeAABB(const AABB& body, bool facingRight) const {
+	constexpr float kOverlapMargin = 0.1f;
+	const float centerY = (body.min.y + body.max.y) * 0.5f;
+
+	AABB aabb;
+	if (facingRight) {
+		aabb.min.x = body.max.x - kOverlapMargin;
+		aabb.max.x = body.max.x + kPlayerLungeReach;
+	} else {
+		aabb.min.x = body.min.x - kPlayerLungeReach;
+		aabb.max.x = body.min.x + kOverlapMargin;
+	}
+	aabb.min.y = centerY - kPlayerLungeHeight * 0.5f;
+	aabb.max.y = centerY + kPlayerLungeHeight * 0.5f;
+	aabb.min.z = body.min.z;
+	aabb.max.z = body.max.z;
+	return aabb;
+}

@@ -157,10 +157,10 @@ public:
 	bool IsDroppingThrough() const { return dropThroughTimer_ > 0.0f; }
 
 	bool TryBlockAttack(const KamataEngine::Vector3& attackerPos);
+	virtual SRTOffset GetActionAnimOffset() const { return attackBodyPose_; }
 protected:
 	friend class DebugMenu;
 
-	virtual SRTOffset GetActionAnimOffset() const { return {}; }
 	ReactionPose GetReactionPose() const {
 		if (!behavior_)
 			return ReactionPose::kNone;
@@ -294,7 +294,7 @@ protected:
 	// virtual: 派生クラス(EnemyCuirassier)が独自のSFXを鳴らしたければoverrideする
 	virtual void PlayHurtSound() {
 		if (sDefaultHurtSoundHandle_ != 0) {
-			KamataEngine::Audio::GetInstance()->PlayWave(sDefaultHurtSoundHandle_, false, sSfxVolume_);
+			AudioSettings::PlaySfx(sDefaultHurtSoundHandle_, false, sSfxVolume_);
 		}
 	}
 	//  picks one of up to 3 registered death SFX variations at random,
@@ -313,24 +313,24 @@ protected:
 			return;
 		}
 		uint32_t chosen = candidates[static_cast<size_t>(std::rand()) % count];
-		KamataEngine::Audio::GetInstance()->PlayWave(chosen, false, sSfxVolume_);
+		AudioSettings::PlaySfx(chosen, false, sSfxVolume_);
 	}
 	// 移動アニメ(足音等)のSFXフック。デフォルトは何もしない。
 	// Cuirassierだけこれをoverrideして重量感のある足音を鳴らす。他の敵は現状無音のまま。
 
 		virtual void PlayFootstepSound() {
 		if (sDefaultFootstepSoundHandle_ != 0) {
-			KamataEngine::Audio::GetInstance()->PlayWave(sDefaultFootstepSoundHandle_, false, kMovementSfxVolume);
+		AudioSettings::PlaySfx(sDefaultFootstepSoundHandle_, false, kMovementSfxVolume);
 		}
 	}
 	virtual void PlayJumpSound() {
 		if (sDefaultJumpSoundHandle_ != 0) {
-			KamataEngine::Audio::GetInstance()->PlayWave(sDefaultJumpSoundHandle_, false, kMovementSfxVolume);
+			AudioSettings::PlaySfx(sDefaultJumpSoundHandle_, false, kMovementSfxVolume);
 		}
 	}
 	virtual void PlayMovementSound() {
 		if (sDefaultLandSoundHandle_ != 0) {
-			KamataEngine::Audio::GetInstance()->PlayWave(sDefaultLandSoundHandle_, false, kMovementSfxVolume);
+			AudioSettings::PlaySfx(sDefaultLandSoundHandle_, false, kMovementSfxVolume);
 		}
 	}
 
@@ -345,4 +345,9 @@ protected:
 	bool ignoreEquipStates_ = false;
 	float equipLockTimer_ = 0.0f;
 	static inline float kHeavyEquipLockDuration = 1.5f;
+
+	AnimationManager::AnimationContext BuildAnimationContext() const;
+
+	// Written each frame by melee enemies' UpdateMeleeVisual / UpdateLungeVisual from their own pose set.
+	SRTOffset attackBodyPose_{};
 };

@@ -29,6 +29,8 @@ public:
 	
 	bool IsInAttackAnticipation() const override { return GetBehavior() == Behavior::kMelee && meleePhase_ == MeleePhase::kAnticipate; }
 
+	bool IsInMeleeRecovery() const override { return GetBehavior() == Behavior::kMelee && meleePhase_ == MeleePhase::kRecovery; }
+
 protected:
 	// 接敵距離まで詰まったらkMeleeへ、クールダウン中は距離を保つ、といった
 	// 交戦判断をkRoot中に行う。

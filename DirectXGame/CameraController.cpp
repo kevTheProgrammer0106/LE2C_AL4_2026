@@ -28,18 +28,45 @@ void CameraController::Initialize(Camera* camera) {
 	camera_->Initialize();
 }
 
+float CameraController::ApplyEase(Ease ease, float t) {
+	t = std::clamp(t, 0.0f, 1.0f);
+	switch (ease) {
+	case Ease::kIn:
+		return EaseIn(0.0f, 1.0f, t);
+	case Ease::kOut:
+		return EaseOut(0.0f, 1.0f, t);
+	case Ease::kInOut:
+		return EaseInOut(0.0f, 1.0f, t);
+	case Ease::kLinear:
+	default:
+		return t;
+	}
+}
+
+Vector3 CameraController::ComputeFollowTarget() const {
+	const WorldTransform& wt = target_->GetWorldTransform();
+	return {
+	    wt.translation_.x + targetOffset_.x + target_->GetVelocity().x * kVelocityBias,
+	    wt.translation_.y + targetOffset_.y + target_->GetVelocity().y * kVelocityBias,
+	    wt.translation_.z + targetOffset_.z + target_->GetVelocity().z * kVelocityBias + zoomDelta_,
+	};
+}
+
 void CameraController::Update() {
-	if (mode_ == Mode::kArenaFocus) {
-		UpdateArenaFocusCamera();
+	UpdateZoom();
+
+	if (mode_ == Mode::kFocus) {
+		UpdateFocusCamera();
+		camera_->UpdateMatrix();
+		return;
+	}
+	if (!target_) {
 		camera_->UpdateMatrix();
 		return;
 	}
 
 	const WorldTransform& targetWT = target_->GetWorldTransform();
-
-	targetPos.x = targetWT.translation_.x + targetOffset_.x + target_->GetVelocity().x * kVelocityBias;
-	targetPos.y = targetWT.translation_.y + targetOffset_.y + target_->GetVelocity().y * kVelocityBias;
-	targetPos.z = targetWT.translation_.z + targetOffset_.z + target_->GetVelocity().z * kVelocityBias;
+	targetPos = ComputeFollowTarget();
 
 	switch (mode_) {
 	case Mode::kFollow:
@@ -64,65 +91,104 @@ void CameraController::Update() {
 	camera_->UpdateMatrix();
 }
 
-void CameraController::StartArenaFocus(const Vector3& focusPoint, float lerpDuration) {
-	arenaFocusPoint_ = focusPoint;
-	arenaFocusStartPos_ = camera_->translation_;
-	arenaFocusDuration_ = std::max(lerpDuration, 0.0001f);
-	arenaFocusTimer_ = 0.0f;
-	arenaFocusPhase_ = ArenaFocusPhase::kEnter;
-	mode_ = Mode::kArenaFocus;
+// ---------------- Zoom ----------------
+void CameraController::ZoomTo(float zoomDelta, float duration, Ease ease) {
+	zoomStart_ = zoomDelta_;
+	zoomTarget_ = zoomDelta;
+	zoomDuration_ = std::max(duration, 0.0001f);
+	zoomTimer_ = 0.0f;
+	zoomEase_ = ease;
+	zoomActive_ = true;
 }
 
-void CameraController::EndArenaFocus(float lerpDuration) {
-	if (mode_ != Mode::kArenaFocus) {
+void CameraController::UpdateZoom() {
+	if (!zoomActive_) {
 		return;
 	}
-	arenaFocusStartPos_ = camera_->translation_;
-	arenaFocusDuration_ = std::max(lerpDuration, 0.0001f);
-	arenaFocusTimer_ = 0.0f;
-	arenaFocusPhase_ = ArenaFocusPhase::kReturn;
+	zoomTimer_ += 1.0f / 60.0f;
+	float t = std::clamp(zoomTimer_ / zoomDuration_, 0.0f, 1.0f);
+	zoomDelta_ = Lerp(zoomStart_, zoomTarget_, ApplyEase(zoomEase_, t));
+	if (t >= 1.0f) {
+		zoomDelta_ = zoomTarget_;
+		zoomActive_ = false;
+	}
 }
 
-void CameraController::UpdateArenaFocusCamera() {
+// ---------------- Focus shot ----------------
+void CameraController::StartFocus(const FocusShot& shot) {
+	if (mode_ != Mode::kFocus) {
+		modeBeforeFocus_ = mode_; // restored when the shot ends (e.g. forced-scroll)
+	}
+	shot_ = shot;
+	shot_.enterDuration = std::max(shot.enterDuration, 0.0001f);
+	shot_.returnDuration = std::max(shot.returnDuration, 0.0001f);
+	focusStartPos_ = camera_->translation_;
+	focusTimer_ = 0.0f;
+	focusPhase_ = FocusPhase::kEnter;
+	mode_ = Mode::kFocus;
+}
+
+void CameraController::BeginFocusReturn() {
+	focusStartPos_ = camera_->translation_;
+	focusTimer_ = 0.0f;
+	focusPhase_ = FocusPhase::kReturn;
+}
+
+void CameraController::ReleaseFocus() {
+	if (mode_ == Mode::kFocus && focusPhase_ != FocusPhase::kReturn) {
+		BeginFocusReturn();
+	}
+}
+
+void CameraController::UpdateFocusCamera() {
 	camera_->rotation_.x = 0.0f;
 	camera_->rotation_.y = 0.0f;
+	constexpr float kDt = 1.0f / 60.0f;
 
-	switch (arenaFocusPhase_) {
-	case ArenaFocusPhase::kEnter: {
-		arenaFocusTimer_ += 1.0f / 60.0f;
-		float t = std::clamp(arenaFocusTimer_ / arenaFocusDuration_, 0.0f, 1.0f);
-		float te = EaseInOut(0.0f, 1.0f, t);
-		camera_->translation_ = Lerp(arenaFocusStartPos_, arenaFocusPoint_, te);
-		if (t >= 1.0f)
-			arenaFocusPhase_ = ArenaFocusPhase::kHold;
+	switch (focusPhase_) {
+	case FocusPhase::kEnter: {
+		focusTimer_ += kDt;
+		float t = std::clamp(focusTimer_ / shot_.enterDuration, 0.0f, 1.0f);
+		camera_->translation_ = Lerp(focusStartPos_, shot_.position, ApplyEase(shot_.enterEase, t));
+		if (t >= 1.0f) {
+			focusPhase_ = FocusPhase::kHold;
+			focusTimer_ = 0.0f;
+		}
 		break;
 	}
-	case ArenaFocusPhase::kHold:
-		camera_->translation_ = arenaFocusPoint_;
+	case FocusPhase::kHold:
+		camera_->translation_ = shot_.position;
+		if (!shot_.holdUntilReleased) {
+			focusTimer_ += kDt;
+			if (focusTimer_ >= shot_.holdDuration) {
+				BeginFocusReturn();
+			}
+		}
 		break;
-	case ArenaFocusPhase::kReturn: {
+	case FocusPhase::kReturn: {
 		if (!target_) {
-			mode_ = Mode::kFollow;
+			mode_ = modeBeforeFocus_;
 			break;
 		}
-		const WorldTransform& targetWT = target_->GetWorldTransform();
-		Vector3 followTarget = {
-		    targetWT.translation_.x + targetOffset_.x + target_->GetVelocity().x * kVelocityBias,
-		    targetWT.translation_.y + targetOffset_.y + target_->GetVelocity().y * kVelocityBias,
-		    targetWT.translation_.z + targetOffset_.z + target_->GetVelocity().z * kVelocityBias,
-		};
-		arenaFocusTimer_ += 1.0f / 60.0f;
-		float t = std::clamp(arenaFocusTimer_ / arenaFocusDuration_, 0.0f, 1.0f);
-		float te = EaseInOut(0.0f, 1.0f, t);
-		camera_->translation_ = Lerp(arenaFocusStartPos_, followTarget, te);
-		if (t >= 1.0f)
-			mode_ = Mode::kFollow;
+		focusTimer_ += kDt;
+		float t = std::clamp(focusTimer_ / shot_.returnDuration, 0.0f, 1.0f);
+		// target is recomputed each frame (with the same clamps follow mode uses) so the camera lands exactly where follow takes over
+		camera_->translation_ = Lerp(focusStartPos_, ComputeClampedFollowPosition(), ApplyEase(shot_.returnEase, t));
+		if (t >= 1.0f) {
+			mode_ = modeBeforeFocus_;
+		}
 		break;
 	}
 	}
 }
 
 void CameraController::Reset() {
+	if (mode_ == Mode::kFocus) {
+		mode_ = modeBeforeFocus_;
+	}
+	zoomDelta_ = 0.0f;
+	zoomActive_ = false;
+
 	const WorldTransform& targetWT = target_->GetWorldTransform();
 
 	switch (mode_) {
@@ -130,11 +196,8 @@ void CameraController::Reset() {
 		ResetCameraPerspectives();
 		break;
 	case Mode::kForcedScroll:
-		targetOffset_ = {0.0f, 0.0f, -15.0f};
+		targetOffset_ = {0.0f, 0.0f, -25.0f};
 		scrollX_ = movableArea_.left;
-		break;
-	case Mode::kArenaFocus:
-		targetOffset_ = {0.0f, 0.0f, -5.0f};
 		break;
 	default:
 		break;
@@ -160,7 +223,7 @@ void CameraController::SetWorldBounds(float worldWidth, float worldHeight) {
 
 void CameraController::DrawDebugControls() {
 #ifdef _DEBUG
-	ImGui::Text("Press P to toggle the debug camera"); 
+	ImGui::Text("Press P to toggle the debug camera");
 	int currentType = static_cast<int>(perspectiveType);
 	ImGui::Value("Current Perspective", static_cast<int>(perspectiveType));
 	ImGui::Combo("Perspective Type", &currentType, "Sidescroll\0Fixed\0TopDown\0TopDownDiagonal\0Isometric\0ThirdPerson\0FirstPerson\0");
@@ -177,6 +240,36 @@ void CameraController::DrawDebugControls() {
 	ImGui::BulletText("Camera SRT Parameters");
 	ImGui::DragFloat2("Rotation", &camera_->rotation_.x, 0.1f, -100.0f, 100.0f);
 	ImGui::DragFloat3("Translation", &camera_->translation_.x, 0.1f, -100.0f, 1000.0f);
+	ImGui::BulletText("Zoom (+in / -out)");
+	static float zoomDelta = 5.0f;
+	ImGui::DragFloat("Zoom Delta", &zoomDelta, 0.1f, -30.0f, 30.0f);
+	if (ImGui::Button("Zoom"))
+		ZoomTo(zoomDelta, 0.6f);
+	ImGui::SameLine();
+	if (ImGui::Button("Reset Zoom"))
+		ResetZoom(0.6f);
+	ImGui::Text("Focus active: %s", IsFocusActive() ? "yes" : "no");
+	if (ImGui::Button("Release Focus"))
+		ReleaseFocus();
+
+	ImGui::Separator();
+	ImGui::BulletText("Camera Zones");
+	ImGui::Text("Follow z offset: %.1f   Camera z: %.1f", targetOffset_.z, camera_->translation_.z);
+	if (zones_.empty())
+		ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.3f, 1.0f), "No zones loaded (no F chips generated)");
+	for (auto& [key, z] : zones_) {
+		ImGui::PushID(static_cast<int>(key));
+		ImGui::Text(
+		    "Zone #%d at (%.0f, %.0f)  area %.0f x %.0f  inside=%s  exit timer=%.2fs  active=%s", static_cast<int>(key), z.focusPoint.x, z.focusPoint.y, z.config.areaWidth, z.config.areaHeight,
+		    z.playerInside ? "yes" : "no", z.exitTimer, z.active ? "yes" : "no");
+		ImGui::Text("  shot camera z: %.1f", z.focusPoint.z + z.config.offset.z);
+		if (ImGui::Button("Force zoom"))
+			ForceZone(key);
+		ImGui::SameLine();
+		if (ImGui::Button("Release"))
+			ReleaseActiveZone();
+		ImGui::PopID();
+	}
 #endif
 }
 
@@ -217,7 +310,7 @@ void CameraController::UpdateCameraPerspectives(const KamataEngine::WorldTransfo
 void CameraController::ResetCameraPerspectives() {
 	switch (perspectiveType) {
 	case PerspectiveType::Sidescroll:
-		targetOffset_ = {0.0f, 0.0f, -20.0f};
+		targetOffset_ = {0.0f, 0.0f, -18.5f};
 		break;
 	default:
 		targetOffset_ = {0.0f, 0.0f, 0.0f};
@@ -294,5 +387,156 @@ void CameraController::UpdateFirstPersonCamera(const WorldTransform& worldTransf
 	camera_->translation_.y = worldTransformTarget.translation_.y + 1.5f;
 	camera_->translation_.z = worldTransformTarget.translation_.z;
 }
+// Same clamps the follow camera applies, so returning from a focus shot lands exactly where follow mode will be.
+Vector3 CameraController::ComputeClampedFollowPosition() const {
+	Vector3 p = ComputeFollowTarget();
+	if (perspectiveType != PerspectiveType::Sidescroll)
+		return p;
+	const WorldTransform& wt = target_->GetWorldTransform();
+	p.x = std::clamp(p.x, wt.translation_.x + margin.left, wt.translation_.x + margin.right);
+	p.y = std::clamp(p.y, wt.translation_.y + margin.bottom, wt.translation_.y + margin.top);
+	p.x = std::clamp(p.x, movableArea_.left, movableArea_.right);
+	p.y = std::clamp(p.y, movableArea_.bottom, movableArea_.top);
+	return p;
+}
 
+// ---------------- Zone presets ----------------
+const std::vector<CameraController::ZonePreset>& CameraController::GetZonePresets() {
+	// areaWidth / areaHeight = the trigger area centred on the 'F' chip (world units, 1 tile = 1). Placeholder sizes: set them per room.
+	static const std::vector<ZonePreset> presets = {
+	    {.stageIndex = 1, .presetID = 0, .config = {.offset = {0.0f, 0.0f, -30.0f}, .areaWidth = 24.0f, .areaHeight = 14.0f, .enterDuration = 1.0f, .returnDuration = 1.0f, .exitDelay = 1.0f}},
+	    {.stageIndex = -1, .presetID = 1, .config = {.offset = {0.0f, 0.0f, -35.0f}, .areaWidth = 20.0f, .areaHeight = 12.0f}                                                                  },
+	    {.stageIndex = -1, .presetID = 2, .config = {.offset = {0.0f, 0.0f, -35.0f}, .areaWidth = 20.0f, .areaHeight = 12.0f, .enterEase = Ease::kOut}                                         },
+	    // stage-specific override example:
+	    // {.stageIndex = 2, .presetID = 1, .config = {.offset = {0.0f, 2.0f, -40.0f}, .areaWidth = 30.0f, .areaHeight = 16.0f}},
+	};
+	return presets;
+}
+
+CameraController::ZoneConfig CameraController::GetCameraConfig(int32_t stageIndex, uint8_t presetID) {
+	const ZonePreset* anyStage = nullptr;
+	for (const ZonePreset& p : GetZonePresets()) {
+		if (p.presetID != presetID)
+			continue;
+		if (p.stageIndex == stageIndex)
+			return p.config; // exact stage wins
+		if (p.stageIndex < 0)
+			anyStage = &p;
+	}
+	return anyStage ? anyStage->config : ZoneConfig{}; // unknown preset: -30 offset, 20 x 12 area, 0.8s, 1.0s cooldown
+}
+
+// ---------------- Zones ----------------
+AABB CameraController::GetZoneArea(const Zone& zone) {
+	const float halfW = zone.config.areaWidth * 0.5f;
+	const float halfH = zone.config.areaHeight * 0.5f;
+	AABB area;
+	area.min = {zone.focusPoint.x - halfW, zone.focusPoint.y - halfH, -1.0f};
+	area.max = {zone.focusPoint.x + halfW, zone.focusPoint.y + halfH, 1.0f};
+	return area;
+}
+
+void CameraController::AddZone(const Vector3& focusPoint, const ZoneConfig& config) {
+	for (auto& [key, z] : zones_) {
+		if (z.focusPoint.x == focusPoint.x && z.focusPoint.y == focusPoint.y) {
+			z.config = config; // already registered
+			return;
+		}
+	}
+	Zone zone;
+	zone.focusPoint = focusPoint;
+	zone.config = config;
+	zones_.emplace(nextZoneKey_++, zone);
+}
+
+void CameraController::RemoveZoneDataInRange(float minX, float maxX) {
+	for (auto it = zones_.begin(); it != zones_.end();) {
+		float x = it->second.focusPoint.x;
+		if (x >= minX && x < maxX) {
+			if (static_cast<int32_t>(it->first) == activeZoneID_) {
+				activeZoneID_ = -1;
+				zoneForced_ = false;
+				ReleaseFocus(); // its chip is being unloaded: ease back
+			}
+			it = zones_.erase(it);
+		} else {
+			++it;
+		}
+	}
+}
+
+void CameraController::BeginZoneShot(Zone& zone, uint32_t zoneKey) {
+	FocusShot shot;
+	shot.position = zone.focusPoint + zone.config.offset;
+	shot.enterDuration = zone.config.enterDuration;
+	shot.returnDuration = zone.config.returnDuration;
+	shot.enterEase = zone.config.enterEase;
+	shot.returnEase = zone.config.returnEase;
+	shot.holdUntilReleased = true; // held until the player leaves the area
+	StartFocus(shot);
+
+	zone.active = true;
+	activeZoneID_ = static_cast<int32_t>(zoneKey);
+}
+
+bool CameraController::ForceZone(uint32_t zoneKey) {
+	auto it = zones_.find(zoneKey);
+	if (it == zones_.end())
+		return false;
+	ReleaseActiveZone();
+	BeginZoneShot(it->second, zoneKey);
+	zoneForced_ = true; // UpdateZones won't release it just because the player isn't inside
+	return true;
+}
+
+void CameraController::ReleaseActiveZone() {
+	zoneForced_ = false;
+	if (activeZoneID_ < 0)
+		return;
+	auto it = zones_.find(static_cast<uint32_t>(activeZoneID_));
+	if (it != zones_.end())
+		it->second.active = false;
+	activeZoneID_ = -1;
+	ReleaseFocus(); // eases back to the follow camera
+}
+
+void CameraController::UpdateZones(const AABB& playerAABB, bool enabled) {
+	constexpr float kDt = 1.0f / 60.0f;
+
+	if (!enabled) {
+		ReleaseActiveZone();
+		return;
+	}
+	// Focus was cancelled from elsewhere (Reset, debug camera): drop the stale ownership.
+	if (activeZoneID_ >= 0 && !IsFocusActive()) {
+		auto it = zones_.find(static_cast<uint32_t>(activeZoneID_));
+		if (it != zones_.end())
+			it->second.active = false;
+		activeZoneID_ = -1;
+		zoneForced_ = false;
+	}
+
+	for (auto& [key, zone] : zones_) {
+		const bool inside = IsCollisionAABB(playerAABB, GetZoneArea(zone));
+		zone.playerInside = inside;
+
+		if (!inside) {
+			if (static_cast<int32_t>(key) == activeZoneID_ && !zoneForced_) {
+				zone.exitTimer += kDt; // outside: count down to easing back
+				if (zone.exitTimer >= zone.config.exitDelay)
+					ReleaseActiveZone();
+			} else {
+				zone.exitTimer = 0.0f;
+			}
+			continue;
+		}
+
+		zone.exitTimer = 0.0f; // back inside: timer resets
+
+		if (activeZoneID_ >= 0)
+			continue; // already active (this zone, or another one owns the camera)
+
+		BeginZoneShot(zone, key);
+	}
+}
 #pragma endregion

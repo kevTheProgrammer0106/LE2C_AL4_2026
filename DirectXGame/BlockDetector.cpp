@@ -79,7 +79,57 @@ bool BlockDetector::ProbeGroundTop(const Vector3& center, float stepUp, float ma
 	}
 	return found;
 }
+bool BlockDetector::HasSupportBelow(float centerX, float feetY) const {
+	const float columnsX[2] = {centerX - kWidth * 0.5f + kBlank, centerX + kWidth * 0.5f - kBlank};
+	constexpr float kStep = 0.1f;
+	for (float x : columnsX) {
+		for (float d = 0.05f; d <= kLedgeProbeDepth; d += kStep) {
+			if (IsSolid({x, feetY - d, 0.0f}, ignoreBarrier_)) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
 
+bool BlockDetector::LedgeGuard(CollisionInfo& collisionInfo, float speedLimit) {
+	if (!mapChipField_ || collisionInfo.move.x == 0.0f) {
+		return false;
+	}
+	// still being flung faster than the entity's own max speed: let it fly
+	if (std::abs(velocity_.x) > speedLimit) {
+		return false;
+	}
+
+	const Vector3 center = worldTransform_.translation_;
+	const float feetY = center.y - kHeight * 0.5f;
+
+	// already over a pit (not standing over any ground): nothing to protect
+	if (!HasSupportBelow(center.x, feetY)) {
+		return false;
+	}
+	const float newFeetY = feetY + collisionInfo.move.y;
+	// the full move keeps ground under at least one foot: fine
+	if (HasSupportBelow(center.x + collisionInfo.move.x, newFeetY)) {
+		return false;
+	}
+
+	// Find the furthest point along the move that still has ground underneath (bisection),
+	// so the entity is locked right at the edge instead of stopping a whole step short.
+	float lo = 0.0f;
+	float hi = 1.0f;
+	for (int i = 0; i < 8; ++i) {
+		float mid = (lo + hi) * 0.5f;
+		if (HasSupportBelow(center.x + collisionInfo.move.x * mid, newFeetY)) {
+			lo = mid;
+		} else {
+			hi = mid;
+		}
+	}
+	collisionInfo.move.x *= lo;
+	velocity_.x = 0.0f;
+	return true;
+}
 void BlockDetector::GroundSwitch(const CollisionInfo& collisionInfo) {
 	if (onGround_) {
 		if (velocity_.y > 0.0f) {

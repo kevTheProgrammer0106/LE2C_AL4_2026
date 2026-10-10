@@ -20,10 +20,11 @@ public:
 		KamataEngine::Vector3 velocity = {};
 		bool onGround = true;
 		bool isDead = false;
-		bool isKnockedBack = false; // [NEW]
-		bool isStunned = false;     // [NEW]
-		bool isBlocking = false;    // [NEW]
-		bool facingRight = true;    // [NEW] used to mirror knockback/stun/block poses
+		bool isKnockedBack = false; 
+		bool isStunned = false;    
+		bool isBlocking = false;    
+		bool facingRight = true;    // used to mirror knockback/stun/block poses
+		bool isAttacking = false;   // melee in progress: movement pose eases to neutral so the attack pose reads cleanly
 
 		// 移動アニメーションとは別の、攻撃・照準・リロード等による体のポーズ
 		SRTOffset actionPose = {};
@@ -71,10 +72,10 @@ protected:
 
 	MovementState movementState_ = MovementState::kIdle;
 	float movementStateTimer_ = 0.0f;
-	float deadTimer_ = 0.0f;  // [NEW] seconds spent in the death behavior
-	bool facingRight_ = true; // [NEW] last facing passed in via AnimationContext
+	float deadTimer_ = 0.0f;  // seconds spent in the death behavior
+	bool facingRight_ = true; // last facing passed in via AnimationContext
 
-	// [NEW] Smoothed poses. Targets jump between states; these chase them so transitions blend instead of snapping.
+	// Smoothed poses. Targets jump between states; these chase them so transitions blend instead of snapping.
 	SRTOffset currentPose_ = {};
 	SRTOffset currentActionPose_ = {};
 	// the un-smoothed pose for the current movement state (old GetMovementAnimOffset body)

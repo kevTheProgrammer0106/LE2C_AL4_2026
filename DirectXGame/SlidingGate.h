@@ -32,7 +32,27 @@ public:
 	bool IsBlocking() const { return openFactor_ < kBlockingThreshold; }
 	AABB GetAABB() const;
 
+	enum class Kind { kNormal, kArena };
+	static Kind KindFromType(MapChipType type) {
+		switch (type) {
+		case MapChipType::kArenaGateUp:
+		case MapChipType::kArenaGateDown:
+		case MapChipType::kArenaGateLeft:
+		case MapChipType::kArenaGateRight:
+			return Kind::kArena;
+		default:
+			return Kind::kNormal;
+		}
+	}
+	Kind GetKind() const { return kind_; }
+	bool IsArenaGate() const { return kind_ == Kind::kArena; }
+	void SnapOpen() {
+		isOpenTarget_ = true;
+		openFactor_ = 1.0f;
+	}
+
 private:
+	Kind kind_ = Kind::kNormal;
 	uint8_t buttonID_ = 0;
 	static SlideDirection DirectionFromType(MapChipType type);
 
@@ -48,9 +68,9 @@ private:
 	bool isOpenTarget_ = false;
 	float openFactor_ = 0.0f;
 
-	static inline float kHalfWidth = 1.0f;
-	static inline float kHalfHeight = 1.0f;
-	static inline float kHalfDepth = 1.0f;
+	static inline float kHalfWidth = 0.5f;
+	static inline float kHalfHeight = 0.5f;
+	static inline float kHalfDepth = 0.5f;
 
 	static inline float kSlideDistance = 2.0f;
 	static inline float kSlideSpeed = 0.02f;

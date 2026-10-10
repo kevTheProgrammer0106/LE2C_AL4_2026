@@ -6,14 +6,17 @@
 #include <algorithm>
 #include <cassert>
 #include <math.h>
+#include <cmath>
 #include <numbers>
+#include<array>
+#include <string>
 
 class Global {};
 
 enum class Owner { kEmpty, kPlayer, kEnemy };
 
 enum class DropItemCategory { kMelee, kFirearm, kUnknown };
-enum class DropWeaponKind { kSabreLight, kSabreHeavy, kMusketLong, kMusketBayonet, kUnknown };
+enum class DropWeaponKind { kSabreLight, kSabreHeavy, kLongAxe, kSpear, kMusketLong, kMusketBayonet, kShotgun, kDualPistols, kUnknown };
 
 struct AABB {
 	KamataEngine::Vector3 min; //!< 最小点
@@ -49,6 +52,55 @@ struct ComboAttackPattern {
 	SRTOffset attackEnd;       // 攻撃振り切り時の姿勢
 	SRTOffset recoveryEnd;     // 硬直終了時の姿勢（通常はidle姿勢に戻す）
 };
+enum class BodyAttackPhase { kAnticipate, kAttack, kRecovery };
+
+inline SRTOffset MakeBodyPose(float rotX, float rotY, float rotZ, KamataEngine::Vector3 scale = {1.0f, 1.0f, 1.0f}, KamataEngine::Vector3 translation = {0.0f, 0.0f, 0.0f}) {
+	SRTOffset pose;
+	pose.scale = scale;
+	pose.rotation = {rotX, rotY, rotZ};
+	pose.translation = translation;
+	return pose;
+}
+
+// Body swing for a combo weapon: 3 combo steps x (anticipate / peak / recovery). Same shape the player uses.
+struct BodyComboPoseSet {
+	std::array<SRTOffset, 3> anticipate;
+	std::array<SRTOffset, 3> peak;
+	std::array<SRTOffset, 3> recovery;
+};
+// Body pose for a thrust (lunge / bayonet).
+struct BodyLungePoseSet {
+	SRTOffset windUp;
+	SRTOffset thrust;
+};
+
+// Carried by DroppableItem so a weapon keeps its state when dropped and picked up again.
+//  Firearm: kReady = loaded,        kOnCooldown = unloaded (reloading)
+//  Melee:   kReady = ready to swing, kOnCooldown = dropped mid-swing / recovering
+enum class DropItemState : uint8_t { kReady = 0, kOnCooldown = 1 };
+
+enum class LungeSource { kNone, kHeavySabre, kBayonet };
+
+// Player special attack parameters (frames @60fps, speed per frame, cooldown seconds)
+struct LungeSpec {
+	float anticipateFrames = 10.0f;
+	float attackFrames = 8.0f;
+	float recoveryFrames = 15.0f;
+	float speed = 0.3f;
+	int damage = 50;
+	float impactPower = 1.8f;
+	float cooldown = 4.0f;
+};
+
+SRTOffset EvaluateBodyComboPose(const BodyComboPoseSet& set, BodyAttackPhase phase, float t, int comboIndex);
+SRTOffset EvaluateBodyLungePose(const BodyLungePoseSet& set, BodyAttackPhase phase, float t);
+
+// GlobalVariables glue so every set is tunable the same way (keys: <prefix><combo><phase><Scale|Rotation|Translation>)
+void RegisterBodyComboPoseSet(const char* group, const char* prefix, const BodyComboPoseSet& set);
+void ApplyBodyComboPoseSet(const char* group, const char* prefix, BodyComboPoseSet& set);
+void RegisterBodyLungePoseSet(const char* group, const char* prefix, const BodyLungePoseSet& set);
+void ApplyBodyLungePoseSet(const char* group, const char* prefix, BodyLungePoseSet& set);
+
 struct BodyComboPattern {
 	SRTOffset anticipateStart; // 予備動作開始時の姿勢（通常はidle姿勢と同じでよい）
 	SRTOffset anticipateEnd;   // 予備動作完了時の姿勢

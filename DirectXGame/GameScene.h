@@ -80,10 +80,14 @@ public:
 
 	void CreateHitEffect(KamataEngine::Vector3& spawnLocation, float rotationZ = 0.0f);
 	void CreateGuardEffect(KamataEngine::Vector3& spawnLocation);
-	void CreateFirearmProjectile(Owner owner, const KamataEngine::Vector3& position, const KamataEngine::Vector2& aimDirection);
 	void CreateMuzzleFlash(KamataEngine::Vector3& spawnLocation);
 	void CreateBlockSparkEffect(KamataEngine::Vector3& spawnLocation);
 	void CreateEnemyDeathParticles(const KamataEngine::Vector3& position);
+
+	void CreateFirearmProjectile(Owner owner, const KamataEngine::Vector3& position, const KamataEngine::Vector2& aimDirection, int damage = -1, int32_t lifeFrames = 0);
+	DroppableItem* CreateDroppableItem(const KamataEngine::Vector3& position, DropItemCategory category, DropWeaponKind kind, DropItemState state = DropItemState::kReady);
+	void ApplyItemPickup(const DroppableItem& item);
+
 
 	void Initialize(StageManager* stageDataManager);
 	void Update();
@@ -99,9 +103,6 @@ public:
 	const std::vector<std::unique_ptr<BaseEnemy>>& GetEnemies() const { return enemies_; }
 
 	void AlertNearbyEnemies(BaseEnemy* sourceEnemy, const KamataEngine::Vector3& alertPosition, float radius);
-
-	void CreateDroppableItem(const KamataEngine::Vector3& position, DropItemCategory category, DropWeaponKind kind);
-	void ApplyItemPickup(const DroppableItem& item);
 
 	void GenerateChunkTileMap(uint32_t chunkIndex);
 	void GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow); // [NEW] row-scoped, idempotent
@@ -135,20 +136,18 @@ public:
 	// (stageIndex, arenaID/linkID) at load time.
 	// ============================================================
 	struct ArenaSpawnEntry {
-		uint8_t subIDSlot;     // matches the map-chip subID painted on the 'S' tile == which "wave" this is
-		uint8_t enemyType;     // 0 = Rifleman, 1 = Cuirassier, 2 = Fighter (0xFF = undeclared/inert custom slot)
-		float interval = 5.0f; // seconds between spawns for this wave
+		uint8_t subIDSlot;
+		uint8_t enemyType;
+		float interval = 5.0f;
 		EnemySpawner::SpawnMode mode = EnemySpawner::SpawnMode::kLimited;
-		int32_t maxSpawnCount = 3; // ignored when mode == kEndless
+		int32_t maxSpawnCount = 3;
 	};
+	// Arena table: waves only. Cameras live in CameraShotConfig below.
 	struct ArenaFieldConfig {
-		int32_t stageIndex;                      // which stage this entry applies to
-		uint8_t arenaID;                         // linkID of the arena (matches 'R'/'S' linkID)
-		std::vector<ArenaSpawnEntry> spawnTable; // subID -> wave config, specific to this arena
-		bool hasCameraOffsetOverride = false;
-		KamataEngine::Vector3 cameraOffsetOverride{}; // overrides ArenaManager::kCameraOffset for this arena only
+		int32_t stageIndex;
+		uint8_t arenaID;
+		std::vector<ArenaSpawnEntry> spawnTable;
 	};
-
 	// Resolves the full wave configuration (enemy type + interval + spawn mode/count) for
 	// (stageIndex, arenaID, subID). subID 1-3 default to the vanilla mapChip mapping
 	// (1->Rifleman, 2->Cuirassier, 3->Fighter) with a standard wave unless a spawnTable
@@ -156,10 +155,20 @@ public:
 	// custom and MUST be declared in spawnTable, otherwise it resolves to an inert wave.
 	static ArenaSpawnEntry ResolveArenaSpawnEntry(int32_t stageIndex, uint8_t arenaID, uint8_t subID);
 	// Returns true and fills outOffset if a per-arena camera offset override is configured.
-	static bool GetArenaCameraOffsetOverride(int32_t stageIndex, uint8_t arenaID, KamataEngine::Vector3& outOffset);
 
+	// Camera shot table: keyed by (stage, cameraID). cameraID = linkID of 'F' (focus) and 'G' (trigger) tiles.
+	// Camera zone table: keyed by (stage, cameraID). cameraID = linkID of 'F' (zoom point) and 'G' (trigger area) tiles.
+	struct CameraShotConfig {
+		int32_t stageIndex = 0;
+		uint8_t cameraID = 0;
+		KamataEngine::Vector3 offset{0.0f, 0.0f, -30.0f}; // added to the 'F' tile position (z = zoom distance)
+		float enterDuration = 0.8f;
+		float returnDuration = 0.8f;
+		CameraController::Ease enterEase = CameraController::Ease::kInOut;
+		CameraController::Ease returnEase = CameraController::Ease::kInOut;
+		float reentryCooldown = 1.0f; // seconds the player must stay inside after re-entering before the zoom starts again
+	};
 	void BindAssets();
-
 private:
 	friend class DebugMenu;
 	GameAssets assets_;
@@ -310,16 +319,10 @@ private:
 	};
 	std::vector<ArenaTriggerPoint> arenaTriggers_;
 	std::vector<std::unique_ptr<EnemySpawner>> enemySpawners_;
-	ArenaManager* activeArenaLockingCamera_ = nullptr;
-	bool arenaReturningToFollow_ = false;
+
 	void UpdateArenaTriggers();
 	void UpdateArenas();
 	void UpdatePeriodicEnemySpawners();
-	struct ArenaCameraPoint {
-		KamataEngine::Vector3 position;
-		uint8_t arenaID;
-	};
-	std::vector<ArenaCameraPoint> arenaCameraPoints_;
 
 	// --- Checkpoint ---
 	struct CheckpointTriggerPoint {
@@ -344,4 +347,6 @@ private:
 	bool showCollisionDebug_ = true;
 
 	PlayerBlockUI playerBlockUI_;
+
+	ArenaManager* FindActiveArena() const;
 };

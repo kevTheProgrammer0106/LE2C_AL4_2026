@@ -113,6 +113,15 @@ private:
 	// Resizes the sprite around the button's centre using button.scale. The hit area (aabb) is untouched.
 	static void ApplyButtonVisual(Button& button);
 
+	// Draws the hovered button's label in a small box above the cursor (ImGui foreground draw list).
+	// Must be called while the ImGui frame is open, i.e. from Update(), not Draw().
+	void DrawHoverLabel(float mouseX, float mouseY) const;
+
+	static inline float kLabelCursorGap = 22.0f; // space between the cursor and the bottom of the label box
+	static inline float kLabelFontSize = 24.0f;
+	static inline float kLabelPadX = 12.0f;
+	static inline float kLabelPadY = 6.0f;
+
 	static inline float kHoverScale = 1.12f; // enlarged while hovered
 	static inline float kPressScale = 0.95f; // slightly pressed in while held
 	static inline float kScaleLerp = 0.25f;  // per-frame ease toward the target

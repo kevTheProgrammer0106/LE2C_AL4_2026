@@ -8,11 +8,11 @@
 #include <numbers>
 
 /// <summary>
-/// Firearm base. ANIMATION offsets (combat / holster / reload / knockback / stun) live here as virtual getters;
-/// each concrete firearm overrides them with its own tuned values. STATS (ammo, reload time, damage, bayonet
-/// reach, ...) stay entirely in the derived classes -- nothing here touches them.
-/// UpdateFollow is shared and built only from those getters, so any firearm can be driven the same way
-/// (player or enemy). Derived classes with per-frame state (reloading) hook in via TickReload().
+/// Firearm base.
+/// - ANIMATION offsets (combat / holster / reload / knockback / stun / block) are virtual getters each firearm overrides.
+/// - AMMO / RELOAD logic is implemented here once (it was copy-pasted in FirearmMusket and FirearmMusketBayonet).
+///   Derived classes only supply the tuning numbers through the pure-virtual stat getters.
+/// - offset_ is an EXTRA offset layered on top of the combat pose (Player / EnemyRifleman call SetOffset every frame).
 /// </summary>
 class BaseFirearm {
 public:
@@ -25,16 +25,21 @@ public:
 	const KamataEngine::WorldTransform& GetWorldTransform() const { return worldTransform_; }
 	const SRTOffset& GetOffset() const { return offset_; }
 
+	// Extra offset on top of the combat pose (identity = no change).
 	void SetOffset(const KamataEngine::Vector3& scale, const KamataEngine::Vector3& rotation, const KamataEngine::Vector3& translation) {
 		offset_.scale = scale;
 		offset_.rotation = rotation;
 		offset_.translation = translation;
 	}
 
+	// 持ち主(プレイヤー/敵)。リロード時間などの値の切り替えに使う。Initializeより前に設定すること
+	void SetOwner(Owner owner) { owner_ = owner; }
+	Owner GetOwner() const { return owner_; }
+
 	// ============================================================
-	// [NEW] Animation offset polymorphism. Override per firearm.
+	// Animation offset polymorphism. Override per firearm.
 	// ============================================================
-	virtual const SRTOffset& GetCombatOffset() const { return offset_; }
+	virtual const SRTOffset& GetCombatOffset() const { return kIdentityOffset; }
 	virtual const SRTOffset& GetHolsterOffset() const { return holsterOffset_; }
 	virtual const SRTOffset& GetReloadOffset() const { return reloadOffset_; }
 	virtual const SRTOffset& GetKnockbackOffset() const { return kDefaultKnockbackOffset; }
@@ -43,7 +48,11 @@ public:
 	// Extra yaw the model needs so that "rotation.y == 0" faces forward (musket models need +pi/2).
 	virtual float GetModelYawOffset() const { return 0.0f; }
 
-	// Fallbacks for firearms that don't override knockback/stun.
+	static inline SRTOffset kIdentityOffset = {
+	    {1.0f, 1.0f, 1.0f},
+        {0.0f, 0.0f, 0.0f},
+        {0.0f, 0.0f, 0.0f}
+    };
 	static inline SRTOffset kDefaultKnockbackOffset = {
 	    {1.0f, 1.0f,  1.0f },
         {0.3f, 0.0f,  0.9f },
@@ -54,7 +63,7 @@ public:
         {0.0f,  0.0f,  -0.9f},
         {0.55f, -0.1f, -0.1f}
     };
-	// [NEW] guard pose: gun held across the body (authored for a right-facing entity)
+	// guard pose: gun held across the body (authored for a right-facing entity)
 	static inline SRTOffset kDefaultBlockOffset = {
 	    {1.0f,  1.0f,  1.0f },
         {0.0f,  0.0f,  0.7f },
@@ -114,31 +123,67 @@ public:
 	}
 
 	virtual float GetImpactPower() const { return kImpactPower; }
+	// 持ち主に応じた1発のダメージ(プレイヤーが撃つ=対敵、敵が撃つ=対プレイヤー)
+	int GetBulletDamage() const { return IsPlayerOwned() ? GetDamageToEnemy() : GetDamageToPlayer(); }
 
 	static void RegisterGlobalVariables();
 	static void ApplyGlobalVariables();
 
 	// --- SFX ---
 	static void SetFireSoundHandle(uint32_t handle) { sFireSoundHandle_ = handle; }
-	static void SetReloadSoundHandle(uint32_t handle) { sReloadSoundHandle_ = handle; }
+	// One shared "reload finished" sound for every musket (the bayonet musket's own handle was never set before).
+	static void SetLoadedSoundHandle(uint32_t handle) { sLoadedSoundHandle_ = handle; }
 	static void SetSfxVolume(float volume) { sSfxVolume_ = volume; }
 	static void PlayFireSound() { PlaySfxHandle(sFireSoundHandle_); }
-	static void PlayReloadSound() { PlaySfxHandle(sReloadSoundHandle_); }
 
 	void SnapEquipped(bool equipped) {
 		equipTarget_ = equipped ? 1.0f : 0.0f;
 		equipFactor_ = equipTarget_;
 	}
 
+	// ============================================================
+	// Shared ammo / reload (single implementation)
+	// ============================================================
+	virtual bool TryFire();
+	bool CanFire() const { return currentAmmo_ > 0; }
+	virtual bool IsReloading() const { return isReloading_; }
+	virtual float GetReloadProgress01() const { return (isReloading_ && reloadDurationCurrent_ > 0.0f) ? std::clamp(reloadTimer_ / reloadDurationCurrent_, 0.0f, 1.0f) : 1.0f; }
+	virtual int GetCurrentAmmo() const { return currentAmmo_; }
+	// Hitting enemies shortens the NEXT reload.
+	virtual void NotifyDealtDamage();
+
+	// Drop state: kReady = loaded, kOnCooldown = unloaded.
+	virtual DropItemState GetDropState() const { return (currentAmmo_ < GetMaxAmmo()) ? DropItemState::kOnCooldown : DropItemState::kReady; }
+	// Called right after a picked-up gun is constructed. kOnCooldown restarts the reload from zero.
+	virtual void RestoreDropState(DropItemState state);
+
+		// ---- 発射パターン(ショットガン等のために仮想化。既定は単発) ----
+	virtual int GetPelletCount() const { return 1; }                   // 1回の発射で出る弾数
+	virtual float GetPelletAngle(int /*index*/) const { return 0.0f; } // 各弾の角度ずれ(rad)
+	virtual int32_t GetProjectileLifeFrames() const { return 0; }      // 0=弾の既定寿命
 protected:
 	static inline float kImpactPower = 1.2f;
-
 	static inline float kEquipLerpSpeed = 0.15f;
 
-	// Derived classes advance their own reload/ammo state here (called at the top of UpdateFollow).
-	virtual void TickReload() {}
+	// ---- tuning supplied by each firearm ----
+	virtual int GetMaxAmmo() const = 0;
+	virtual float GetBaseReloadDuration() const = 0;
+	virtual float GetReloadHitBonus() const = 0;
+	virtual float GetReloadDurationMin() const = 0;
 
-	// Blends the combat pose toward knockback/stun. Ticks the blend once per call (once per UpdateFollow).
+	// Advances reload (called at the top of UpdateFollow).
+	virtual void TickReload();
+
+	int currentAmmo_ = 1;
+	bool isReloading_ = false;
+	float reloadTimer_ = 0.0f;
+	float reloadDurationCurrent_ = 1.0f;
+
+	// ---- 銃ごとのダメージ(各銃で必ず定義する) ----
+	virtual int GetDamageToEnemy() const = 0;  // プレイヤーが撃ったときの敵へのダメージ
+	virtual int GetDamageToPlayer() const = 0; // 敵が撃ったときのプレイヤーへのダメージ
+
+	// Blends the combat pose toward knockback/stun/block. Ticks the blend once per call (once per UpdateFollow).
 	SRTOffset ComputeCombatOffset(const SRTOffset& base) {
 		float target = (debuffPose_ != ReactionPose::kNone) ? 1.0f : 0.0f;
 		reactionBlend_ = Lerp(reactionBlend_, target, kDebuffBlendSpeed);
@@ -151,8 +196,7 @@ protected:
 			debuffPtr = &GetStunOffset();
 		else if (lastReactionPose_ == ReactionPose::kBlock)
 			debuffPtr = &GetBlockOffset();
-		const SRTOffset& debuff = *debuffPtr;
-		return LerpSRT(base, debuff, reactionBlend_);
+		return LerpSRT(base, *debuffPtr, reactionBlend_);
 	}
 
 	float equipFactor_ = 1.0f;
@@ -171,7 +215,7 @@ protected:
 	KamataEngine::Camera* camera_ = nullptr;
 	uint32_t textureHandle_ = 0;
 
-	// Generic defaults (used by GetCombatOffset/GetHolsterOffset/GetReloadOffset unless overridden)
+	// Extra offset layered on the combat pose (identity by default).
 	SRTOffset offset_ = {
 	    {1.0f, 1.0f, 1.0f},
         {0.0f, 0.0f, 0.0f},
@@ -188,15 +232,16 @@ protected:
         {-0.1f, 0.35f, 0.0f }
     };
 
-	virtual bool TryFire() { return true; }
+	bool IsPlayerOwned() const { return owner_ == Owner::kPlayer; }
+	Owner owner_ = Owner::kPlayer;
 
-	// --- SFX (shared, static since these are class-wide default sounds) ---
+	// --- SFX (class-wide default sounds) ---
 	static inline uint32_t sFireSoundHandle_ = 0;
-	static inline uint32_t sReloadSoundHandle_ = 0;
+	static inline uint32_t sLoadedSoundHandle_ = 0;
 	static inline float sSfxVolume_ = 1.0f;
 	static void PlaySfxHandle(uint32_t handle) {
 		if (handle != 0) {
-			KamataEngine::Audio::GetInstance()->PlayWave(handle, false, sSfxVolume_);
+			AudioSettings::PlaySfx(handle, false, sSfxVolume_);
 		}
 	}
 };

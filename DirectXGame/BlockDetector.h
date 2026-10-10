@@ -47,6 +47,12 @@ public:
 	void SetUseDetailedTiles(bool detailed) { useDetailedTiles_ = detailed; }
 
 	bool ProbeGroundTop(const KamataEngine::Vector3& center, float stepUp, float maxDepth, float& outTopY);
+	// Knockback ledge guard. Call right after MapChipCollision() on the same CollisionInfo.
+	// If the entity's horizontal speed is no longer above speedLimit, and it is currently standing
+	// over ground but the move would carry BOTH foot columns over empty space, the horizontal move is
+	// shortened so the entity stops right at the edge and velocity.x is zeroed.
+	// Returns true if it clamped.
+	bool LedgeGuard(CollisionInfo& collisionInfo, float speedLimit);
 
 private:
 	bool IsSolid(const KamataEngine::Vector3& position, bool ignoreBarrier) const;
@@ -70,4 +76,7 @@ private:
 	MapChipField* mapChipField_ = nullptr;
 
 	float kAttenuation = 0.1f;
+	// true if either foot column has solid ground (platforms included) within kLedgeProbeDepth below feetY
+	bool HasSupportBelow(float centerX, float feetY) const;
+	static inline float kLedgeProbeDepth = 0.8f;
 };

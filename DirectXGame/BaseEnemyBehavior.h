@@ -12,6 +12,78 @@ class BaseEnemy;
 class GameScene;
 class MapChipField;
 
+/// Gun-aim tracker. Holds the world aim ANGLE that feeds the gun rotation.
+/// - Spotted: angle == exact angle to the player.
+/// - Lost: angle stays on the LAST SEEN position (recomputed from the moving origin).
+/// - Re-spotted: angle lerps (shortest way round) to the live player, then returns to exact tracking.
+struct AimTracker {
+	void Reset(const KamataEngine::Vector3& origin, const KamataEngine::Vector3& livePos) {
+		lastSeenPos_ = livePos;
+		aimAngle_ = AngleTo(origin, livePos);
+		lostTimer_ = 0.0f;
+		wasSpotted_ = true;
+		justReacquired_ = false;
+		catchingUp_ = false;
+		active_ = true;
+	}
+
+	void Update(bool spotted, const KamataEngine::Vector3& origin, const KamataEngine::Vector3& livePos, float catchUpRate, float dt = 1.0f / 60.0f) {
+		if (!active_)
+			Reset(origin, livePos);
+
+		if (spotted) {
+			if (!wasSpotted_) {
+				justReacquired_ = true;
+				catchingUp_ = true; // start lerping back to the player
+			}
+			lastSeenPos_ = livePos;
+			lostTimer_ = 0.0f;
+		} else {
+			lostTimer_ += dt;
+		}
+
+		const float target = AngleTo(origin, lastSeenPos_);
+		if (catchingUp_) {
+			aimAngle_ += WrapAngle(target - aimAngle_) * std::clamp(catchUpRate, 0.0f, 1.0f);
+			if (std::abs(WrapAngle(target - aimAngle_)) < 0.02f)
+				catchingUp_ = false; // arrived: back to exact tracking
+		} else {
+			aimAngle_ = target;
+		}
+		wasSpotted_ = spotted;
+	}
+	const KamataEngine::Vector3& GetLastSeenPos() const { return lastSeenPos_; }
+	bool ConsumeReacquired() {
+		bool r = justReacquired_;
+		justReacquired_ = false;
+		return r;
+	}
+	void Deactivate() { active_ = false; }
+	bool IsActive() const { return active_; }
+	bool IsSightLost() const { return !wasSpotted_; }
+	float GetLostTime() const { return lostTimer_; }
+	KamataEngine::Vector2 GetAimDir() const { return {std::cos(aimAngle_), std::sin(aimAngle_)}; }
+
+private:
+	static float AngleTo(const KamataEngine::Vector3& from, const KamataEngine::Vector3& to) { return std::atan2(to.y - from.y, to.x - from.x); }
+	static float WrapAngle(float a) {
+		constexpr float kPi = std::numbers::pi_v<float>;
+		while (a > kPi)
+			a -= 2.0f * kPi;
+		while (a <= -kPi)
+			a += 2.0f * kPi;
+		return a;
+	}
+
+	KamataEngine::Vector3 lastSeenPos_{};
+	float aimAngle_ = 0.0f;
+	float lostTimer_ = 0.0f;
+	bool wasSpotted_ = true;
+	bool justReacquired_ = false;
+	bool catchingUp_ = false;
+	bool active_ = false;
+};
+
 class BaseEnemyBehavior {
 public:
 	explicit BaseEnemyBehavior(BaseEnemy& owner) : owner_(owner) {}
@@ -80,6 +152,7 @@ public:
 	bool IsPlayerSpotted() const { return visionSensor_.IsPlayerSpotted(); }
 	const VisionSensor& GetVisionSensor() const { return visionSensor_; }
 	VisionSensor& GetVisionSensor() { return visionSensor_; }
+	const AimTracker& GetAimTracker() const { return aimTracker_; }
 
 	bool IsChasing() const;
 
@@ -89,7 +162,7 @@ public:
 	bool ScanWallAhead(int direction, float maxLookAhead, float maxHeight, float& outDistance, float& outHeight) const;
 	bool ScanGapAhead(int direction, float maxLookAhead, float& outGapDistance) const;
 	bool CanJumpOverWall(int direction) const;
-	bool HasReachableLedgeAhead(int direction) const;
+	bool HasReachableLedgeAhead(int direction, float travelSpeedOverride = 0.0f) const;
 	bool TryJumpIfLedgeAhead(int direction);
 
 	void ApplySeparationFromOtherEnemies();
@@ -170,6 +243,29 @@ public:
 
 	static inline float kBlockDuration = 1.5f;
 	static inline float kBlockCooldown = 10.0f; // counted from the END of the block
+
+	bool RetreatAwayFrom(const KamataEngine::Vector3& threatPos, float speed);
+	bool RetreatInDirection(int direction, float speed);
+	bool TimedRetreatAwayFrom(const KamataEngine::Vector3& threatPos, float speed, float duration, float& timer);
+	static float ScaleRetreatSpeed(float distance, float outerRange, float innerRange, float maxSpeed);
+
+	// True while airborne from a hop, and for kMoveDecisionCooldown seconds after landing.
+	// While true, AI must not make decisions (aim / fire / melee / state changes): just call ContinueCommittedMove().
+	bool IsMoveCommitted() const;
+	bool CanMakeDecision() const { return !IsMoveCommitted(); }
+	// Repeats the last approach/retreat request (keeps the hop velocity forward/back in the air).
+	void ContinueCommittedMove();
+
+	// Ledge guard request, read by BaseEnemy::MapChipCollisionUpdate every frame.
+	// active: guard on. speedLimit: guard only applies while |velocity.x| <= speedLimit (BlockDetector::LedgeGuard).
+	struct LedgeGuardRequest {
+		bool active = false;
+		float speedLimit = 0.0f;
+	};
+	LedgeGuardRequest GetLedgeGuardRequest() const;
+	// Override in melee behaviors: true while the current melee action is in its recovery phase.
+	virtual bool IsInMeleeRecovery() const { return false; }
+
 protected:
 	PostMode postMode_ = PostMode::kWander;
 
@@ -196,6 +292,14 @@ protected:
 	virtual void BehaviorStunnedUpdate();
 
 	void IdleFacingUpdate();
+	// Faces the player (no-op if there is none).
+	void FacePlayer();
+	// Sets forward (facing-side) horizontal velocity for a melee step. Stops short of the player
+	// (kMeleeAdvanceStopGap) and before ledges, so lunges/swings never run through or off the map.
+	void AdvanceTowardFacing(float speed);
+	// Slowly walks toward target. Stops at ledges it can't cross, walls too tall to jump, and within stopDistance.
+	// Small wall hops are handled by BaseEnemy::JumpMovement; ledge hops and platform drop-through are handled here.
+	void ApproachPosition(const KamataEngine::Vector3& target, float speed, float stopDistance);
 
 	KamataEngine::Vector3& OwnerVelocity();
 	const KamataEngine::Vector3& OwnerVelocity() const;
@@ -232,6 +336,45 @@ protected:
 	static inline float kLedgeCheckDownOffset = 0.3f;
 	static inline float kMaxCrossableGapDistance = 1.5f;
 
+	// ---- Ground movement: approach and retreat share ONE calculation ----
+	enum class MoveKind { kApproach, kRetreat };
+	enum class MoveTerrain {
+		kClear,    // flat ground behind/ahead: just walk
+		kStepDown, // empty cell(s) but ground within maxStepDown below: staircase, walk off
+		kJumpable, // wall of <= maxWallBlocks with headroom on top: hop over it
+		kGap,      // real gap (or kill block in the drop)
+		kBlocked,  // wall too tall or low ceiling
+	};
+	struct MoveProfile {
+		int32_t maxWallBlocks = 1;
+		int32_t maxStepDown = 2;
+		float hopSpeed = 0.45f;       // vertical launch speed
+		float hopForwardSpeed = 0.1f; // horizontal speed held in the air
+		bool allowGapJump = false;
+	};
+	MoveProfile GetMoveProfile(MoveKind kind) const;
+	MoveTerrain ClassifyMoveTerrain(int direction, const MoveProfile& profile) const;
+	bool MoveAlongGround(int direction, float speed, MoveKind kind);
+	void LaunchMoveHop(int direction, float forwardSpeed, float hopSpeed);
+	void ClearMoveCommit();
+
+	static inline float kMoveLookAheadDistance = 0.75f;   // how far ahead/behind the terrain column is sampled
+	static inline int32_t kMoveMaxStepDown = 2;           // empty cells below the feet row that still count as a staircase
+	static inline float kMoveHopForwardSpeed = 0.1f;      // horizontal speed during a hop
+	static inline float kMoveFootSampleOffset = 0.1f;     // sample this far above the feet to find the feet row
+	static inline float kMoveDecisionCooldown = 1.0f;     // seconds after landing before AI may decide again
+	static inline int32_t kRetreatJumpableWallBlocks = 1; // retreat hops walls up to this height, taller ones stop it
+	static inline float kRetreatHopSpeed = 0.45f;         // retreat hop launch speed (apex about 2.2 blocks)
+
+	bool moveHopping_ = false;
+	int moveHopDirection_ = 0;
+	float moveHopSpeed_ = 0.0f;
+	float moveDecisionCooldownTimer_ = 0.0f;
+	MoveKind lastMoveKind_ = MoveKind::kRetreat;
+	int lastMoveDirection_ = 0;
+	float lastMoveSpeed_ = 0.0f;
+
+
 	PathDetector pathSensor_;
 	static inline float kWallLookAheadMargin = 0.35f;
 
@@ -241,6 +384,8 @@ protected:
 
 	VisionSensor visionSensor_;
 	static inline float kVisionEyeHeight = 0.2f;
+
+	AimTracker aimTracker_;
 
 	static inline float kWaypointReachThreshold = 0.3f;
 	static inline float kJumpNodeIgnoreDistance = 1.0f;
@@ -295,4 +440,9 @@ protected:
 
 	float blockTimer_ = 0.0f;
 	float blockCooldownTimer_ = 0.0f;
+
+	static inline float kMeleeAdvanceStopGap = 0.9f;
+
+	// During kMelee (outside recovery), the ledge guard only applies once |velocity.x| is at or below this.
+	static inline float kLungeLedgeGuardSpeed = 0.1f;
 };

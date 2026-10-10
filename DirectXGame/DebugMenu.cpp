@@ -389,6 +389,73 @@ void DebugMenu::DrawSpawnTab(GameScene* gs) {
 	if (ImGui::Button("Endless Cuirassier (every 8s, omniscient)"))
 		gs->AddEnemySpawner(p, 1, 8.0f, EnemySpawner::SpawnMode::kEndless, -1, true);
 	ImGui::Text("Active spawners: %d", static_cast<int>(gs->enemySpawners_.size()));
+
+		// ---- アイテムスポーナー(武器ドロップ) ----
+	ImGui::Separator();
+	ImGui::Text("Item spawner");
+
+	// 武器の種類と状態の選択(static: 選択を保持する)
+	static int itemKindIndex = 0;
+	static int itemStateIndex = 0;
+	static float itemSpawnOffsetX = 1.5f;
+	static float itemSpawnOffsetY = 1.0f;
+	static bool itemSpawnFront = true;
+	static int itemSpawnCount = 1;
+
+	struct ItemEntry {
+		const char* label;
+		DropItemCategory category;
+		DropWeaponKind kind;
+	};
+	static const ItemEntry kItemTable[] = {
+	    {"Sabre (light)",    DropItemCategory::kMelee,   DropWeaponKind::kSabreLight   },
+	    {"Sabre (heavy)",    DropItemCategory::kMelee,   DropWeaponKind::kSabreHeavy   },
+	    {"Musket (long)",    DropItemCategory::kFirearm, DropWeaponKind::kMusketLong   },
+	    {"Musket (bayonet)", DropItemCategory::kFirearm, DropWeaponKind::kMusketBayonet},
+	    {"Shotgun",  DropItemCategory::kFirearm, DropWeaponKind::kShotgun},
+	};
+	constexpr int kItemCount = static_cast<int>(sizeof(kItemTable) / sizeof(kItemTable[0]));
+
+	if (ImGui::BeginCombo("Weapon", kItemTable[itemKindIndex].label)) {
+		for (int i = 0; i < kItemCount; ++i) {
+			if (ImGui::Selectable(kItemTable[i].label, itemKindIndex == i))
+				itemKindIndex = i;
+		}
+		ImGui::EndCombo();
+	}
+
+	// 銃: Ready=装填済み / OnCooldown=未装填、近接: Ready=通常 / OnCooldown=クールダウン中(拾い直しでリセットされる)
+	static const char* kStateLabels[] = {"Ready (loaded / ready)", "OnCooldown (unloaded / cooling)"};
+	ImGui::Combo("State", &itemStateIndex, kStateLabels, 2);
+
+	ImGui::DragFloat("Offset X", &itemSpawnOffsetX, 0.05f, 0.0f, 20.0f);
+	ImGui::DragFloat("Offset Y", &itemSpawnOffsetY, 0.05f, -5.0f, 10.0f);
+	ImGui::Checkbox("In front of player (facing)", &itemSpawnFront);
+	ImGui::SliderInt("Count", &itemSpawnCount, 1, 10);
+
+	// プレイヤーの位置(向きに応じて前方 or 常に右)からスポーン位置を決める
+	auto itemSpawnPosition = [&]() {
+		float dir = 1.0f;
+		if (itemSpawnFront && player->isLeft())
+			dir = -1.0f;
+		return Vector3{p.x + itemSpawnOffsetX * dir, p.y + itemSpawnOffsetY, p.z};
+	};
+	const DropItemState itemState = (itemStateIndex == 0) ? DropItemState::kReady : DropItemState::kOnCooldown;
+
+	if (ImGui::Button("Spawn item")) {
+		const ItemEntry& e = kItemTable[itemKindIndex];
+		for (int i = 0; i < itemSpawnCount; ++i)
+			gs->CreateDroppableItem(itemSpawnPosition(), e.category, e.kind, itemState);
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Spawn one of each")) {
+		for (int i = 0; i < kItemCount; ++i)
+			gs->CreateDroppableItem(itemSpawnPosition(), kItemTable[i].category, kItemTable[i].kind, itemState);
+	}
+	ImGui::Text("Droppable items: %d", static_cast<int>(gs->droppableItems_.size()));
+	ImGui::SameLine();
+	if (ImGui::SmallButton("Clear items"))
+		gs->droppableItems_.clear();
 }
 
 // ------------------------------------------------------------------ Enemies
@@ -475,10 +542,16 @@ void DebugMenu::DrawSabreTab() {
 	}
 
 	if (ImGui::CollapsingHeader("BaseMelee timing (shared by ALL melee weapons)")) {
-		DragF3Arr("Attack speed", WeaponSabre::kComboAttackSpeed, 0.01f);
-		DragF3Arr("Anticipate (frames)", WeaponSabre::kComboAnticipateDuration, 0.2f);
-		DragF3Arr("Attack (frames)", WeaponSabre::kComboAttackDuration, 0.2f);
-		DragF3Arr("Recovery (frames)", WeaponSabre::kComboRecoveryDuration, 0.2f);
+		ImGui::TextDisabled("Player");
+		DragF3Arr("P Attack speed", WeaponSabre::kComboAttackSpeedPlayer, 0.01f);
+		DragF3Arr("P Anticipate (frames)", WeaponSabre::kComboAnticipateDurationPlayer, 0.2f);
+		DragF3Arr("P Attack (frames)", WeaponSabre::kComboAttackDurationPlayer, 0.2f);
+		DragF3Arr("P Recovery (frames)", WeaponSabre::kComboRecoveryDurationPlayer, 0.2f);
+		ImGui::TextDisabled("Enemy");
+		DragF3Arr("E Attack speed", WeaponSabre::kComboAttackSpeedEnemy, 0.01f);
+		DragF3Arr("E Anticipate (frames)", WeaponSabre::kComboAnticipateDurationEnemy, 0.2f);
+		DragF3Arr("E Attack (frames)", WeaponSabre::kComboAttackDurationEnemy, 0.2f);
+		DragF3Arr("E Recovery (frames)", WeaponSabre::kComboRecoveryDurationEnemy, 0.2f);
 	}
 }
 

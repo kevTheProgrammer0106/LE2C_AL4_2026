@@ -71,6 +71,7 @@ void UIMenu::Update() {
 	bool mouseDown = input->IsPrimaryHeld();
 	bool mouseTriggeredDown = input->IsPrimaryTriggered();
 	UpdateButtons(mouseX, mouseY, mouseDown, mouseTriggeredDown);
+	DrawHoverLabel(mouseX, mouseY);
 
 #ifdef _DEBUG
 	ImGui::Begin("Cursor");
@@ -111,7 +112,47 @@ void UIMenu::UpdateButtonFade() {
 	float t = std::clamp(buttonFadeTimer_ / buttonFadeDuration_, 0.0f, 1.0f);
 	buttonFadeAlpha_ = (buttonFadeStatus_ == ButtonFadeStatus::kFadeIn) ? t : (1.0f - t);
 }
+void UIMenu::DrawHoverLabel(float mouseX, float mouseY) const {
+	if (buttonFadeAlpha_ <= 0.01f) {
+		return;
+	}
 
+	const Button* hovered = nullptr;
+	for (const Button& button : buttons_) {
+		if (button.visible && button.enabled && button.isHovered && !button.label.empty()) {
+			hovered = &button;
+			break;
+		}
+	}
+	if (!hovered) {
+		return;
+	}
+
+	ImDrawList* drawList = ImGui::GetForegroundDrawList();
+	ImFont* font = ImGui::GetFont();
+
+	// CalcTextSize measures at the default font size, so scale it to kLabelFontSize.
+	const float scale = kLabelFontSize / ImGui::GetFontSize();
+	ImVec2 textSize = ImGui::CalcTextSize(hovered->label.c_str());
+	textSize.x *= scale;
+	textSize.y *= scale;
+
+	const float boxWidth = textSize.x + kLabelPadX * 2.0f;
+	const float boxHeight = textSize.y + kLabelPadY * 2.0f;
+
+	// centered above the cursor, kept inside the screen
+	const float screenW = static_cast<float>(WinApp::kWindowWidth);
+	float left = std::clamp(mouseX - boxWidth * 0.5f, 4.0f, std::max(4.0f, screenW - boxWidth - 4.0f));
+	float top = std::max(4.0f, mouseY - kLabelCursorGap - boxHeight);
+
+	const float a = std::clamp(buttonFadeAlpha_, 0.0f, 1.0f);
+	const ImVec2 p0 = {left, top};
+	const ImVec2 p1 = {left + boxWidth, top + boxHeight};
+
+	drawList->AddRectFilled(p0, p1, IM_COL32(0, 0, 0, static_cast<int>(200 * a)), 6.0f);
+	drawList->AddRect(p0, p1, IM_COL32(255, 255, 255, static_cast<int>(180 * a)), 6.0f, 0, 1.5f);
+	drawList->AddText(font, kLabelFontSize, {left + kLabelPadX, top + kLabelPadY}, IM_COL32(255, 255, 255, static_cast<int>(255 * a)), hovered->label.c_str());
+}
 #pragma region UIボタン(AABB)
 
 bool UIMenu::IsInsideAABB(const ButtonAABB& aabb, float x, float y) { return x >= aabb.left && x <= aabb.right && y >= aabb.top && y <= aabb.bottom; }
@@ -243,7 +284,7 @@ void UIMenu::UpdateButtons(float mouseX, float mouseY, bool mouseDown, bool mous
 					button.wasClickedThisFrame = true;
 
 					if (clickSoundDataHandle_ != 0) {
-						Audio::GetInstance()->PlayWave(clickSoundDataHandle_, false, clickSoundVolume_);
+						AudioSettings::PlaySfx(clickSoundDataHandle_, false, clickSoundVolume_);
 					}
 					if (button.onClick) {
 						button.onClick();

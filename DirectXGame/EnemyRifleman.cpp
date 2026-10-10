@@ -20,6 +20,7 @@ void EnemyRifleman::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "ReloadPoseTranslation", kReloadPose.translation);
 	gv->AddItem(kGroupName, "ReloadPoseRotation", kReloadPose.rotation);
 	gv->AddItem(kGroupName, "FirePoseDuration", kFirePoseDuration);
+	RegisterBodyLungePoseSet(kGroupName, "BodyLunge", kBodyLunge);
 }
 void EnemyRifleman::ApplyGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
@@ -30,6 +31,7 @@ void EnemyRifleman::ApplyGlobalVariables() {
 	kReloadPose.translation = gv->GetVector3Value(kGroupName, "ReloadPoseTranslation");
 	kReloadPose.rotation = gv->GetVector3Value(kGroupName, "ReloadPoseRotation");
 	kFirePoseDuration = gv->GetFloatValue(kGroupName, "FirePoseDuration");
+	ApplyBodyLungePoseSet(kGroupName, "BodyLunge", kBodyLunge);
 }
 
 void EnemyRifleman::Initialize(const std::array<PartResources, static_cast<size_t>(PartSlot::kCount)>& partResources, Camera* camera, const Vector3& position) {
@@ -75,22 +77,29 @@ void EnemyRifleman::Draw() {
 }
 
 void EnemyRifleman::SetMusketModel(Model* model, uint32_t textureHandle) {
+	// SetMusketModel 内: Initialize の前に持ち主を設定する
 	currentFirearm_ = std::make_unique<FirearmMusketBayonet>();
+	currentFirearm_->SetOwner(Owner::kEnemy);
 	currentFirearm_->Initialize(model, textureHandle, camera_);
 	SnapWeaponEquipState(ignoreEquipStates_);
 }
 
 Vector2 EnemyRifleman::ComputeTargetAimPosition() {
-	if (!gameScene_ || !gameScene_->GetPlayer()) {
-		return isRight() ? Vector2{1.0f, 0.0f} : Vector2{-1.0f, 0.0f};
+	const Vector2 fallback = isRight() ? Vector2{1.0f, 0.0f} : Vector2{-1.0f, 0.0f};
+
+	const AimTracker& tracker = GetBehaviorModule().GetAimTracker();
+	if (GetBehaviorModule().GetBehavior() == Behavior::kAiming && tracker.IsActive()) {
+		return tracker.GetAimDir();
 	}
+
+	if (!gameScene_ || !gameScene_->GetPlayer())
+		return fallback;
 	Vector3 self = GetWorldPosition();
 	Vector3 target = gameScene_->GetPlayer()->GetWorldPosition();
 	Vector2 dir{target.x - self.x, target.y - self.y};
 	float len = std::sqrtf(dir.x * dir.x + dir.y * dir.y);
-	if (len < 0.0001f) {
-		return isRight() ? Vector2{1.0f, 0.0f} : Vector2{-1.0f, 0.0f};
-	}
+	if (len < 0.0001f)
+		return fallback;
 	return {dir.x / len, dir.y / len};
 }
 
@@ -101,7 +110,7 @@ void EnemyRifleman::UpdateFirearmHybrid() {
 
 	const Behavior currentBehavior = GetBehaviorModule().GetBehavior();
 
-	if (currentBehavior == Behavior::kAiming && IsPlayerSpotted()) {
+	if (currentBehavior == Behavior::kAiming) {
 		currentFirearm_->ClearLungePose();
 
 		const Vector2 aimDir = ComputeTargetAimPosition();
@@ -133,7 +142,8 @@ void EnemyRifleman::ShootFirearm() {
 	Vector2 aimDir = ComputeTargetAimPosition();
 
 	if (gameScene_) {
-		gameScene_->CreateFirearmProjectile(Owner::kEnemy, origin, aimDir);
+		// ShootFirearm 内
+		gameScene_->CreateFirearmProjectile(Owner::kEnemy, origin, aimDir, currentFirearm_->GetBulletDamage());
 		Vector3 muzzlePos = origin;
 		gameScene_->CreateMuzzleFlash(muzzlePos);
 	}
@@ -181,7 +191,9 @@ SRTOffset EnemyRifleman::GetActionAnimOffset() const {
 	if (!currentFirearm_) {
 		return pose;
 	}
-
+	if (currentFirearm_->IsLungePoseActive()) {
+		return EvaluateBodyLungePose(kBodyLunge, static_cast<BodyAttackPhase>(static_cast<int>(currentFirearm_->GetLungePhase())), currentFirearm_->GetLungeT());
+	}
 	switch (gunPose_) {
 	case GunPose::kAiming:
 		pose = kAimPose;

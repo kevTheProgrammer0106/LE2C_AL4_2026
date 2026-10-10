@@ -5,6 +5,9 @@
 
 class EnemyCuirassier final : public BaseEnemy {
 public:
+	static void RegisterGlobalVariables();
+	static void ApplyGlobalVariables();
+
 	void Initialize(const std::array<PartResources, static_cast<size_t>(PartSlot::kCount)>& partResources, KamataEngine::Camera* camera, const KamataEngine::Vector3& position);
 	void Update() override;
 	void Draw() override;
@@ -67,7 +70,7 @@ protected:
 	// 専用ハンドルが無ければ何も鳴らさない)。
 	void PlayHurtSound() override {
 		if (sHurtSoundHandle_ != 0) {
-			KamataEngine::Audio::GetInstance()->PlayWave(sHurtSoundHandle_, false, sSfxVolume_);
+			AudioSettings::PlaySfx(sHurtSoundHandle_, false, sSfxVolume_);
 		} else {
 			BaseEnemy::PlayHurtSound();
 		}
@@ -85,11 +88,11 @@ protected:
 			return;
 		}
 		uint32_t chosen = candidates[static_cast<size_t>(std::rand()) % count];
-		KamataEngine::Audio::GetInstance()->PlayWave(chosen, false, sSfxVolume_);
+		AudioSettings::PlaySfx(chosen, false, sSfxVolume_);
 	}
 	void PlayMovementSound() override {
 		if (sMovementSoundHandle_ != 0) {
-			KamataEngine::Audio::GetInstance()->PlayWave(sMovementSoundHandle_, false, sSfxVolume_);
+			AudioSettings::PlaySfx(sMovementSoundHandle_, false, sSfxVolume_);
 		}
 	}
 
@@ -100,6 +103,20 @@ private:
 	bool isSwingActive_ = false;
 	bool isLungeActive_ = false;
 	int currentComboIndex_ = 0;
+
+	// Heavy: deep wind-ups, big forward lean, body sinks into each swing.
+	static inline BodyComboPoseSet kBodyCombo = {
+	    {MakeBodyPose(-0.25f, -1.0f, 0.0f, {1.0f, 1.03f, 1.0f},  {0.0f, 0.03f, 0.0f}),  MakeBodyPose(-0.25f, 1.3f, 0.0f, {1.0f, 1.03f, 1.0f},  {0.0f, 0.03f, 0.0f}),
+	     MakeBodyPose(-0.6f, -1.0f, 0.0f, {1.0f, 1.05f, 1.0f},  {0.0f, 0.05f, 0.0f}) },
+	    {MakeBodyPose(0.4f,   0.35f, 0.0f, {1.03f, 0.97f, 1.0f}, {0.0f, -0.04f, 0.0f}), MakeBodyPose(0.45f,  0.0f, 0.0f, {1.15f, 0.97f, 1.0f}, {0.0f, -0.04f, 0.0f}),
+	     MakeBodyPose(0.7f,  -0.2f, 0.0f, {1.05f, 0.95f, 1.0f}, {0.0f, -0.08f, 0.0f})},
+	    {MakeBodyPose(0.4f,   1.0f,  0.0f, {1.0f, 0.98f, 1.0f},  {0.0f, -0.03f, 0.0f}), MakeBodyPose(0.5f,   0.0f, 0.0f, {1.0f, 0.98f, 1.0f},  {0.0f, -0.03f, 0.0f}),
+	     MakeBodyPose(0.65f, 0.0f,  0.0f, {1.0f, 0.97f, 1.0f},  {0.0f, -0.05f, 0.0f})},
+	};
+	static inline BodyLungePoseSet kBodyLunge = {
+	    MakeBodyPose(-0.3f, -0.5f, 0.0f, {0.97f, 1.03f, 1.0f}),
+	    MakeBodyPose(0.55f, 0.35f, 0.0f, {1.05f, 0.95f, 1.0f}, {0.0f, -0.05f, 0.0f}),
+	};
 
 	// --- SFX ---
 	static inline uint32_t sHurtSoundHandle_ = 0;

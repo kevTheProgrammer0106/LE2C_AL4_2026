@@ -7,6 +7,9 @@
 
 class EnemyFighter final : public BaseEnemy {
 public:
+	static void RegisterGlobalVariables();
+	static void ApplyGlobalVariables();
+
 	void Initialize(const std::array<PartResources, static_cast<size_t>(PartSlot::kCount)>& partResources, KamataEngine::Camera* camera, const KamataEngine::Vector3& position);
 	void Update() override;
 	void Draw() override;
@@ -47,4 +50,11 @@ private:
 
 	bool isSwingActive_ = false;
 	int currentComboIndex_ = 0;
+
+	// Light, quick slashes: small wind-ups, snappy peaks.
+	static inline BodyComboPoseSet kBodyCombo = {
+	    {MakeBodyPose(-0.15f, -0.9f, 0.0f), MakeBodyPose(-0.15f, 1.2f, 0.0f), MakeBodyPose(-0.5f, -0.9f, 0.0f)},
+	    {MakeBodyPose(0.25f, 0.3f, 0.0f), MakeBodyPose(0.35f, 0.0f, 0.0f, {1.08f, 1.0f, 1.0f}), MakeBodyPose(0.5f, -0.2f, 0.0f)},
+	    {MakeBodyPose(0.3f, 0.9f, 0.0f), MakeBodyPose(0.4f, 0.0f, 0.0f), MakeBodyPose(0.55f, 0.0f, 0.0f)},
+	};
 };

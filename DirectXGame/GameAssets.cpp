@@ -84,14 +84,14 @@ void GameAssets::LoadModelsAndTextures() {
 	}
 
 	// --- Goal / Gate / Switch / HealthBlock ---
-	modelGoal.reset(Model::CreateFromOBJ("block", true));
-	goalTex = TextureManager::Load("./Resources/block/block.png");
-	modelGate.reset(Model::CreateFromOBJ("block", true));
-	gateTex = TextureManager::Load("./Resources/block/block.png");
-	modelSwitch.reset(Model::CreateFromOBJ("block", true));
-	switchTex = TextureManager::Load("./Resources/block/block.png");
-	modelHealthBlock.reset(Model::CreateFromOBJ("block"));
-	healthBlockTex = TextureManager::Load("./Resources/block/block.png");
+	modelGoal.reset(Model::CreateFromOBJ("blockNormal", true));
+	goalTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
+	modelGate.reset(Model::CreateFromOBJ("blockNormal", true));
+	gateTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
+	modelSwitch.reset(Model::CreateFromOBJ("blockNormal", true));
+	switchTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
+	modelHealthBlock.reset(Model::CreateFromOBJ("blockNormal"));
+	healthBlockTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
 
 	// --- Gameplay HUD ---
 	healthBarBackgroundTex = TextureManager::Load("./Resources/white1x1.png");
@@ -100,8 +100,15 @@ void GameAssets::LoadModelsAndTextures() {
 	enemyIconCuirassierTex = TextureManager::Load("./Resources/UserInterface/iconCuirassier.png");
 	enemyIconFighterTex = TextureManager::Load("./Resources/UserInterface/iconFighter.png");
 	enemyIconArrowTex = TextureManager::Load("./Resources/UserInterface/enemyDirectionArrow.png");
-	meleeIconTex = texSabreLight;
-	firearmIconTex = musketLongTex;
+
+	// Placeholder icons: reuse the weapon textures until real icon art exists.
+	// Swap each line for TextureManager::Load("./Resources/UserInterface/iconXxx.png") when the files are ready.
+	meleeIconLightTex = texSabreLight;
+	meleeIconHeavyTex = texSabreHeavy;
+	firearmIconLongTex = musketLongTex;
+	firearmIconBayonetTex = musketBayonetTex;
+	bayonetLungeIconTex = musketBayonetTex;
+
 	interactionPromptTex = TextureManager::Load("./Resources/UserInterface/InteractionPrompt.png");
 
 	// --- Menus / cursor ---
@@ -125,7 +132,6 @@ void GameAssets::LoadAudio() {
 	musicArena = audio->LoadWave("./Resources/sfx_bgm/ArenaMusic.wav");
 
 	sfxFirearmFire = audio->LoadWave("./Resources/sfx_bgm/gunShot.wav");
-	sfxFirearmReload = audio->LoadWave("./Resources/sfx_bgm/gunReloading.wav");
 	sfxMusketLoaded = audio->LoadWave("./Resources/sfx_bgm/gunLoaded.wav");
 	sfxMeleeSwingDefault = audio->LoadWave("./Resources/sfx_bgm/swing.wav");
 	sfxSwingRight = audio->LoadWave("./Resources/sfx_bgm/swordSlashRight.wav");
@@ -158,4 +164,10 @@ void GameAssets::LoadAudio() {
 	sfxSwitchPress = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
 	sfxGateOpen = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
 	sfxGoalReached = audio->LoadWave("./Resources/sfx_bgm/victoryJingle.wav");
+
+	// Arena SFX (placeholders — swap in real wavs; handle 0 = silent)
+	sfxArenaStart = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
+	sfxWaveStart = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
+	sfxWaveEnd = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
+	sfxArenaClear = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
 }

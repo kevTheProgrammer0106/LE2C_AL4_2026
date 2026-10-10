@@ -6,8 +6,12 @@
 #include "PlayerBehavior.h"
 
 #include "FirearmMusket.h"
+#include "FirearmMusketBayonet.h"
+#include "FirearmShotgun.h"
 #include "ProjectileBall.h"
 #include "WeaponSabre.h"
+#include "WeaponHeavySabre.h"
+
 
 class GameScene;
 class BaseEnemy;
@@ -44,7 +48,7 @@ public:
 	AABB GetAABB();
 
 	void MapChipCollisionUpdate();
-	void MapChipCollisionUpdate(CollisionInfo& collisionInfo);
+	void MapChipCollisionUpdate(CollisionInfo& collisionInfo, bool ledgeGuard = false);
 
 	void GroundMovement();
 	void JumpMovement();
@@ -76,9 +80,38 @@ public:
 	AttackDirection GetAttackDirection() const { return behavior_.GetAttackDirection(); }
 
 	BaseMelee* GetCurrentMelee() const { return currentMelee_.get(); }
-	FirearmMusket* GetCurrentFirearm() const { return currentFirearm_.get(); }
-	void SetMusketModel(KamataEngine::Model* model, uint32_t textureHandle);
-	void SetMeleeModel(KamataEngine::Model* model, uint32_t textureHandle);
+	BaseFirearm* GetCurrentFirearm() const { return currentFirearm_.get(); }
+
+	void SetMusketModel(KamataEngine::Model* model, uint32_t textureHandle, DropWeaponKind kind = DropWeaponKind::kMusketLong);
+	void SetMeleeModel(KamataEngine::Model* model, uint32_t textureHandle, DropWeaponKind kind = DropWeaponKind::kSabreLight);
+
+	DropItemState GetCurrentMeleeState() const;
+	DropItemState GetCurrentFirearmState() const;
+
+	// ---------------- Lunge (special attack) ----------------
+	bool IsLunge() const { return behavior_.IsLunge(); }
+	// Combo swing in progress (a bayonet lunge or any lunge does NOT count). Use for sabre hit detection / poses.
+	bool IsMeleeSwingActive() const { return behavior_.IsAttacking() && !behavior_.IsLunge(); }
+	bool IsLungeHitActive() const { return behavior_.IsLunge() && behavior_.GetAttackAnimState().phase == AttackPhase::kAttack; }
+	LungeSource GetCurrentLungeSource() const { return behavior_.GetLungeSource(); }
+	LungeSpec GetLungeSpec(LungeSource source) const;
+	AABB GetLungeAABB();
+	void BeginLungeCooldown(LungeSource source);
+	void PlayLungeSound(LungeSource source);
+
+	bool IsMeleeLungeCooling() const { return meleeLungeCooldown_ > 0.0f; }
+	float GetMeleeLungeProgress01() const { return meleeLungeCooldownMax_ > 0.0f ? std::clamp(1.0f - meleeLungeCooldown_ / meleeLungeCooldownMax_, 0.0f, 1.0f) : 1.0f; }
+	bool IsBayonetLungeCooling() const { return bayonetLungeCooldown_ > 0.0f; }
+	float GetBayonetLungeProgress01() const { return bayonetLungeCooldownMax_ > 0.0f ? std::clamp(1.0f - bayonetLungeCooldown_ / bayonetLungeCooldownMax_, 0.0f, 1.0f) : 1.0f; }
+
+	// Targets hit by the current lunge (one hit per target per lunge)
+	void ResetLungeHits() { lungeHits_.clear(); }
+	bool HasLungeHit(const void* target) const { return std::find(lungeHits_.begin(), lungeHits_.end(), target) != lungeHits_.end(); }
+	void MarkLungeHit(const void* target) { lungeHits_.push_back(target); }
+	bool HasLungeHits() const { return !lungeHits_.empty(); }
+	void RestoreMeleeState(DropItemState state);
+	void RestoreFirearmState(DropItemState state);
+
 	DropWeaponKind GetCurrentMeleeKind() const { return currentMeleeKind_; }
 	void SetCurrentMeleeKind(DropWeaponKind kind) { currentMeleeKind_ = kind; }
 	DropWeaponKind GetCurrentFirearmKind() const { return currentFirearmKind_; }
@@ -244,8 +277,8 @@ private:
 	KamataEngine::WorldTransform worldTransformAttack_;
 	uint32_t modelAttackTex_ = 0;
 
-	std::unique_ptr<WeaponSabre> currentMelee_;
-	std::unique_ptr<FirearmMusket> currentFirearm_;
+	std::unique_ptr<BaseMelee> currentMelee_;
+	std::unique_ptr<BaseFirearm> currentFirearm_;
 
 	float turnFirstRotationY_ = 0.0f;
 	float turnTimer_ = 0.0f;
@@ -308,7 +341,7 @@ private:
 	static inline float sSfxVolume_ = 1.0f;
 	static void PlaySfxHandle(uint32_t handle) {
 		if (handle != 0) {
-			KamataEngine::Audio::GetInstance()->PlayWave(handle, false, sSfxVolume_);
+			AudioSettings::PlaySfx(handle, false, sSfxVolume_);
 		}
 	}
 	static inline uint32_t sFootstepSoundHandle_ = 0;
@@ -318,7 +351,7 @@ private:
 
 	static void PlayMovementSfxHandle(uint32_t handle) {
 		if (handle != 0) {
-			KamataEngine::Audio::GetInstance()->PlayWave(handle, false, kMovementSfxVolume);
+			AudioSettings::PlaySfx(handle, false, kMovementSfxVolume);
 		}
 	}
 	SRTOffset GetAttackPoseOffset() const { return behavior_.GetAttackPoseOffset(); }
@@ -344,4 +377,20 @@ private:
 	static inline float kBlockRecoverThreshold = 60.0f; // block is usable again at this value (~3 hits' worth)
 	static inline float kBlockRegenRate = 15.0f;        // per second
 	static inline float kBlockRegenDelay = 1.0f;        // seconds after a blocked hit before regen starts
+
+		void UseBayonetLungeIfReloading();
+	void TickLungeCooldowns();
+	void UpdateMeleeVisual();
+
+	float meleeLungeCooldown_ = 0.0f;
+	float meleeLungeCooldownMax_ = 0.0f;
+	float bayonetLungeCooldown_ = 0.0f;
+	float bayonetLungeCooldownMax_ = 0.0f;
+
+	// Heavy sabre: tap = combo (fires on release), hold >= kLungeHoldTime = lunge
+	bool meleePressPending_ = false;
+	float meleeHoldTimer_ = 0.0f;
+	static inline float kLungeHoldTime = 0.3f;
+
+	std::vector<const void*> lungeHits_;
 };

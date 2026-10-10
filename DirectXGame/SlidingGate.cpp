@@ -20,6 +20,7 @@ void SlidingGate::Initialize(Model* model, uint32_t textureHandle, Camera* camer
 	closedPosition_ = closedPosition;
 	direction_ = DirectionFromType(gateType);
 	textureVariant_ = textureVariant;
+	kind_ = KindFromType(gateType);
 	buttonID_ = buttonID;
 
 	worldTransform_.Initialize();
@@ -33,13 +34,17 @@ void SlidingGate::Initialize(Model* model, uint32_t textureHandle, Camera* camer
 SlidingGate::SlideDirection SlidingGate::DirectionFromType(MapChipType type) {
 	switch (type) {
 	case MapChipType::kGateUp:
+	case MapChipType::kArenaGateUp:
 	default:
 		return SlideDirection::kUp;
 	case MapChipType::kGateDown:
+	case MapChipType::kArenaGateDown:
 		return SlideDirection::kDown;
 	case MapChipType::kGateLeft:
+	case MapChipType::kArenaGateLeft:
 		return SlideDirection::kLeft;
 	case MapChipType::kGateRight:
+	case MapChipType::kArenaGateRight:
 		return SlideDirection::kRight;
 	}
 }

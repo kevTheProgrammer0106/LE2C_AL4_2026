@@ -17,14 +17,19 @@ void FirearmMusket::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "OffsetHolsterScale", musketHolsterOffset_.scale);
 	gv->AddItem(kGroupName, "OffsetHolsterRotate", musketHolsterOffset_.rotation);
 	gv->AddItem(kGroupName, "OffsetHolsterTranslate", musketHolsterOffset_.translation);
-	// [NEW] reload pose
 	gv->AddItem(kGroupName, "OffsetReloadScale", musketReloadOffset_.scale);
 	gv->AddItem(kGroupName, "OffsetReloadRotate", musketReloadOffset_.rotation);
 	gv->AddItem(kGroupName, "OffsetReloadTranslate", musketReloadOffset_.translation);
 
-	gv->AddItem(kGroupName, "ReloadDuration", kReloadDuration);
-	gv->AddItem(kGroupName, "ReloadHitBonus", kReloadHitBonus);
-	gv->AddItem(kGroupName, "ReloadDurationMin", kReloadDurationMin);
+	gv->AddItem(kGroupName, "ReloadDurationPlayer", kReloadDurationPlayer);
+	gv->AddItem(kGroupName, "ReloadHitBonusPlayer", kReloadHitBonusPlayer);
+	gv->AddItem(kGroupName, "ReloadDurationMinPlayer", kReloadDurationMinPlayer);
+	gv->AddItem(kGroupName, "ReloadDurationEnemy", kReloadDurationEnemy);
+	gv->AddItem(kGroupName, "ReloadHitBonusEnemy", kReloadHitBonusEnemy);
+	gv->AddItem(kGroupName, "ReloadDurationMinEnemy", kReloadDurationMinEnemy);
+
+	gv->AddItem(kGroupName, "DamageToEnemy", kDamageToEnemy);
+	gv->AddItem(kGroupName, "DamageToPlayer", kDamageToPlayer);
 }
 
 void FirearmMusket::ApplyGlobalVariables() {
@@ -39,36 +44,15 @@ void FirearmMusket::ApplyGlobalVariables() {
 	musketReloadOffset_.rotation = gv->GetVector3Value(kGroupName, "OffsetReloadRotate");
 	musketReloadOffset_.translation = gv->GetVector3Value(kGroupName, "OffsetReloadTranslate");
 
-	kReloadDuration = gv->GetFloatValue(kGroupName, "ReloadDuration");
-	kReloadHitBonus = gv->GetFloatValue(kGroupName, "ReloadHitBonus");
-	kReloadDurationMin = gv->GetFloatValue(kGroupName, "ReloadDurationMin");
+	kReloadDurationPlayer = gv->GetFloatValue(kGroupName, "ReloadDurationPlayer");
+	kReloadHitBonusPlayer = gv->GetFloatValue(kGroupName, "ReloadHitBonusPlayer");
+	kReloadDurationMinPlayer = gv->GetFloatValue(kGroupName, "ReloadDurationMinPlayer");
+	kReloadDurationEnemy = gv->GetFloatValue(kGroupName, "ReloadDurationEnemy");
+	kReloadHitBonusEnemy = gv->GetFloatValue(kGroupName, "ReloadHitBonusEnemy");
+	kReloadDurationMinEnemy = gv->GetFloatValue(kGroupName, "ReloadDurationMinEnemy");
+
+	kDamageToEnemy = gv->GetIntValue(kGroupName, "DamageToEnemy");
+	kDamageToPlayer = gv->GetIntValue(kGroupName, "DamageToPlayer");
 }
 
-// Called by BaseFirearm::UpdateFollow. Stats only; pose math lives in the base class.
-void FirearmMusket::TickReload() {
-	if (currentAmmo_ < kMaxAmmo) {
-		reloadTimer_ += 1.0f / 60.0f;
-		if (reloadTimer_ >= reloadDurationCurrent_) {
-			currentAmmo_ = kMaxAmmo;
-			reloadTimer_ = 0.0f;
-			reloadDurationCurrent_ = kReloadDuration;
-			if (sMusketLoadedSoundHandle_ != 0) {
-				Audio::GetInstance()->PlayWave(sMusketLoadedSoundHandle_, false, sSfxVolume_);
-			}
-		}
-	}
-	isReloading_ = (currentAmmo_ < kMaxAmmo);
-}
-
-bool FirearmMusket::TryFire() {
-	if (currentAmmo_ <= 0) {
-		return false;
-	}
-	--currentAmmo_;
-	return true;
-}
-
-void FirearmMusket::NotifyDealtDamage() {
-	// 敵にダメージを与えるほど次のリロードが短くなる（積極的なプレイを促す）
-	reloadDurationCurrent_ = std::max(reloadDurationCurrent_ - kReloadHitBonus, kReloadDurationMin);
-}
+// Ammo / reload / drop-state logic now lives in BaseFirearm.

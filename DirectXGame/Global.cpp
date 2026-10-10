@@ -1,6 +1,74 @@
 #include "Global.h"
+#include "GlobalVariables.h"
 
 using namespace KamataEngine;
+
+namespace {
+void RegisterSRT(const char* group, const std::string& key, const SRTOffset& v) {
+	GlobalVariables* gv = GlobalVariables::GetInstance();
+	gv->AddItem(group, key + "Scale", v.scale);
+	gv->AddItem(group, key + "Rotation", v.rotation);
+	gv->AddItem(group, key + "Translation", v.translation);
+}
+void ApplySRT(const char* group, const std::string& key, SRTOffset& v) {
+	GlobalVariables* gv = GlobalVariables::GetInstance();
+	v.scale = gv->GetVector3Value(group, key + "Scale");
+	v.rotation = gv->GetVector3Value(group, key + "Rotation");
+	v.translation = gv->GetVector3Value(group, key + "Translation");
+}
+} // namespace
+
+SRTOffset EvaluateBodyComboPose(const BodyComboPoseSet& set, BodyAttackPhase phase, float t, int comboIndex) {
+	int idx = std::clamp(comboIndex, 0, 2);
+	t = std::clamp(t, 0.0f, 1.0f);
+	switch (phase) {
+	case BodyAttackPhase::kAnticipate:
+		return LerpSRT(SRTOffset{}, set.anticipate[idx], EaseIn(0.0f, 1.0f, t));
+	case BodyAttackPhase::kAttack:
+		return LerpSRT(set.anticipate[idx], set.peak[idx], EaseOut(0.0f, 1.0f, t));
+	case BodyAttackPhase::kRecovery:
+		return LerpSRT(set.recovery[idx], SRTOffset{}, EaseInOut(0.0f, 1.0f, t));
+	}
+	return SRTOffset{};
+}
+
+SRTOffset EvaluateBodyLungePose(const BodyLungePoseSet& set, BodyAttackPhase phase, float t) {
+	t = std::clamp(t, 0.0f, 1.0f);
+	switch (phase) {
+	case BodyAttackPhase::kAnticipate:
+		return LerpSRT(SRTOffset{}, set.windUp, EaseIn(0.0f, 1.0f, t));
+	case BodyAttackPhase::kAttack:
+		return LerpSRT(set.windUp, set.thrust, EaseOut(0.0f, 1.0f, t));
+	case BodyAttackPhase::kRecovery:
+		return LerpSRT(set.thrust, SRTOffset{}, EaseInOut(0.0f, 1.0f, t));
+	}
+	return SRTOffset{};
+}
+
+void RegisterBodyComboPoseSet(const char* group, const char* prefix, const BodyComboPoseSet& set) {
+	for (int i = 0; i < 3; ++i) {
+		std::string base = std::string(prefix) + std::to_string(i);
+		RegisterSRT(group, base + "Anticipate", set.anticipate[i]);
+		RegisterSRT(group, base + "Peak", set.peak[i]);
+		RegisterSRT(group, base + "Recovery", set.recovery[i]);
+	}
+}
+void ApplyBodyComboPoseSet(const char* group, const char* prefix, BodyComboPoseSet& set) {
+	for (int i = 0; i < 3; ++i) {
+		std::string base = std::string(prefix) + std::to_string(i);
+		ApplySRT(group, base + "Anticipate", set.anticipate[i]);
+		ApplySRT(group, base + "Peak", set.peak[i]);
+		ApplySRT(group, base + "Recovery", set.recovery[i]);
+	}
+}
+void RegisterBodyLungePoseSet(const char* group, const char* prefix, const BodyLungePoseSet& set) {
+	RegisterSRT(group, std::string(prefix) + "WindUp", set.windUp);
+	RegisterSRT(group, std::string(prefix) + "Thrust", set.thrust);
+}
+void ApplyBodyLungePoseSet(const char* group, const char* prefix, BodyLungePoseSet& set) {
+	ApplySRT(group, std::string(prefix) + "WindUp", set.windUp);
+	ApplySRT(group, std::string(prefix) + "Thrust", set.thrust);
+}
 
 void WorldTransformUpdate(KamataEngine::WorldTransform& worldTransform) {
 	// スケール、回転、平行移動からワールド行列を計算

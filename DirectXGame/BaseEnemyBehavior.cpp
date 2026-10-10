@@ -12,6 +12,12 @@ namespace {
 constexpr const char* kGroupName = "BaseEnemyBehavior";
 }
 
+namespace {
+// Walls for ground movement: anything solid that blocks sideways. One-way platforms never do.
+bool IsMoveWall(MapChipType type) { return MapChipField::IsGroundType(type) && type != MapChipType::kPlatform; }
+} // namespace
+
+
 void BaseEnemyBehavior::RegisterGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
 	gv->CreateGroup(kGroupName);
@@ -30,6 +36,13 @@ void BaseEnemyBehavior::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "xHitStunDuration", kHitStunDuration);
 	gv->AddItem(kGroupName, "xBlockDuration", kBlockDuration);
 	gv->AddItem(kGroupName, "xBlockCooldown", kBlockCooldown);
+	gv->AddItem(kGroupName, "xMoveLookAheadDistance", kMoveLookAheadDistance);
+	gv->AddItem(kGroupName, "xMoveMaxStepDown", kMoveMaxStepDown);
+	gv->AddItem(kGroupName, "xMoveHopForwardSpeed", kMoveHopForwardSpeed);
+	gv->AddItem(kGroupName, "xMoveDecisionCooldown", kMoveDecisionCooldown);
+	gv->AddItem(kGroupName, "xRetreatJumpableWallBlocks", kRetreatJumpableWallBlocks);
+	gv->AddItem(kGroupName, "xRetreatHopSpeed", kRetreatHopSpeed);
+	gv->AddItem(kGroupName, "xLungeLedgeGuardSpeed", kLungeLedgeGuardSpeed);
 }
 
 void BaseEnemyBehavior::ApplyGlobalVariables() {
@@ -49,6 +62,13 @@ void BaseEnemyBehavior::ApplyGlobalVariables() {
 	kHitStunDuration = gv->GetFloatValue(kGroupName, "xHitStunDuration");
 	kBlockDuration = gv->GetFloatValue(kGroupName, "xBlockDuration");
 	kBlockCooldown = gv->GetFloatValue(kGroupName, "xBlockCooldown");
+	kMoveLookAheadDistance = gv->GetFloatValue(kGroupName, "xMoveLookAheadDistance");
+	kMoveMaxStepDown = gv->GetIntValue(kGroupName, "xMoveMaxStepDown");
+	kMoveHopForwardSpeed = gv->GetFloatValue(kGroupName, "xMoveHopForwardSpeed");
+	kMoveDecisionCooldown = gv->GetFloatValue(kGroupName, "xMoveDecisionCooldown");
+	kRetreatJumpableWallBlocks = gv->GetIntValue(kGroupName, "xRetreatJumpableWallBlocks");
+	kRetreatHopSpeed = gv->GetFloatValue(kGroupName, "xRetreatHopSpeed");
+	kLungeLedgeGuardSpeed = gv->GetFloatValue(kGroupName, "xLungeLedgeGuardSpeed");
 }
 
 void BaseEnemyBehavior::Initialize() {
@@ -59,6 +79,7 @@ void BaseEnemyBehavior::Initialize() {
 	blockTimer_ = 0.0f;
 	blockCooldownTimer_ = 0.0f;
 	behavior_ = Behavior::kIdle;
+	ClearMoveCommit();
 	BehaviorIdleInitialize();
 }
 
@@ -187,15 +208,22 @@ void BaseEnemyBehavior::ResolveBehaviorRequest() {
 		behaviorRequest_ = Behavior::kIdle;
 	}
 	if (behaviorRequest_ != Behavior::kUnknown) {
+		if (behaviorRequest_ == Behavior::kKnockback || behaviorRequest_ == Behavior::kStunned || behaviorRequest_ == Behavior::kDeath) {
+			ClearMoveCommit();
+		}
 		behavior_ = behaviorRequest_;
 		InitializeBehaviorState(behavior_);
 		behaviorRequest_ = Behavior::kUnknown;
 	}
+
 }
 
 void BaseEnemyBehavior::UpdateCurrentBehavior() {
 	if (blockCooldownTimer_ > 0.0f) {
 		blockCooldownTimer_ = std::max(0.0f, blockCooldownTimer_ - 1.0f / 60.0f);
+	}
+	if (moveDecisionCooldownTimer_ > 0.0f) {
+		moveDecisionCooldownTimer_ = std::max(0.0f, moveDecisionCooldownTimer_ - 1.0f / 60.0f);
 	}
 	UpdateBehaviorState();
 }
@@ -313,8 +341,9 @@ void BaseEnemyBehavior::ApplySeparationFromOtherEnemies() {
 
 	if (pushX == 0.0f)
 		return;
+	const float speedBefore = std::abs(owner_.velocity_.x);
 	owner_.velocity_.x += pushX;
-	float maxSeparatedSpeed = owner_.kChaseSpeed + kSeparationStrength;
+	float maxSeparatedSpeed = std::max(owner_.kChaseSpeed + kSeparationStrength, speedBefore);
 	owner_.velocity_.x = std::clamp(owner_.velocity_.x, -maxSeparatedSpeed, maxSeparatedSpeed);
 }
 
@@ -326,10 +355,253 @@ void BaseEnemyBehavior::IdleFacingUpdate() {
 	BaseEnemy::LRDirection newDirection = (owner_.lrDirection_ == BaseEnemy::LRDirection::kRight) ? BaseEnemy::LRDirection::kLeft : BaseEnemy::LRDirection::kRight;
 	owner_.FaceDirection(newDirection);
 }
+void BaseEnemyBehavior::ApproachPosition(const Vector3& target, float speed, float stopDistance) {
+	const Vector3 pos = owner_.GetWorldPosition();
+	const float dx = target.x - pos.x;
+
+	// Mid-hop: keep going, ignore stopDistance until we land
+	if (moveHopping_ && !owner_.onGround_) {
+		MoveAlongGround(lastMoveDirection_, speed, MoveKind::kApproach);
+		return;
+	}
+
+	// Platform: target is well below and we stand on a platform -> drop through (only if the landing is safe).
+	if (owner_.onGround_ && owner_.IsStandingOnPlatform() && pos.y - target.y > PathFindingAI::kDropPlayerBelowThreshold && std::abs(dx) < 2.0f && owner_.pathfindingModule_ &&
+	    owner_.pathfindingModule_->IsDropLandingSafe(pos)) {
+		owner_.velocity_.x = 0.0f;
+		owner_.RequestDropThrough();
+		return;
+	}
+
+	if (std::abs(dx) <= stopDistance) {
+		owner_.velocity_.x = 0.0f;
+		return;
+	}
+
+	const int dir = (dx < 0.0f) ? static_cast<int>(BaseEnemy::LRDirection::kLeft) : static_cast<int>(BaseEnemy::LRDirection::kRight);
+	MoveAlongGround(dir, speed, MoveKind::kApproach);
+}
 
 void BaseEnemyBehavior::OwnerFaceDirection(int direction) { owner_.FaceDirection(static_cast<BaseEnemy::LRDirection>(direction)); }
 void BaseEnemyBehavior::OwnerSetFirearmMode(int mode) { owner_.firearmMode_ = static_cast<BaseEnemy::FirearmMode>(mode); }
+void BaseEnemyBehavior::FacePlayer() {
+	GameScene* scene = OwnerGameScene();
+	if (!scene || !scene->GetPlayer())
+		return;
+	OwnerFaceDirection(scene->GetPlayer()->GetWorldPosition().x < owner_.GetWorldPosition().x ? 1 : 0);
+}
 
+void BaseEnemyBehavior::AdvanceTowardFacing(float speed) {
+	const bool right = owner_.isRight();
+
+	if (GameScene* scene = OwnerGameScene()) {
+		if (Player* player = scene->GetPlayer()) {
+			float dx = player->GetWorldPosition().x - owner_.GetWorldPosition().x;
+			bool playerAhead = right ? (dx > 0.0f) : (dx < 0.0f);
+			if (playerAhead && std::abs(dx) <= kMeleeAdvanceStopGap) {
+				OwnerVelocity().x = 0.0f;
+				return;
+			}
+		}
+	}
+	if (!IsGroundAheadClear(right ? 0 : 1)) {
+		OwnerVelocity().x = 0.0f;
+		return;
+	}
+	OwnerVelocity().x = right ? speed : -speed;
+}
+
+
+
+BaseEnemyBehavior::MoveProfile BaseEnemyBehavior::GetMoveProfile(MoveKind kind) const {
+	MoveProfile p;
+	p.maxStepDown = kMoveMaxStepDown;
+	p.hopForwardSpeed = kMoveHopForwardSpeed;
+	if (kind == MoveKind::kRetreat) {
+		p.maxWallBlocks = kRetreatJumpableWallBlocks;
+		p.hopSpeed = kRetreatHopSpeed;
+		p.allowGapJump = false;
+	} else {
+		// Approach uses the enemy's normal jump (same height formula as CanJumpOverWall).
+		float maxJumpHeight = (owner_.kJumpAcceleration * owner_.kJumpAcceleration) / (2.0f * owner_.kGravityAcceleration) + kJumpHeightMargin;
+		p.maxWallBlocks = std::max(0, static_cast<int32_t>(std::floor(maxJumpHeight)));
+		p.hopSpeed = owner_.kJumpAcceleration;
+		p.allowGapJump = true;
+	}
+	return p;
+}
+
+BaseEnemyBehavior::MoveTerrain BaseEnemyBehavior::ClassifyMoveTerrain(int direction, const MoveProfile& profile) const {
+	MapChipField* field = owner_.mapChipField_;
+	if (!field) {
+		return MoveTerrain::kClear;
+	}
+
+	const float sign = (direction == static_cast<int>(BaseEnemy::LRDirection::kRight)) ? 1.0f : -1.0f;
+	const Vector3 pos = owner_.worldTransform_.translation_;
+	const float footY = pos.y - BaseEnemy::GetBodyHeight() * 0.5f;
+
+	// the column we are moving into, and the row the feet are in (cell just above the floor)
+	MapChipField::IndexSet feet = field->GetMapChipIndexSetByPosition(Vector3(pos.x + sign * kMoveLookAheadDistance, footY + kMoveFootSampleOffset, 0.0f));
+	const int col = static_cast<int>(feet.xIndex);
+	const int row = static_cast<int>(feet.yIndex); // yIndex grows downward
+	const int rows = static_cast<int>(field->GetNumBlockVertical());
+
+	auto typeAt = [&](int r) -> MapChipType {
+		if (r < 0 || r >= rows) {
+			return MapChipType::kBlank;
+		}
+		return field->GetMapChipTypeByIndex(static_cast<uint32_t>(col), static_cast<uint32_t>(r));
+	};
+
+	const float blockHeight = (rows > 0) ? field->GetWorldHeight() / static_cast<float>(rows) : 1.0f;
+	const int bodyCells = std::max(1, static_cast<int>(std::ceil(BaseEnemy::GetBodyHeight() / blockHeight - 0.05f)));
+
+	// --- wall: count its height (stop one past the limit) ---
+	int wallBlocks = 0;
+	while (wallBlocks <= profile.maxWallBlocks && IsMoveWall(typeAt(row - wallBlocks))) {
+		++wallBlocks;
+	}
+	if (wallBlocks > profile.maxWallBlocks) {
+		return MoveTerrain::kBlocked; // too tall to hop
+	}
+	if (wallBlocks > 0) {
+		for (int k = 0; k < bodyCells; ++k) {
+			if (IsMoveWall(typeAt(row - wallBlocks - k))) {
+				return MoveTerrain::kBlocked; // no headroom on top of the wall
+			}
+		}
+		return MoveTerrain::kJumpable;
+	}
+
+	// --- overhang that would hit the head ---
+	for (int k = 1; k < bodyCells; ++k) {
+		if (IsMoveWall(typeAt(row - k))) {
+			return MoveTerrain::kBlocked;
+		}
+	}
+
+	// --- floor: flat, staircase down, or gap (blocks, half blocks, slow blocks and platforms all count as floor) ---
+	for (int depth = 0; depth <= profile.maxStepDown; ++depth) {
+		MapChipType type = typeAt(row + 1 + depth);
+		if (type == MapChipType::kKillBlock) {
+			return MoveTerrain::kGap;
+		}
+		if (MapChipField::IsGroundType(type)) {
+			return (depth == 0) ? MoveTerrain::kClear : MoveTerrain::kStepDown;
+		}
+	}
+	return MoveTerrain::kGap;
+}
+
+void BaseEnemyBehavior::LaunchMoveHop(int direction, float forwardSpeed, float hopSpeed) {
+	const float sign = (direction == static_cast<int>(BaseEnemy::LRDirection::kLeft)) ? -1.0f : 1.0f;
+	moveHopping_ = true;
+	moveHopDirection_ = direction;
+	moveHopSpeed_ = forwardSpeed;
+	moveDecisionCooldownTimer_ = kMoveDecisionCooldown;
+	owner_.velocity_.x = sign * forwardSpeed;
+	owner_.velocity_.y = hopSpeed; // onGround_ is cleared by the ground check this frame
+}
+
+void BaseEnemyBehavior::ClearMoveCommit() {
+	moveHopping_ = false;
+	moveDecisionCooldownTimer_ = 0.0f;
+}
+
+bool BaseEnemyBehavior::IsMoveCommitted() const { return (moveHopping_ && !owner_.onGround_) || moveDecisionCooldownTimer_ > 0.0f; }
+
+void BaseEnemyBehavior::ContinueCommittedMove() { MoveAlongGround(lastMoveDirection_, lastMoveSpeed_, lastMoveKind_); }
+
+bool BaseEnemyBehavior::MoveAlongGround(int direction, float speed, MoveKind kind) {
+	lastMoveKind_ = kind;
+	lastMoveDirection_ = direction;
+	lastMoveSpeed_ = speed;
+
+	const float sign = (direction == static_cast<int>(BaseEnemy::LRDirection::kLeft)) ? -1.0f : 1.0f;
+
+	// Airborne: never re-evaluate. During our own hop keep the velocity locked forward/back
+	// and hold the decision cooldown at full so it only starts counting after landing.
+	if (!owner_.onGround_) {
+		if (moveHopping_) {
+			const float hopSign = (moveHopDirection_ == static_cast<int>(BaseEnemy::LRDirection::kLeft)) ? -1.0f : 1.0f;
+			owner_.velocity_.x = hopSign * moveHopSpeed_;
+			moveDecisionCooldownTimer_ = kMoveDecisionCooldown;
+		} else {
+			owner_.velocity_.x = sign * speed; // walked off a step: keep going
+		}
+		return true;
+	}
+	moveHopping_ = false; // landed
+
+	if (speed <= 0.0001f) {
+		owner_.velocity_.x = 0.0f;
+		return false;
+	}
+
+	// slow terrain (same rule as chase / roam)
+	float speedFactor = 1.0f;
+	if (owner_.mapChipField_) {
+		Vector3 footPos = owner_.worldTransform_.translation_ + Vector3(0.0f, -(BaseEnemy::GetBodyHeight() * 0.5f) - 0.05f, 0.0f);
+		if (owner_.mapChipField_->IsSlowAtPosition(footPos)) {
+			speedFactor = MapChipField::kSlowSpeedFactor;
+		}
+	}
+	const float walkSpeed = speed * speedFactor;
+
+	const MoveProfile profile = GetMoveProfile(kind);
+	switch (ClassifyMoveTerrain(direction, profile)) {
+	case MoveTerrain::kClear:
+	case MoveTerrain::kStepDown:
+		owner_.velocity_.x = sign * walkSpeed;
+		return true;
+
+	case MoveTerrain::kJumpable:
+		LaunchMoveHop(direction, std::max(walkSpeed, profile.hopForwardSpeed), profile.hopSpeed);
+		return true;
+
+	case MoveTerrain::kGap:
+		if (profile.allowGapJump && HasReachableLedgeAhead(direction, profile.hopForwardSpeed)) {
+			LaunchMoveHop(direction, profile.hopForwardSpeed, profile.hopSpeed);
+			return true;
+		}
+		owner_.velocity_.x = 0.0f; // corner lock
+		return false;
+
+	case MoveTerrain::kBlocked:
+	default:
+		owner_.velocity_.x = 0.0f; // wall too tall: stand still
+		return false;
+	}
+}
+
+bool BaseEnemyBehavior::RetreatInDirection(int direction, float speed) { return MoveAlongGround(direction, speed, MoveKind::kRetreat); }
+
+bool BaseEnemyBehavior::RetreatAwayFrom(const Vector3& threatPos, float speed) {
+	const bool threatOnRight = threatPos.x >= owner_.GetWorldPosition().x;
+	const int direction = threatOnRight ? static_cast<int>(BaseEnemy::LRDirection::kLeft) : static_cast<int>(BaseEnemy::LRDirection::kRight);
+	return RetreatInDirection(direction, speed);
+}
+
+bool BaseEnemyBehavior::TimedRetreatAwayFrom(const Vector3& threatPos, float speed, float duration, float& timer) {
+	if (timer >= duration) {
+		return false;
+	}
+	if (!RetreatAwayFrom(threatPos, speed)) {
+		return false;
+	}
+	timer += 1.0f / 60.0f;
+	return true;
+}
+
+float BaseEnemyBehavior::ScaleRetreatSpeed(float distance, float outerRange, float innerRange, float maxSpeed) {
+	const float span = outerRange - innerRange;
+	if (span <= 0.0f) {
+		return maxSpeed;
+	}
+	const float amount = std::clamp((outerRange - distance) / span, 0.0f, 1.0f);
+	return maxSpeed * amount;
+}
 void BaseEnemyBehavior::BehaviorRootInitialize() {}
 void BaseEnemyBehavior::BehaviorRootUpdate() { owner_.pathfindingModule_->Update(); }
 
@@ -528,12 +800,12 @@ bool BaseEnemyBehavior::CanJumpOverWall(int direction) const {
 		return false;
 	return wallHeight <= maxJumpHeight;
 }
-bool BaseEnemyBehavior::HasReachableLedgeAhead(int direction) const {
+bool BaseEnemyBehavior::HasReachableLedgeAhead(int direction, float travelSpeedOverride) const {
 	if (!owner_.mapChipField_)
 		return false;
 	float maxJumpHeight = (owner_.kJumpAcceleration * owner_.kJumpAcceleration) / (2.0f * owner_.kGravityAcceleration) + kJumpHeightMargin;
 	float airTime = (2.0f * owner_.kJumpAcceleration) / owner_.kGravityAcceleration;
-	float travelSpeed = (behavior_ == Behavior::kRoot) ? owner_.kChaseSpeed : owner_.kWalkSpeed;
+	float travelSpeed = (travelSpeedOverride > 0.0f) ? travelSpeedOverride : ((behavior_ == Behavior::kRoot) ? owner_.kChaseSpeed : owner_.kWalkSpeed);
 	float maxJumpDistance = travelSpeed * airTime;
 	bool directionIsRight = (direction == static_cast<int>(BaseEnemy::LRDirection::kRight));
 	Vector3 footPos = owner_.worldTransform_.translation_ + Vector3(0.0f, -(owner_.kHeight / 2.0f), 0.0f);
@@ -615,4 +887,16 @@ void BaseEnemyBehavior::BehaviorBlockUpdate() {
 	if (blockTimer_ >= kBlockDuration) {
 		behaviorRequest_ = Behavior::kRoot;
 	}
+}
+BaseEnemyBehavior::LedgeGuardRequest BaseEnemyBehavior::GetLedgeGuardRequest() const {
+	if (IsKnockedBack()) {
+		return {true, BaseEnemy::kChaseSpeed}; // same rule as before: let strong launches fly
+	}
+	if (behavior_ == Behavior::kMelee) {
+		if (IsInMeleeRecovery()) {
+			return {true, std::numeric_limits<float>::max()}; // recovery: always stop at the edge
+		}
+		return {true, kLungeLedgeGuardSpeed}; // otherwise only once slow enough
+	}
+	return {};
 }

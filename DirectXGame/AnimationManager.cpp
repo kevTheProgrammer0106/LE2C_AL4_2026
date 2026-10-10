@@ -136,8 +136,7 @@ AnimationManager::MovementEvents AnimationManager::UpdateMovementState(const Ani
 		footstepTimer_ = 0.0f;
 	}
 
-	// [NEW] chase the target pose instead of snapping to it
-	SRTOffset target = context.isDead ? kNeutralPose : ComputeTargetPose();
+	SRTOffset target = (context.isDead || context.isAttacking) ? kNeutralPose : ComputeTargetPose();
 	currentPose_ = SmoothSRT(currentPose_, target);
 
 	return events;

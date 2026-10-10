@@ -69,49 +69,25 @@ void RiflemanBehavior::BehaviorRootInitialize() {
 	}
 }
 
-float RiflemanBehavior::GetPlayerDistance() const {
-	GameScene* scene = OwnerGameScene();
-	if (!scene || !scene->GetPlayer()) {
-		return FLT_MAX;
-	}
-
-	const Vector3 playerPosition = scene->GetPlayer()->GetWorldPosition();
-	const Vector3 enemyPosition = owner_.GetWorldPosition();
-
-	const float dx = playerPosition.x - enemyPosition.x;
-	const float dy = playerPosition.y - enemyPosition.y;
-
-	return std::sqrtf(dx * dx + dy * dy);
-}
 bool RiflemanBehavior::TryGetPlayerDistance(float& outDistance) const {
 	GameScene* scene = OwnerGameScene();
 	if (!scene || !scene->GetPlayer()) {
-		outDistance = 0.0f;
 		return false;
 	}
-
-	const Vector3 playerPosition = scene->GetPlayer()->GetWorldPosition();
-
-	const Vector3 enemyPosition = owner_.GetWorldPosition();
-
-	const float dx = playerPosition.x - enemyPosition.x;
-	const float dy = playerPosition.y - enemyPosition.y;
-
+	const Vector3 p = scene->GetPlayer()->GetWorldPosition();
+	const Vector3 e = owner_.GetWorldPosition();
+	const float dx = p.x - e.x;
+	const float dy = p.y - e.y;
 	outDistance = std::sqrtf(dx * dx + dy * dy);
 	return true;
 }
-float RiflemanBehavior::CalculateRetreatSpeed(float distance) const {
-	// RetreatRangeからBayonetRangeへ近づくほど後退速度を上げる。
-	const float retreatSpan = kRetreatRange - kBayonetRange;
 
-	if (retreatSpan <= 0.0f) {
-		return kRetreatSpeed;
-	}
-
-	const float retreatAmount = std::clamp((kRetreatRange - distance) / retreatSpan, 0.0f, 1.0f);
-
-	return kRetreatSpeed * retreatAmount;
+float RiflemanBehavior::GetPlayerDistance() const {
+	float d = 0.0f;
+	TryGetPlayerDistance(d);
+	return d;
 }
+float RiflemanBehavior::CalculateRetreatSpeed(float distance) const { return ScaleRetreatSpeed(distance, kRetreatRange, kBayonetRange, kRetreatSpeed); }
 
 void RiflemanBehavior::BehaviorRootUpdate() {
 	GameScene* scene = OwnerGameScene();
@@ -127,16 +103,15 @@ void RiflemanBehavior::BehaviorRootUpdate() {
 		BaseEnemyBehavior::BehaviorRootUpdate();
 		return;
 	}
-	// [FIX] Do NOT gate on IsPlayerOnSameFloor() here: a ranged enemy must engage even while the
-	// player is jumping / on another height. (The check made the rifleman stand idle mid-jump.)
 
 	// 移動せず、その場でプレイヤーの方向だけを向く。
 	OwnerFaceDirection(player->GetWorldPosition().x < owner_.GetWorldPosition().x ? 1 : 0);
-
+	if (!CanMakeDecision()) {
+		ContinueCommittedMove(); // still hopping / just landed
+		return;
+	}
 	const float distance = GetPlayerDistance();
 
-	// 最も近い距離では必ず銃剣へ移行する。
-	// [FIX] bayonet only when the player is on the same floor; an airborne player gets shot instead.
 	if (distance <= kBayonetRange && IsPlayerOnSameFloor()) {
 		RequestBehavior(Behavior::kMelee);
 		return;
@@ -150,9 +125,15 @@ void RiflemanBehavior::BehaviorRootUpdate() {
 
 void RiflemanBehavior::BehaviorAimingInitialize() {
 	aimTimer_ = 0.0f;
+	currentAimDuration_ = kAimDuration; // full duration on first sight
 
 	OwnerVelocity().x = 0.0f;
 	OwnerSetFirearmMode(1);
+
+	GameScene* scene = OwnerGameScene();
+	if (scene && scene->GetPlayer()) {
+		aimTracker_.Reset(owner_.GetModelWorldPosition(), scene->GetPlayer()->GetWorldPosition());
+	}
 
 	riflemanOwner_.SetGunPose(EnemyRifleman::GunPose::kAiming);
 	if (FirearmMusketBayonet* firearm = riflemanOwner_.GetCurrentFirearm()) {
@@ -161,6 +142,8 @@ void RiflemanBehavior::BehaviorAimingInitialize() {
 }
 
 void RiflemanBehavior::BehaviorAimingUpdate() {
+	constexpr float kDeltaTime = 1.0f / 60.0f;
+
 	GameScene* scene = OwnerGameScene();
 	Player* player = scene ? scene->GetPlayer() : nullptr;
 
@@ -170,55 +153,59 @@ void RiflemanBehavior::BehaviorAimingUpdate() {
 		return;
 	}
 
-	// 狙っている最中も、プレイヤーが射撃条件を満たしているか再確認する。
-	// [FIX] only line of sight cancels the aim. Player height / jumping no longer does.
-	if (!IsPlayerSpotted()) {
-		OwnerVelocity().x = 0.0f;
-		RequestBehavior(Behavior::kRoot);
+	const bool spotted = IsPlayerSpotted();
+	aimTracker_.Update(spotted, owner_.GetModelWorldPosition(), player->GetWorldPosition(), kAimTrackSpeed, kDeltaTime);
+
+	// Player is back in sight: gun lerps to them, and the remaining aim time is capped at 0.5s.
+	if (aimTracker_.ConsumeReacquired()) {
+		currentAimDuration_ = std::min(currentAimDuration_, aimTimer_ + kReacquireAimDuration);
+	}
+
+	if (IsMoveCommitted()) {
+		ContinueCommittedMove();
+		riflemanOwner_.UpdateFirearmHybrid();
 		return;
 	}
 
+
+	// Sight lost: hold aim on the last seen position. No firing, aim timer paused.
+	// Sight lost: keep the gun on the last seen position, creep toward it, no firing, aim timer paused.
+	if (!spotted) {
+		if (aimTracker_.GetLostTime() >= kLostSightChaseDelay) {
+			OwnerVelocity().x = 0.0f;
+			RequestBehavior(Behavior::kRoot); // chase the last known position
+			return;
+		}
+		ApproachPosition(aimTracker_.GetLastSeenPos(), kApproachSpeed, kApproachStopDistance);
+		riflemanOwner_.UpdateFirearmHybrid();
+		return;
+	}
 	const float distance = GetPlayerDistance();
 
-	// 射撃可能距離より外へ逃げられたら、再び追跡へ戻る。
 	if (distance > kFiringRange) {
 		OwnerVelocity().x = 0.0f;
 		RequestBehavior(Behavior::kRoot);
 		return;
 	}
 
-	// 至近距離なら射撃をやめて銃剣へ切り替える。
 	if (distance <= kBayonetRange && IsPlayerOnSameFloor()) {
 		OwnerVelocity().x = 0.0f;
 		RequestBehavior(Behavior::kMelee);
 		return;
 	}
 
-	// [FIX] Facing while aiming is decided by UpdateFirearmHybrid() via ComputeAimFacing (with hysteresis).
-	// Facing by raw dx here fought with it and made the rifleman flip every frame when the player was above/below.
-
 	if (distance < kRetreatRange) {
-		// RetreatRangeを切ると徐々に後退を開始する。
-		const bool playerOnRight = player->GetWorldPosition().x >= owner_.GetWorldPosition().x;
-
-		const int retreatDirection = playerOnRight ? static_cast<int>(BaseEnemy::LRDirection::kLeft) : static_cast<int>(BaseEnemy::LRDirection::kRight);
-
-		const float retreatSpeed = CalculateRetreatSpeed(distance);
-
-		OwnerVelocity().x = retreatDirection == static_cast<int>(BaseEnemy::LRDirection::kLeft) ? -retreatSpeed : retreatSpeed;
+		RetreatAwayFrom(player->GetWorldPosition(), CalculateRetreatSpeed(distance));
 	} else {
-		// 十分離れている間はその場に止まって射撃する。
-		OwnerVelocity().x = 0.0f;
+		OwnerVelocity().x = 0.0f; 
 	}
 
 	riflemanOwner_.UpdateFirearmHybrid();
 
-	aimTimer_ += 1.0f / 60.0f;
-
-	if (aimTimer_ >= kAimDuration) {
+	aimTimer_ += kDeltaTime;
+	if (aimTimer_ >= currentAimDuration_) {
 		riflemanOwner_.ShootFirearm();
 		riflemanOwner_.SetGunPose(EnemyRifleman::GunPose::kFiring);
-
 		RequestBehavior(Behavior::kReloading);
 	}
 }
@@ -237,53 +224,31 @@ void RiflemanBehavior::BehaviorReloadingUpdate() {
 	constexpr float kDeltaTime = 1.0f / 60.0f;
 
 	retreatTimer_ += kDeltaTime;
-
 	OwnerVelocity().x = 0.0f;
 
 	GameScene* scene = OwnerGameScene();
 	Player* player = scene ? scene->GetPlayer() : nullptr;
 
 	if (player) {
-		float playerX = player->GetWorldPosition().x;
-		float enemyX = owner_.GetWorldPosition().x;
+		const Vector3 playerPos = player->GetWorldPosition();
+		const bool playerOnRight = playerPos.x >= owner_.GetWorldPosition().x;
 
-		bool playerOnRight = playerX >= enemyX;
+		// keep facing the player while backing away
+		OwnerFaceDirection(playerOnRight ? static_cast<int>(BaseEnemy::LRDirection::kRight) : static_cast<int>(BaseEnemy::LRDirection::kLeft));
 
-		// プレイヤーを向いたまま、プレイヤーと反対方向へ後退する。
-		int facingDirection = playerOnRight ? static_cast<int>(BaseEnemy::LRDirection::kRight) : static_cast<int>(BaseEnemy::LRDirection::kLeft);
-
-		int retreatDirection = playerOnRight ? static_cast<int>(BaseEnemy::LRDirection::kLeft) : static_cast<int>(BaseEnemy::LRDirection::kRight);
-
-		OwnerFaceDirection(facingDirection);
-
-		// リロード開始直後の短時間だけ後退する。
-		if (retreatMoveTimer_ < kRetreatDuration) {
-			float gapDistance = 0.0f;
-
-			bool hasGap = ScanGapAhead(retreatDirection, kRetreatLookAheadDistance, gapDistance);
-
-			float wallDistance = 0.0f;
-			float wallHeight = 0.0f;
-
-			bool hasWall = ScanWallAhead(retreatDirection, kRetreatLookAheadDistance, owner_.GetBodyHeight(), wallDistance, wallHeight);
-
-			// 後方に崖や壁がある場合は、それ以上下がらない。
-			if (!hasGap && !hasWall) {
-				OwnerVelocity().x = (retreatDirection == static_cast<int>(BaseEnemy::LRDirection::kLeft)) ? -kRetreatSpeed : kRetreatSpeed;
-
-				retreatMoveTimer_ += kDeltaTime;
-			}
+		if (IsMoveCommitted()) {
+			ContinueCommittedMove();
+		} else {
+			TimedRetreatAwayFrom(playerPos, kRetreatSpeed, kRetreatDuration, retreatMoveTimer_);
 		}
 	}
 
 	riflemanOwner_.UpdateFirearmHybrid();
 
 	FirearmMusketBayonet* firearm = riflemanOwner_.GetCurrentFirearm();
-
 	bool reloadComplete = firearm && !firearm->IsReloading() && firearm->GetCurrentAmmo() > 0;
 
-	// リロード完了後の判断は今はRootに戻すだけにして、後で調整する。
-	if (reloadComplete || retreatTimer_ >= kMaxRetreatDuration) {
+	if (CanMakeDecision() && (reloadComplete || retreatTimer_ >= kMaxRetreatDuration)) {
 		OwnerVelocity().x = 0.0f;
 		RequestBehavior(Behavior::kRoot);
 	}

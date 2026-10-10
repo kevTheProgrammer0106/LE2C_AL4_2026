@@ -28,6 +28,10 @@ std::map<char, MapChipType> mapChipTypeTable = {
     {'2', MapChipType::kGateDown     },
     {'3', MapChipType::kGateLeft     },
     {'4', MapChipType::kGateRight    },
+    {'5', MapChipType::kArenaGateUp   }, // Triggers when player enters arena, closes all gates in that arena
+    {'6', MapChipType::kArenaGateDown },
+    {'7', MapChipType::kArenaGateLeft },
+    {'8', MapChipType::kArenaGateRight },
     {'K', MapChipType::kKillBlock    },
     {'A', MapChipType::kBarrier      },
     {'M', MapChipType::kSlowBlock    },
@@ -37,6 +41,7 @@ std::map<char, MapChipType> mapChipTypeTable = {
     {'C', MapChipType::kCheckpoint   },
 	{'F', MapChipType::kArenaCamera},
     {'H', MapChipType::kHealthBlock   },
+    {'G', MapChipType::kCameraTrigger },
 };
 } // namespace
 

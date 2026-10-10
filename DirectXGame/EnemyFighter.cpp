@@ -6,6 +6,16 @@
 
 using namespace KamataEngine;
 
+namespace {
+constexpr const char* kGroupName = "EnemyFighter";
+}
+
+void EnemyFighter::RegisterGlobalVariables() {
+	GlobalVariables::GetInstance()->CreateGroup(kGroupName);
+	RegisterBodyComboPoseSet(kGroupName, "BodyCombo", kBodyCombo);
+}
+void EnemyFighter::ApplyGlobalVariables() { ApplyBodyComboPoseSet(kGroupName, "BodyCombo", kBodyCombo); }
+
 void EnemyFighter::Initialize(const std::array<PartResources, static_cast<size_t>(PartSlot::kCount)>& partResources, KamataEngine::Camera* camera, const KamataEngine::Vector3& position) {
 	BaseEnemy::Initialize(partResources, camera, position);
 	SetMaxHP(125);
@@ -55,10 +65,12 @@ void EnemyFighter::UpdateMeleeVisual(const BaseMelee::GenericAttackAnimState* at
 	currentMelee_->SetReactionPose(GetReactionPose());
 	currentMelee_->SetMeleePositionGeneric(modelWorldTransform_.translation_, modelWorldTransform_.rotation_, facingRight, attackState);
 
-	// 攻撃判定は「振っている(kAttack)」フェーズの間だけ有効
 	isSwingActive_ = (attackState != nullptr && attackState->phase == BaseMelee::AttackPhase::kAttack);
 	if (attackState) {
 		currentComboIndex_ = attackState->comboIndex;
+		attackBodyPose_ = EvaluateBodyComboPose(kBodyCombo, static_cast<BodyAttackPhase>(static_cast<int>(attackState->phase)), attackState->t, attackState->comboIndex);
+	} else {
+		attackBodyPose_ = SRTOffset{};
 	}
 }
 

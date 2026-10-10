@@ -15,6 +15,35 @@ namespace {
 constexpr const char* kGroupName = "GameScene";
 }
 
+namespace {
+bool ResolveWeaponVisual(const GameAssets& a, DropWeaponKind kind, Model*& outModel, uint32_t& outTex) {
+	switch (kind) {
+	case DropWeaponKind::kSabreLight:
+		outModel = a.modelSabreLight.get();
+		outTex = a.texSabreLight;
+		return true;
+	case DropWeaponKind::kSabreHeavy:
+		outModel = a.modelSabreHeavy.get();
+		outTex = a.texSabreHeavy;
+		return true;
+	case DropWeaponKind::kMusketLong:
+		outModel = a.modelMusketLong.get();
+		outTex = a.musketLongTex;
+		return true;
+	case DropWeaponKind::kMusketBayonet:
+		outModel = a.modelMusketBayonet.get();
+		outTex = a.musketBayonetTex;
+		return true;
+	case DropWeaponKind::kShotgun:
+		outModel = a.modelMusketLong.get();
+		outTex = a.musketLongTex;
+		return true;
+	default:
+		return false;
+	}
+}
+}
+
 void GameScene::RegisterGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
 	gv->CreateGroup(kGroupName);
@@ -44,7 +73,6 @@ void GameScene::debugMenu() {
 }
 void GameScene::BindAssets() {
 	BaseFirearm::SetFireSoundHandle(assets_.sfxFirearmFire);
-	BaseFirearm::SetReloadSoundHandle(assets_.sfxFirearmReload);
 	FirearmMusket::SetMusketLoadedSoundHandle(assets_.sfxMusketLoaded);
 
 	BaseMelee::SetDefaultSwingSoundHandle(assets_.sfxMeleeSwingDefault);
@@ -67,6 +95,8 @@ void GameScene::BindAssets() {
 	Player::SetJumpSoundHandle(assets_.sfxJump);
 	Player::SetLandSoundHandle(assets_.sfxLand);
 
+	FirearmMusketBayonet::SetLungeSoundHandle(assets_.sfxBayonetLunge);
+
 	WeaponHeavySabre::SetSwingSoundHandle(assets_.sfxCuirassierSwing);
 	WeaponHeavySabre::SetLungeSoundHandle(assets_.sfxCuirassierLunge);
 	EnemyCuirassier::SetMovementSoundHandle(assets_.sfxCuirassierMove);
@@ -76,6 +106,11 @@ void GameScene::BindAssets() {
 
 	EnemyRifleman::SetBayonetLungeSoundHandle(assets_.sfxBayonetLunge);
 	HealthBlock::SetConsumeSoundHandle(assets_.sfxHealthRestore);
+
+	ArenaManager::SetArenaStartSoundHandle(assets_.sfxArenaStart);
+	ArenaManager::SetWaveStartSoundHandle(assets_.sfxWaveStart);
+	ArenaManager::SetWaveEndSoundHandle(assets_.sfxWaveEnd);
+	ArenaManager::SetArenaClearSoundHandle(assets_.sfxArenaClear);
 }
 void GameScene::Initialize(StageManager* stageDataManager) {
 	loadingCover_ = std::make_unique<Fade>();
@@ -100,12 +135,15 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	DroppableItem::RegisterGlobalVariables();
 	WeaponHeavySabre::RegisterGlobalVariables();
 	FirearmMusketBayonet::RegisterGlobalVariables();
+	FirearmShotgun::RegisterGlobalVariables(); 
 	BaseMelee::RegisterGlobalVariables();
 	BaseFirearm::RegisterGlobalVariables();
 	AnimationManager::RegisterGlobalVariables();
 	CameraController::RegisterGlobalVariables();
 	PlayerBehavior::RegisterGlobalVariables();
 	EnemyRifleman::RegisterGlobalVariables();
+	EnemyFighter::RegisterGlobalVariables();
+	EnemyCuirassier::RegisterGlobalVariables();
 	VisionSensor::RegisterGlobalVariables();
 	EnemySpawner::RegisterGlobalVariables();
 	EnemyHUD::RegisterGlobalVariables();
@@ -174,7 +212,15 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	cursor_.Initialize(assets_.cursorTex, 2, &camera_);
 	playerHealthUI_.Initialize(assets_.healthBarBackgroundTex, assets_.healthBarFillTex);
 	enemyHUD_.Initialize(assets_.enemyIconArrowTex, assets_.enemyIconFighterTex);
-	weaponStatusUI_.Initialize(assets_.meleeIconTex, assets_.firearmIconTex);
+	{
+		WeaponStatusUI::Textures icons;
+		icons.meleeLight = assets_.meleeIconLightTex;
+		icons.meleeHeavy = assets_.meleeIconHeavyTex;
+		icons.firearmLong = assets_.firearmIconLongTex;
+		icons.firearmBayonet = assets_.firearmIconBayonetTex;
+		icons.bayonetLunge = assets_.bayonetLungeIconTex;
+		weaponStatusUI_.Initialize(icons);
+	}
 	playerBlockUI_.Initialize(assets_.healthBarBackgroundTex, assets_.healthBarFillTex);
 
 	cameraController_ = std::make_unique<CameraController>();
@@ -213,15 +259,21 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 		player_->SetWorldTransform(wt);
 		player_->ResetVelocity();
 		player_->SetHP(cp.playerHP);
+		{
+			Model* m = nullptr;
+			uint32_t t = 0;
+			DropWeaponKind meleeKind = static_cast<DropWeaponKind>(cp.meleeKind);
+			DropWeaponKind firearmKind = static_cast<DropWeaponKind>(cp.firearmKind);
+			if (ResolveWeaponVisual(assets_, meleeKind, m, t))
+				player_->SetMeleeModel(m, t, meleeKind);
+			if (ResolveWeaponVisual(assets_, firearmKind, m, t))
+				player_->SetMusketModel(m, t, firearmKind);
+		}
 		player_->SetWeaponMode(cp.weaponModeIsFirearm ? Player::WeaponMode::kFirearm : Player::WeaponMode::kMelee);
 
 		cameraController_->SetTarget(player_.get());
 		cameraController_->Reset();
 		cameraController_->SetWorldBounds(static_cast<float>(loadedChunkCount_) * kChunkWorldWidth, mapChipField_->GetWorldHeight());
-	}
-
-	for (const ArenaCameraPoint& cp : arenaCameraPoints_) {
-		GetOrCreateArena(cp.arenaID)->SetCameraFocusOverride(cp.position);
 	}
 	InitializePauseMenu();
 	InitializeRetryMenu();
@@ -284,7 +336,7 @@ void GameScene::InitializeInGamePauseButton() {
 	float x = kMargin;
 	float y = kMargin;
 
-	inGamePauseButton_ = gameplayHUDInput_.AddButton(assets_.inGamePauseButtonTex, x, y, kButtonSize, kButtonSize, "II");
+	inGamePauseButton_ = gameplayHUDInput_.AddButton(assets_.inGamePauseButtonTex, x, y, kButtonSize, kButtonSize, "Pause");
 	gameplayHUDInput_.SetButtonOnClick(inGamePauseButton_, [this]() {
 		if (phase_ == Phase::kPlay) {
 			phaseBeforePause_ = phase_;
@@ -385,9 +437,13 @@ void GameScene::CreateEnemyDeathParticles(const Vector3& position) {
 	particles->Initialize(assets_.deathParticleModel.get(), assets_.deathParticleTex, &camera_, position);    
 	enemyDeathParticles_.push_back(std::move(particles));
 }
-void GameScene::CreateFirearmProjectile(Owner owner, const KamataEngine::Vector3& position, const KamataEngine::Vector2& aimDirection) {
+void GameScene::CreateFirearmProjectile(Owner owner, const KamataEngine::Vector3& position, const KamataEngine::Vector2& aimDirection, int damage, int32_t lifeFrames) {
 	auto projectile = std::make_unique<ProjectileBall>();
-	projectile->InitializeAimed(assets_.modelProjectileBall.get(), assets_.firearmBallTex, &camera_, position, aimDirection, owner); // CreateFirearmProjectile
+	projectile->InitializeAimed(assets_.modelProjectileBall.get(), assets_.firearmBallTex, &camera_, position, aimDirection, owner);
+	if (damage >= 0)
+		projectile->SetDamage(damage); // 銃ごとのダメージ
+	if (lifeFrames > 0)
+		projectile->SetLifeFrames(lifeFrames);
 	if (owner == Owner::kPlayer)
 		playerBullets_.push_back(std::move(projectile));
 	else if (owner == Owner::kEnemy)
@@ -487,8 +543,8 @@ void GameScene::ChangePhase() {
 
 		{
 			std::vector<BaseEnemy*> arenaEnemies;
-			if (activeArenaLockingCamera_) {
-				uint8_t activeArenaID = activeArenaLockingCamera_->GetArenaID();
+			if (ArenaManager* activeArena = FindActiveArena()) {
+				uint8_t activeArenaID = activeArena->GetArenaID();
 				arenaEnemies.reserve(enemies_.size());
 				for (std::unique_ptr<BaseEnemy>& enemy : enemies_) {
 					if (enemy && enemy->GetArenaID() == activeArenaID) {
@@ -501,14 +557,19 @@ void GameScene::ChangePhase() {
 		if (player_) {
 			playerHealthUI_.Update(player_->GetHP(), player_->GetMaxHP());
 
-			bool isFirearmMode = (player_->GetWeaponMode() == Player::WeaponMode::kFirearm);
-			bool isReloading = false;
-			float reloadProgress = 1.0f;
-			if (FirearmMusket* firearm = player_->GetCurrentFirearm()) {
-				isReloading = firearm->IsReloading();
-				reloadProgress = firearm->GetReloadProgress01();
+			WeaponStatusUI::State ws;
+			ws.isFirearmMode = (player_->GetWeaponMode() == Player::WeaponMode::kFirearm);
+			ws.meleeKind = player_->GetCurrentMeleeKind();
+			ws.firearmKind = player_->GetCurrentFirearmKind();
+			ws.isMeleeCooling = player_->IsMeleeLungeCooling();
+			ws.meleeCooldownProgress01 = player_->GetMeleeLungeProgress01();
+			ws.isLungeCooling = player_->IsBayonetLungeCooling();
+			ws.lungeCooldownProgress01 = player_->GetBayonetLungeProgress01();
+			if (BaseFirearm* firearm = player_->GetCurrentFirearm()) {
+				ws.isReloading = firearm->IsReloading();
+				ws.reloadProgress01 = firearm->GetReloadProgress01();
 			}
-			weaponStatusUI_.Update(isFirearmMode, isReloading, reloadProgress);
+			weaponStatusUI_.Update(ws);
 			playerBlockUI_.Update(player_->GetBlockGauge(), player_->GetMaxBlockGauge(), player_->IsBlockBroken(), player_->GetBlockRecoverThreshold());
 		}
 		for (std::vector<BlockInstance>& line : worldTransformBlocks_) {
@@ -607,7 +668,7 @@ void GameScene::GenerateChunkTileMap(uint32_t chunkIndex) { GenerateChunkTileMap
 void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) {
 	auto key = std::make_pair(chunkIndex, chunkRow);
 	if (generatedChunkRows_.contains(key))
-		return; // [FIX] idempotent — closes the duplication bug
+		return;
 	generatedChunkRows_.insert(key);
 
 	uint32_t numVertical = mapChipField_->GetNumBlockVertical();
@@ -641,19 +702,7 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 
 				Model* shapeModel = assets_.blockModel.get();
 				uint32_t tex = assets_.blockTex;
-				switch (mapChipType) {
-				case MapChipType::kBlockHalfUp:
-				//	shapeModel = blockHalfUpModel.get();
-				//	tex = ResolveBlockTexture(blockHalfUpTexVariants_, subID, blockHalfUpHandle);
-				//	break;
-				case MapChipType::kBlockHalfDown:
-				//	shapeModel = blockHalfDownModel.get();
-				//	tex = ResolveBlockTexture(blockHalfDownTexVariants_, subID, blockHalfDownHandle);
-				//	break;
-				default: // kBlock / kSlowBlock keep the cube shape
-					tex = assets_.ResolveBlockTexture(assets_.blockTexVariants, subID, assets_.blockTex);
-					break;
-				}
+				tex = assets_.ResolveBlockTexture(assets_.blockTexVariants, subID, assets_.blockTex);
 				worldTransformBlocks_[i][j] = {worldTransform, shapeModel, tex};
 			} break;
 			case MapChipType::kPlatform: {
@@ -665,15 +714,9 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 				uint32_t tex = assets_.ResolveBlockTexture(assets_.platformTexVariants, subID, assets_.blockPlatformTex);
 				worldTransformBlocks_[i][j] = {worldTransform, assets_.blockPlatformModel.get(), tex};
 			} break;
-			case MapChipType::kArenaCamera: {
-				uint8_t arenaID = mapChipField_->GetMapChipLinkIDByIndex(j, i);
-				Vector3 camPos = mapChipField_->GetMapChipPositionByIndex(j, i);
-
-				arenaCameraPoints_.push_back({camPos, arenaID});
-
-				// ストリーミングで生成されたカメラポイントも、その場でArenaManagerへ登録する。
-				// これで初回ロード時でも、後からロードされたFタイルでも同じフォーカスを使える。
-				GetOrCreateArena(arenaID)->SetCameraFocusOverride(camPos);
+			case MapChipType::kArenaCamera: { // 'F': zoom point and trigger area. Sub ID = preset
+				uint8_t presetID = mapChipField_->GetMapChipSubIDByIndex(j, i);
+				cameraController_->AddZone(mapChipField_->GetMapChipPositionByIndex(j, i), CameraController::GetCameraConfig(stageManager_->GetCurrentStageIndex(), presetID));
 			} break;
 			case MapChipType::kPlayer: {
 				player_ = std::make_unique<Player>();
@@ -703,7 +746,11 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 			case MapChipType::kGateUp:
 			case MapChipType::kGateDown:
 			case MapChipType::kGateLeft:
-			case MapChipType::kGateRight: {
+			case MapChipType::kGateRight:
+			case MapChipType::kArenaGateUp:
+			case MapChipType::kArenaGateDown:
+			case MapChipType::kArenaGateLeft:
+			case MapChipType::kArenaGateRight: {
 				uint8_t buttonID = mapChipField_->GetMapChipLinkIDByIndex(j, i);
 				uint8_t textureVariant = mapChipField_->GetMapChipSubIDByIndex(j, i);
 				Vector3 gatePosition = mapChipField_->GetMapChipPositionByIndex(j, i);
@@ -719,19 +766,14 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 				sw->Initialize(assets_.modelSwitch.get(), assets_.switchTex, &camera_, switchPosition, buttonID);
 				switches_.push_back(std::move(sw));
 			} break;
-			case MapChipType::kArenaTrigger: { 
+			case MapChipType::kArenaTrigger: {
 				uint8_t arenaID = mapChipField_->GetMapChipLinkIDByIndex(j, i);
 				Vector3 triggerPos = mapChipField_->GetMapChipPositionByIndex(j, i);
 				arenaTriggers_.push_back({triggerPos, arenaID, false});
-				ArenaManager* arena = GetOrCreateArena(arenaID);
-
-				Vector3 offsetOverride{};
-				if (GetArenaCameraOffsetOverride(stageManager_->GetCurrentStageIndex(), arenaID, offsetOverride)) {
-					arena->SetCameraOffsetOverride(offsetOverride);
-				}
+				GetOrCreateArena(arenaID);
 			} break;
 			case MapChipType::kEnemySpawner: {
-				uint8_t enemySubID = mapChipField_->GetMapChipSubIDByIndex(j, i); // wave slot/order: S00->0, S10->1, S20->2...
+				uint8_t enemySubID = mapChipField_->GetMapChipSubIDByIndex(j, i);
 				uint8_t arenaID = mapChipField_->GetMapChipLinkIDByIndex(j, i);
 				Vector3 spawnerPos = mapChipField_->GetMapChipPositionByIndex(j, i);
 
@@ -740,19 +782,11 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 				auto spawner = std::make_unique<EnemySpawner>();
 				spawner->Initialize(spawnerPos, enemySubID, waveEntry.interval, waveEntry.mode, waveEntry.maxSpawnCount);
 				spawner->SetArenaID(arenaID);
-				spawner->SetActive(false); // ArenaManager turns on only the current wave's spawner (see ArenaManager::ActivateCurrentWave)
-
+				spawner->SetActive(false);
 				spawner->SetResolvedEnemyType(waveEntry.enemyType);
 				spawner->SetSpawnedEnemiesOmniscient(true);
 
-				ArenaManager* arena = GetOrCreateArena(arenaID);
-				arena->RegisterSpawner(spawner.get());
-
-				// Apply hard-coded per-arena camera offset override, once per arena.
-				Vector3 offsetOverride{};
-				if (GetArenaCameraOffsetOverride(stageManager_->GetCurrentStageIndex(), arenaID, offsetOverride)) {
-					arena->SetCameraOffsetOverride(offsetOverride);
-				}
+				GetOrCreateArena(arenaID)->RegisterSpawner(spawner.get());
 				enemySpawners_.push_back(std::move(spawner));
 			} break;
 			case MapChipType::kCheckpoint: {
@@ -829,6 +863,8 @@ void GameScene::Update() {
 
 	Goal::ApplyGlobalVariables();
 	EnemyRifleman::ApplyGlobalVariables();
+	EnemyCuirassier::ApplyGlobalVariables();
+	EnemyFighter::ApplyGlobalVariables();
 	Player::ApplyGlobalVariables();
 	HitEffect::ApplyGlobalVariables();
 	GuardEffect::ApplyGlobalVariables();
@@ -838,6 +874,7 @@ void GameScene::Update() {
 	DroppableItem::ApplyGlobalVariables();
 	WeaponHeavySabre::ApplyGlobalVariables();
 	FirearmMusketBayonet::ApplyGlobalVariables();
+	FirearmShotgun::ApplyGlobalVariables();    
 	BaseMelee::ApplyGlobalVariables();
 	BaseFirearm::ApplyGlobalVariables();
 	AnimationManager::ApplyGlobalVariables();
@@ -890,6 +927,8 @@ void GameScene::Update() {
 	UpdateInteractionPrompt();
 	TryInteract();
 	UpdateArenaTriggers();
+	if (player_ && (phase_ == Phase::kPlay || phase_ == Phase::kDeath))
+		cameraController_->UpdateZones(player_->GetAABB(), phase_ == Phase::kPlay && !player_->isDead());
 	UpdateArenas();
 	UpdateCheckpointTriggers();
 	UpdatePeriodicEnemySpawners();
@@ -945,8 +984,8 @@ void GameScene::CheckAllCollisions() {
 		}
 	}
 
-	if (player_->isAttack()) {
-		WeaponSabre* melee = static_cast<WeaponSabre*>(player_->GetCurrentMelee());
+	if (player_->IsMeleeSwingActive()) {
+		BaseMelee* melee = player_->GetCurrentMelee();
 		AABB meleeAABB = melee->GetSwingAABB(*player_, player_->GetComboIndex());
 
 		float hitRotZ = 0.0f;
@@ -986,8 +1025,9 @@ void GameScene::CheckAllCollisions() {
 					dir = {player_->isRight() ? 1.0f : -1.0f, 0.0f, 0.0f};
 				}
 				float power = 1.0f;
-				if (const BaseMelee* pm = player_->GetCurrentMelee())
-					power = pm->GetImpactPower(player_->GetComboIndex());
+				if (const BaseMelee* pm = player_->GetCurrentMelee()) {
+					power = pm->GetImpactPower(player_->GetComboIndex(), Owner::kPlayer); // プレイヤーのサーベル
+				}
 				enemy->RequestKnockback(dir, power);
 
 				player_->OnCollision(enemy.get());
@@ -996,7 +1036,41 @@ void GameScene::CheckAllCollisions() {
 			}
 		}
 	}
+	if (player_->IsLungeHitActive()) {
+		const AABB lungeAABB = player_->GetLungeAABB();
+		const LungeSpec spec = player_->GetLungeSpec(player_->GetCurrentLungeSource());
+		for (const std::unique_ptr<BaseEnemy>& enemy : enemies_) {
+			if (!enemy || enemy->IsDead() || enemy->IsCollisionDisabled())
+				continue;
+			if (player_->HasLungeHit(enemy.get()))
+				continue;
+			if (!IsCollisionAABB(lungeAABB, enemy->GetAABB()))
+				continue;
+			player_->MarkLungeHit(enemy.get()); // one hit per target per lunge
 
+			// guarded: no damage, the player recoils (same as a blocked sabre swing)
+			if (enemy->TryBlockAttack(player_->GetWorldPosition())) {
+				player_->OnCollision(enemy.get());
+				continue;
+			}
+
+			Vector3 dir = enemy->GetWorldPosition() - player_->GetWorldPosition();
+			float len = std::sqrtf(dir.x * dir.x + dir.y * dir.y);
+			if (len > 0.0001f) {
+				dir.x /= len;
+				dir.y /= len;
+			} else {
+				dir = {player_->isRight() ? 1.0f : -1.0f, 0.0f, 0.0f};
+			}
+			Vector3 hitDir = dir;
+			hitDir.y += 0.4f;
+			enemy->TakeDamage(spec.damage, hitDir, spec.impactPower);
+			enemy->RequestKnockback(dir, spec.impactPower);
+
+			if (player_->GetCurrentFirearm())
+				player_->GetCurrentFirearm()->NotifyDealtDamage();
+		}
+	}
 	for (auto& bullet : playerBullets_) {
 		if (bullet->IsDead())
 			continue;
@@ -1007,6 +1081,7 @@ void GameScene::CheckAllCollisions() {
 			if (IsCollisionAABB(bulletAABB, enemy->GetAABB())) {
 				enemy->OnCollision(bullet.get());
 				bullet->OnCollision();
+				break; 
 			}
 		}
 	}
@@ -1091,7 +1166,7 @@ void GameScene::CheckAllCollisions() {
 			WeaponSabre* melee = fighter->GetCurrentMelee();
 			if (fighter->IsSwingActive() && melee && !melee->HasHit(player_.get())) {
 				int comboIdx = fighter->GetCurrentComboIndex();
-				if (resolveAttackOnPlayer(fighter->GetSwingAABB(), fighter->GetWorldPosition(), melee->GetDamage(comboIdx, Owner::kEnemy), melee->GetImpactPower(comboIdx), fighter))
+				if (resolveAttackOnPlayer(fighter->GetSwingAABB(), fighter->GetWorldPosition(), melee->GetDamage(comboIdx, Owner::kEnemy), melee->GetImpactPower(comboIdx, Owner::kEnemy), fighter))
 					melee->MarkHit(player_.get());
 			}
 		} else if (EnemyCuirassier* cuirassier = dynamic_cast<EnemyCuirassier*>(enemyPtr)) {
@@ -1102,7 +1177,7 @@ void GameScene::CheckAllCollisions() {
 				AABB weaponAABB = lunge ? cuirassier->GetLungeAABB() : cuirassier->GetSwingAABB();
 				int comboIdx = cuirassier->GetCurrentComboIndex();
 				int damage = lunge ? melee->GetLungeDamage() : melee->GetDamage(comboIdx, Owner::kEnemy);
-				float power = lunge ? melee->GetLungeImpactPower() : melee->GetImpactPower(comboIdx);
+				float power = lunge ? melee->GetLungeImpactPower() : melee->GetImpactPower(comboIdx, Owner::kEnemy);
 				if (resolveAttackOnPlayer(weaponAABB, cuirassier->GetWorldPosition(), damage, power, cuirassier))
 					melee->MarkHit(player_.get());
 			}
@@ -1367,70 +1442,53 @@ bool GameScene::IsWithinActiveRange(const Vector3& position, float range) const 
 	return dx <= range;
 }
 
-void GameScene::CreateDroppableItem(const Vector3& position, DropItemCategory category, DropWeaponKind kind) {
+DroppableItem* GameScene::CreateDroppableItem(const Vector3& position, DropItemCategory category, DropWeaponKind kind, DropItemState state) {
 	Model* model = nullptr;
 	uint32_t tex = 0;
-	switch (kind) {
-	case DropWeaponKind::kSabreLight:
-		model = assets_.modelSabreLight.get();
-		tex = assets_.texSabreLight;
-		break;
-	case DropWeaponKind::kSabreHeavy:
-		model = assets_.modelSabreHeavy.get();
-		tex = assets_.texSabreHeavy;
-		break;
-	case DropWeaponKind::kMusketLong:
-		model = assets_.modelMusketLong.get();
-		tex = assets_.musketLongTex;
-		break;
-	case DropWeaponKind::kMusketBayonet:
-		model = assets_.modelMusketBayonet.get();
-		tex = assets_.musketBayonetTex;
-		break;
-	default:
-		break;
-	}
-	if (!model)
-		return;
+	if (!ResolveWeaponVisual(assets_, kind, model, tex) || !model)
+		return nullptr;
 	auto item = std::make_unique<DroppableItem>();
-	item->Initialize(model, tex, &camera_, position, category, kind);
+	item->Initialize(model, tex, &camera_, position, category, kind, state);
+	item->SetMapChipField(mapChipField_.get());
+	DroppableItem* raw = item.get();
 	droppableItems_.push_back(std::move(item));
+	return raw; // 次の push_back まで有効。直後に Launch するだけに使う
 }
 
 void GameScene::ApplyItemPickup(const DroppableItem& item) {
+	// Copy everything we need FIRST: CreateDroppableItem() below pushes into droppableItems_,
+	// which can reallocate and leave `item` dangling.
+	const DropWeaponKind pickedKind = item.GetWeaponKind();
+	const DropItemCategory pickedCategory = item.GetCategory();
+	const DropItemState pickedState = item.GetState();
 	Vector3 dropPos = player_->GetWorldPosition();
 
 	if (assets_.sfxItemPickup != 0) {
-		Audio::GetInstance()->PlayWave(assets_.sfxItemPickup, false, 1.0f);
+		AudioSettings::PlaySfx(assets_.sfxItemPickup, false, 1.0f);
 	}
 
-	switch (item.GetWeaponKind()) {
-	case DropWeaponKind::kSabreLight:
-		CreateDroppableItem(dropPos, DropItemCategory::kMelee, player_->GetCurrentMeleeKind());
-		player_->SetMeleeModel(assets_.modelSabreLight.get(), assets_.texSabreLight);
-		player_->SetCurrentMeleeKind(DropWeaponKind::kSabreLight);
+	Model* model = nullptr;
+	uint32_t tex = 0;
+	if (!ResolveWeaponVisual(assets_, pickedKind, model, tex))
+		return;
+
+		// 手放す武器はプレイヤーの向いている方向へ放り出す
+	const Vector3 throwVelocity = DroppableItem::MakeThrowVelocity(player_->isRight());
+
+	if (pickedCategory == DropItemCategory::kMelee) {
+		if (DroppableItem* dropped = CreateDroppableItem(dropPos, DropItemCategory::kMelee, player_->GetCurrentMeleeKind(), player_->GetCurrentMeleeState()))
+			dropped->Launch(throwVelocity);
+		CreateDroppableItem(dropPos, DropItemCategory::kMelee, player_->GetCurrentMeleeKind(), player_->GetCurrentMeleeState());
+		player_->SetMeleeModel(model, tex, pickedKind);
+		player_->RestoreMeleeState(pickedState); // premature re-pickup: cooldown restarts
 		player_->SetWeaponMode(Player::WeaponMode::kMelee);
-		break;
-	case DropWeaponKind::kSabreHeavy:
-		CreateDroppableItem(dropPos, DropItemCategory::kMelee, player_->GetCurrentMeleeKind());
-		player_->SetMeleeModel(assets_.modelSabreHeavy.get(), assets_.texSabreHeavy);
-		player_->SetCurrentMeleeKind(DropWeaponKind::kSabreHeavy);
-		player_->SetWeaponMode(Player::WeaponMode::kMelee);
-		break;
-	case DropWeaponKind::kMusketLong:
-		CreateDroppableItem(dropPos, DropItemCategory::kFirearm, player_->GetCurrentFirearmKind());
-		player_->SetMusketModel(assets_.modelMusketLong.get(), assets_.musketLongTex);
-		player_->SetCurrentFirearmKind(DropWeaponKind::kMusketLong);
+	} else if (pickedCategory == DropItemCategory::kFirearm) {
+		if (DroppableItem* dropped = CreateDroppableItem(dropPos, DropItemCategory::kFirearm, player_->GetCurrentFirearmKind(), player_->GetCurrentFirearmState()))
+			dropped->Launch(throwVelocity);
+		CreateDroppableItem(dropPos, DropItemCategory::kFirearm, player_->GetCurrentFirearmKind(), player_->GetCurrentFirearmState());
+		player_->SetMusketModel(model, tex, pickedKind);
+		player_->RestoreFirearmState(pickedState);
 		player_->SetWeaponMode(Player::WeaponMode::kFirearm);
-		break;
-	case DropWeaponKind::kMusketBayonet:
-		CreateDroppableItem(dropPos, DropItemCategory::kFirearm, player_->GetCurrentFirearmKind());
-		player_->SetMusketModel(assets_.modelMusketBayonet.get(), assets_.musketBayonetTex);
-		player_->SetCurrentFirearmKind(DropWeaponKind::kMusketBayonet);
-		player_->SetWeaponMode(Player::WeaponMode::kFirearm);
-		break;
-	default:
-		break;
 	}
 }
 
@@ -1553,7 +1611,7 @@ void GameScene::UnloadChunkVisuals(uint32_t chunkIndex) {
 		}
 	}
 
-	// [NEW] clear the generation-tracking entries for this chunk across all vertical rows
+	// clear the generation-tracking entries for this chunk across all vertical rows
 	for (uint32_t row = 0; row < MapChipField::kMaxVerticalChunks; ++row) {
 		generatedChunkRows_.erase({chunkIndex, row});
 	}
@@ -1561,6 +1619,8 @@ void GameScene::UnloadChunkVisuals(uint32_t chunkIndex) {
 	float chunkMinX = static_cast<float>(chunkIndex) * kChunkWorldWidth;
 	float chunkMaxX = chunkMinX + kChunkWorldWidth;
 	auto inRange = [&](float x) { return x >= chunkMinX && x < chunkMaxX; };
+
+	cameraController_->RemoveZoneDataInRange(chunkMinX, chunkMaxX);
 
 	enemies_.erase(std::remove_if(enemies_.begin(), enemies_.end(), [&](const std::unique_ptr<BaseEnemy>& e) { return !e || inRange(e->GetWorldPosition().x); }), enemies_.end());
 
@@ -1592,7 +1652,7 @@ void GameScene::TriggerLevelClear() {
 	victoryMenuInput_.StartButtonFade(true, kButtonFadeDuration);
 
 	if (assets_.sfxGoalReached != 0) {
-		Audio::GetInstance()->PlayWave(assets_.sfxGoalReached, false, 1.0f);
+		AudioSettings::PlaySfx(assets_.sfxGoalReached, false, 1.0f); // 1.0f -> sSfxVolume_
 	}
 	if (stageManager_)
 		stageManager_->ClearCheckpoint();
@@ -1668,14 +1728,14 @@ void GameScene::TryInteract() {
 	if (nearestInteractableSwitch_ && !nearestInteractableSwitch_->IsPressed()) {
 		nearestInteractableSwitch_->SetPressed(true);
 		if (assets_.sfxSwitchPress != 0) {
-			Audio::GetInstance()->PlayWave(assets_.sfxSwitchPress, false, 1.0f);
+			AudioSettings::PlaySfx(assets_.sfxSwitchPress, false, 1.0f); // 1.0f -> sSfxVolume_
 		}
 		uint8_t buttonID = nearestInteractableSwitch_->GetButtonID();
 		for (auto& gate : gates_) {
-			if (gate && gate->GetButtonID() == buttonID) {
+			if (gate && !gate->IsArenaGate() && gate->GetButtonID() == buttonID) {
 				gate->Open();
 				if (assets_.sfxGateOpen != 0) {
-					Audio::GetInstance()->PlayWave(assets_.sfxGateOpen, false, 1.0f);
+					AudioSettings::PlaySfx(assets_.sfxGateOpen, false, 1.0f); // 1.0f -> sSfxVolume_
 				}
 			}
 		}
@@ -1698,48 +1758,31 @@ void GameScene::UpdateArenaTriggers() {
 		float distSq = diff.x * diff.x + diff.y * diff.y;
 		if (distSq <= kTriggerRadius * kTriggerRadius) {
 			trigger.consumed = true;
-
-			ArenaManager* arena = GetOrCreateArena(trigger.arenaID);
-
-			arena->Activate();
-			musicManager_.StartArenaMusic(); // arena BGM crossfades in on trigger touch
-
-			player_->SetControlLocked(true);
-			Vector3 focusPoint = arena->GetCameraFocusPoint() + arena->GetEffectiveCameraOffset();
-			cameraController_->StartArenaFocus(focusPoint, 0.8f);
-			activeArenaLockingCamera_ = arena;
+			GetOrCreateArena(trigger.arenaID)->Activate(); // plays arena-start SFX; no camera, no control lock
+			musicManager_.StartArenaMusic();
 		}
 	}
 }
 
-void GameScene::UpdateArenas() {
-	if (activeArenaLockingCamera_ && player_ && player_->IsControlLocked() && cameraController_->IsArenaFocusHolding()) {
-		player_->SetControlLocked(false);
+ArenaManager* GameScene::FindActiveArena() const {
+	for (const auto& arena : arenas_) {
+		if (arena && arena->GetState() == ArenaManager::State::kActive)
+			return arena.get();
 	}
+	return nullptr;
+}
 
+void GameScene::UpdateArenas() {
 	for (auto& arena : arenas_) {
-		if (!arena) {
+		if (!arena)
 			continue;
-		}
 		ArenaManager::State prevState = arena->GetState();
 		arena->Update(this);
 
-		if (prevState == ArenaManager::State::kActive && arena->GetState() == ArenaManager::State::kCleared && activeArenaLockingCamera_ == arena.get()) {
-			if (player_) {
-				player_->SetControlLocked(true);
-			}
-			cameraController_->EndArenaFocus(0.8f);
-			musicManager_.StopArenaMusic();
-			arenaReturningToFollow_ = true; // [FIX] only now is a return-to-follow actually in flight
+		if (prevState == ArenaManager::State::kActive && arena->GetState() == ArenaManager::State::kCleared) {
+			if (!FindActiveArena())
+				musicManager_.StopArenaMusic();
 		}
-	}
-
-	if (activeArenaLockingCamera_ && arenaReturningToFollow_ && cameraController_->GetMode() == CameraController::Mode::kFollow) {
-		if (player_) {
-			player_->SetControlLocked(false);
-		}
-		activeArenaLockingCamera_ = nullptr;
-		arenaReturningToFollow_ = false;
 	}
 }
 
@@ -1796,52 +1839,36 @@ void GameScene::UpdateHealthBlocks() {
 
 const std::vector<GameScene::ArenaFieldConfig>& GameScene::GetArenaFieldConfigs() {
 	static const std::vector<ArenaFieldConfig> configs = {
-	    // --- Stage 1, Arena 0 ---
-	    ArenaFieldConfig{
-	                     /*stageIndex*/ 1,
+	    ArenaFieldConfig{/*stageIndex*/ 1,
 	                     /*arenaID*/ 0,
-	                     /*spawnTable*/
-	        {
-	            {0, 2, 3.0f, EnemySpawner::SpawnMode::kLimited, 1},
-	            {1, 2, 3.0f, EnemySpawner::SpawnMode::kLimited, 1}, // wave 1: Fighter
-	            {2, 2, 3.0f, EnemySpawner::SpawnMode::kLimited, 2}, // wave 2: Fighter
-	            {3, 1, 5.0f, EnemySpawner::SpawnMode::kLimited, 1}, // wave 3 Cuirassier
-	        },	                         /*hasCameraOffsetOverride*/ false,
-	                     /*cameraOffsetOverride*/ {},
-	                     },
-
-	    // --- Stage 2, Arena 0 ---
-	    ArenaFieldConfig{
-	                     /*stageIndex*/ 2,
+	                     {
+	                         {0, 2, 3.0f, EnemySpawner::SpawnMode::kLimited, 1},
+	                         {1, 2, 3.0f, EnemySpawner::SpawnMode::kLimited, 1},
+	                         {2, 2, 3.0f, EnemySpawner::SpawnMode::kLimited, 2},
+	                         {3, 1, 5.0f, EnemySpawner::SpawnMode::kLimited, 1},
+	                     }},
+	    ArenaFieldConfig{/*stageIndex*/ 2,
 	                     /*arenaID*/ 2,
-	                     /*spawnTable*/
-	        {
-	            {0, 0, 2.0f, EnemySpawner::SpawnMode::kLimited, 1},
-	            {1, 2, 1.0f, EnemySpawner::SpawnMode::kLimited, 3},
-	            {2, 0, 4.0f, EnemySpawner::SpawnMode::kLimited, 3},
-	            {3, 2, 1.0f, EnemySpawner::SpawnMode::kLimited, 2},
-	            {4, 2, 0.5f, EnemySpawner::SpawnMode::kLimited, 1},
-	            {5, 0, 0.2f, EnemySpawner::SpawnMode::kLimited, 2},
-	        }, /*hasCameraOffsetOverride*/ true,
-	                     /*cameraOffsetOverride*/ {0.0f, 0.0f, -35.0f},
-	                     },
-	    // --- Stage 2, Arena 1 ---
-	    ArenaFieldConfig{
-	                     /*stageIndex*/ 2,
+	                     {
+	                         {0, 0, 2.0f, EnemySpawner::SpawnMode::kLimited, 1},
+	                         {1, 2, 1.0f, EnemySpawner::SpawnMode::kLimited, 3},
+	                         {2, 0, 4.0f, EnemySpawner::SpawnMode::kLimited, 3},
+	                         {3, 2, 1.0f, EnemySpawner::SpawnMode::kLimited, 2},
+	                         {4, 2, 0.5f, EnemySpawner::SpawnMode::kLimited, 1},
+	                         {5, 0, 0.2f, EnemySpawner::SpawnMode::kLimited, 2},
+	                     }},
+	    ArenaFieldConfig{/*stageIndex*/ 2,
 	                     /*arenaID*/ 7,
-	                     /*spawnTable*/
-	        {
-	            {0, 2, 0.5f, EnemySpawner::SpawnMode::kLimited, 1}, // fighter followed by rifleman
-	            {1, 0, 3.0f, EnemySpawner::SpawnMode::kLimited, 3},
-	            {2, 1, 1.0f, EnemySpawner::SpawnMode::kLimited, 1}, // cuirassier will join the fray
-	            {3, 2, 5.0f, EnemySpawner::SpawnMode::kLimited, 4}, // fighter invades from the left
-	            {4, 0, 5.0f, EnemySpawner::SpawnMode::kLimited, 4}, // rifleman flanks at right
-	            {5, 2, 0.5f, EnemySpawner::SpawnMode::kLimited, 2}, // FIGHTEERRR
-	            {6, 0, 0.5f, EnemySpawner::SpawnMode::kLimited, 2}, // RIFLEMANNN
-	            {7, 1, 5.0f, EnemySpawner::SpawnMode::kLimited, 1}, // CUIRASSIERRR
-	        },	            /*hasCameraOffsetOverride*/ true,
-	                     /*cameraOffsetOverride*/ {0.0f, 0.0f, -35.0f},
-	                     },
+	                     {
+	                         {0, 2, 0.5f, EnemySpawner::SpawnMode::kLimited, 1},
+	                         {1, 0, 3.0f, EnemySpawner::SpawnMode::kLimited, 3},
+	                         {2, 1, 1.0f, EnemySpawner::SpawnMode::kLimited, 1},
+	                         {3, 2, 5.0f, EnemySpawner::SpawnMode::kLimited, 4},
+	                         {4, 0, 5.0f, EnemySpawner::SpawnMode::kLimited, 4},
+	                         {5, 2, 0.5f, EnemySpawner::SpawnMode::kLimited, 2},
+	                         {6, 0, 0.5f, EnemySpawner::SpawnMode::kLimited, 2},
+	                         {7, 1, 5.0f, EnemySpawner::SpawnMode::kLimited, 1},
+	                     }},
 	};
 	return configs;
 }
@@ -1870,15 +1897,7 @@ GameScene::ArenaSpawnEntry GameScene::ResolveArenaSpawnEntry(int32_t stageIndex,
 	// subID >= 4 with no matching table entry: inert custom slot -- don't guess.
 	return ArenaSpawnEntry{subID, 0xFF, 5.0f, EnemySpawner::SpawnMode::kLimited, 0};
 }
-bool GameScene::GetArenaCameraOffsetOverride(int32_t stageIndex, uint8_t arenaID, Vector3& outOffset) {
-	for (const ArenaFieldConfig& config : GetArenaFieldConfigs()) {
-		if (config.stageIndex == stageIndex && config.arenaID == arenaID && config.hasCameraOffsetOverride) {
-			outOffset = config.cameraOffsetOverride;
-			return true;
-		}
-	}
-	return false;
-}
+
 void GameScene::DrawCollisionDebug() {
 #ifdef _DEBUG
 	if (Input::GetInstance()->TriggerKey(DIK_F1))
@@ -1894,16 +1913,39 @@ void GameScene::DrawCollisionDebug() {
 		if (player_->IsBlockActive())
 			Box(player_->GetBlockAABB(), Color::kBlock);
 
-		if (player_->isAttack()) {
-			// dynamic_cast: the player may be holding WeaponHeavySabre, which has no player-side swing AABB
-			if (WeaponSabre* sabre = dynamic_cast<WeaponSabre*>(player_->GetCurrentMelee())) {
+		if (player_->IsMeleeSwingActive()) {
+			if (BaseMelee* melee = player_->GetCurrentMelee()) {
 				if (player_->GetAttackAnimState().phase == Player::AttackPhase::kAttack) {
-					Box(sabre->GetSwingAABB(*player_, player_->GetComboIndex()), Color::kAttack);
+					Box(melee->GetSwingAABB(*player_, player_->GetComboIndex()), Color::kAttack);
 				}
 			}
 		}
+		if (player_->IsLungeHitActive())
+			Box(player_->GetLungeAABB(), Color::kAttack);
 	}
+	// --- Camera zones (owned by CameraController) ---
+	for (const auto& [key, zone] : cameraController_->GetZones()) {
+		bool active = (cameraController_->GetActiveZoneID() == static_cast<int32_t>(key));
+		Box(CameraController::GetZoneArea(zone), active ? Color::kCameraZoneActive : Color::kCameraZone);
 
+		BoxAt(zone.focusPoint, 0.5f, 0.5f, 0.5f, Color::kCameraFocus);
+		Vector3 camPos = zone.focusPoint + zone.config.offset;
+		BoxAt(camPos, 0.3f, 0.3f, 0.3f, Color::kCameraFocus);
+		Arrow(camPos, zone.focusPoint, Color::kCameraFocus);
+
+		float halfH = std::tan(camera_.fovAngleY * 0.5f) * std::abs(zone.config.offset.z);
+		float halfW = halfH * camera_.aspectRatio;
+		Vector3 c[4] = {
+		    {zone.focusPoint.x - halfW, zone.focusPoint.y + halfH, zone.focusPoint.z},
+		    {zone.focusPoint.x + halfW, zone.focusPoint.y + halfH, zone.focusPoint.z},
+		    {zone.focusPoint.x + halfW, zone.focusPoint.y - halfH, zone.focusPoint.z},
+		    {zone.focusPoint.x - halfW, zone.focusPoint.y - halfH, zone.focusPoint.z},
+		};
+		for (int k = 0; k < 4; ++k) {
+			Line(c[k], c[(k + 1) % 4], Color::kCameraFocus);
+			Line(camPos, c[k], Color::kCameraFocus);
+		}
+	}
 	// --- Enemies: body + active weapon hitboxes ---
 	for (const std::unique_ptr<BaseEnemy>& enemy : enemies_) {
 		if (!enemy || enemy->IsDead())

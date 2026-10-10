@@ -199,23 +199,44 @@ void WeaponStatusUI::CooldownIcon::Draw() {
 	}
 }
 
-void WeaponStatusUI::Initialize(uint32_t meleeIconTexture, uint32_t firearmIconTexture) {
+void WeaponStatusUI::Initialize(const Textures& tex) {
 	float iconY = PlayerHealthUI::GetBarBottomY() + kTopOffsetFromHealthBar;
 	float meleeX = PlayerHealthUI::GetBarX();
 	float firearmX = meleeX + kIconSize + kIconSpacing;
+	float lungeX = firearmX + kIconSize + kIconSpacing; // next to the musket icon
 
-	meleeIcon_.Initialize(meleeIconTexture, {meleeX, iconY});
-	firearmIcon_.Initialize(firearmIconTexture, {firearmX, iconY});
+	meleeLight_.Initialize(tex.meleeLight, {meleeX, iconY});
+	meleeHeavy_.Initialize(tex.meleeHeavy, {meleeX, iconY});
+	firearmLong_.Initialize(tex.firearmLong, {firearmX, iconY});
+	firearmBayonet_.Initialize(tex.firearmBayonet, {firearmX, iconY});
+	bayonetLunge_.Initialize(tex.bayonetLunge, {lungeX, iconY});
 }
 
-void WeaponStatusUI::Update(bool isFirearmMode, bool isReloading, float reloadProgress01, bool isMeleeCooling, float meleeCooldownProgress01) {
-	meleeIcon_.Update(isFirearmMode ? kInactiveColor : kActiveColor, isMeleeCooling, meleeCooldownProgress01);
-	firearmIcon_.Update(isFirearmMode ? kActiveColor : kInactiveColor, isReloading, reloadProgress01);
+void WeaponStatusUI::Update(const State& s) {
+	shownMelee_ = s.meleeKind;
+	shownFirearm_ = s.firearmKind;
+
+	const bool heavy = (s.meleeKind == DropWeaponKind::kSabreHeavy);
+	const bool bayonet = (s.firearmKind == DropWeaponKind::kMusketBayonet);
+	const Vector4& meleeBase = s.isFirearmMode ? kInactiveColor : kActiveColor;
+	const Vector4& firearmBase = s.isFirearmMode ? kActiveColor : kInactiveColor;
+
+	// only the held weapon's icon gets the live cooldown
+	meleeLight_.Update(meleeBase, false, 1.0f);
+	meleeHeavy_.Update(meleeBase, heavy && s.isMeleeCooling, s.meleeCooldownProgress01);
+	firearmLong_.Update(firearmBase, !bayonet && s.isReloading, s.reloadProgress01);
+	firearmBayonet_.Update(firearmBase, bayonet && s.isReloading, s.reloadProgress01);
+	bayonetLunge_.Update(firearmBase, bayonet && s.isLungeCooling, s.lungeCooldownProgress01);
 }
 
 void WeaponStatusUI::Draw() {
 	Sprite::PreDraw();
-	meleeIcon_.Draw();
-	firearmIcon_.Draw();
+	(shownMelee_ == DropWeaponKind::kSabreHeavy ? meleeHeavy_ : meleeLight_).Draw();
+	if (shownFirearm_ == DropWeaponKind::kMusketBayonet) {
+		firearmBayonet_.Draw();
+		bayonetLunge_.Draw();
+	} else {
+		firearmLong_.Draw();
+	}
 	Sprite::PostDraw();
 }

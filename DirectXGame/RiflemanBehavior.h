@@ -30,6 +30,8 @@ public:
 
 	bool IsInAttackAnticipation() const override { return GetBehavior() == Behavior::kMelee && meleePhase_ == MeleePhase::kAnticipate; }
 
+	bool IsInMeleeRecovery() const override { return GetBehavior() == Behavior::kMelee && meleePhase_ == MeleePhase::kRecovery; }
+
 protected:
 	void BehaviorRootInitialize() override;
 	void BehaviorRootUpdate() override;
@@ -57,11 +59,13 @@ private:
 		// プレイヤーが存在しない場合はfalseを返す。
 	bool TryGetPlayerDistance(float& outDistance) const;
 
-	// --- kAiming ---
+		// --- kAiming ---
 	float aimTimer_ = 0.0f;
-
-	// 狙いを定めてから発砲するまでの時間。
-	static inline float kAimDuration = 1.2f;
+	float currentAimDuration_ = 1.2f;                 // this aim's duration (cut down on re-acquire)
+	static inline float kAimDuration = 1.2f;          // first sight
+	static inline float kReacquireAimDuration = 0.5f; // max remaining aim time once the player is seen again
+	static inline float kLostSightChaseDelay = 3.0f;  // seconds of lost sight before chasing
+	static inline float kAimTrackSpeed = 0.15f;       // per-frame lerp rate, 0-1 (lower = slower swing back)
 
 	// --- kReloading ---
 	float retreatTimer_ = 0.0f;
@@ -72,9 +76,6 @@ private:
 
 	// リロード開始直後だけ実際に後退する時間。
 	static inline float kRetreatDuration = 0.75f;
-
-	// 後退方向の崖・段差を検査する距離。
-	static inline float kRetreatLookAheadDistance = 0.75f;
 
 	// リロードが長引いた場合の安全弁。
 	static inline float kMaxRetreatDuration = 4.0f;
@@ -98,5 +99,6 @@ private:
 	// Riflemanが交戦を開始できる最大距離。
 	static inline float kFiringRange = 40.0f;
 
-	WeaponSabre sabreComboReference_;
+	static inline float kApproachSpeed = 0.03f;       // slow walk toward the last seen position
+	static inline float kApproachStopDistance = 1.5f; // stops this close to the last seen position
 };

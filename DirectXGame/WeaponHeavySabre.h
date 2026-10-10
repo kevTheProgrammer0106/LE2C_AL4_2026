@@ -1,55 +1,70 @@
 #pragma once
 #include "BaseMelee.h"
+#include "Global.h"
 
+/// Heavy sabre. Shared melee logic lives in BaseMelee; this class holds its data plus the lunge (enemy only).
 class WeaponHeavySabre final : public BaseMelee {
 public:
-	void SetWorldPosition(KamataEngine::Vector3& TargetPosition) override;
+	WeaponHeavySabre() { equipDuration_ = 0.3f; }
 
 	static void RegisterGlobalVariables();
 	static void ApplyGlobalVariables();
 
 	AABB GetAABB() const override;
-	AABB GetSwingAABBGeneric(const KamataEngine::Vector3& ownerPosition, bool facingRight, int comboIndex) const;
 
-	void SetWeaponState(WeaponState state);
-	void UpdateWeaponState();
-
-	void SetMeleePositionGeneric(const KamataEngine::Vector3& ownerPosition, const KamataEngine::Vector3& ownerRotation, bool facingRight, const GenericAttackAnimState* attackState);
 	void SetLungePositionGeneric(const KamataEngine::Vector3& ownerPosition, const KamataEngine::Vector3& ownerRotation, bool facingRight, AttackPhase lungePhase, float t);
 	AABB GetLungeAABBGeneric(const KamataEngine::Vector3& ownerPosition, bool facingRight) const;
-	
+
 	int GetLungeDamage() const { return kLungeDamage; }
 	float GetLungeImpactPower() const { return kLungeImpactPower; }
 
 	// --- SFX ---
-	// Cuirassier固有の振りSFX(通常コンボ・ランジ共通)。未設定ならBaseMeleeのデフォルトを使う。
 	static void SetSwingSoundHandle(uint32_t handle) { sSwingSoundHandle_ = handle; }
-	// ランジ突撃専用の踏み込みSFX。呼び出し側(CuirassierBehavior)が明示的に鳴らす。
 	static void SetLungeSoundHandle(uint32_t handle) { sLungeSoundHandle_ = handle; }
 	static void PlayLungeSound() {
 		if (sLungeSoundHandle_ != 0) {
-			KamataEngine::Audio::GetInstance()->PlayWave(sLungeSoundHandle_, false, sSfxVolume_);
+			AudioSettings::PlaySfx(sLungeSoundHandle_, false, sSfxVolume_);
 		}
 	}
 
-	void SnapWeaponState(WeaponState state) {
-		weaponState_ = state;
-		equipTimer_ = 1.0f;
-		isTransitioning_ = false;
-	}
-	void SetEquipDuration(float seconds);
-	float GetEquipDuration() const { return equipDuration_; }
-
+	// FIX: these were missing, so BaseMelee's generic blend used the default sabre poses for the heavy sabre.
+	const SRTOffset& GetHolsterOffset() const override { return holsterOffset_; }
+	const SRTOffset& GetReadyStanceOffset() const override { return readyStanceOffset_; }
 	const SRTOffset& GetKnockbackOffset() const override { return kKnockbackOffset; }
 	const SRTOffset& GetStunOffset() const override { return kStunOffset; }
 	const SRTOffset& GetBlockOffset() const override { return kBlockOffset; }
 
+	static float GetLungeReach() { return kLungeReach; }
+
+	// ---------------- Player lunge (hold left click). Separate values from the enemy lunge ----------------
+	LungeSpec GetPlayerLungeSpec() const { return {kPlayerLungeAnticipate, kPlayerLungeAttack, kPlayerLungeRecovery, kPlayerLungeSpeed, kPlayerLungeDamage, kPlayerLungeImpact, kPlayerLungeCooldown}; }
+	void SetPlayerLungePosition(const Player& player, AttackPhase phase, float t);
+	AABB GetPlayerLungeAABB(const AABB& playerAABB, bool facingRight) const;
+
+	// Uses the heavy-specific swing sound when set, otherwise the shared combo sounds.
+	void PlaySwingSound(int comboIndex) override {
+		if (sSwingSoundHandle_ != 0) {
+			AudioSettings::PlaySfx(sSwingSoundHandle_, false, sSfxVolume_);
+		} else {
+			BaseMelee::PlaySwingSound(comboIndex);
+		}
+	}
+	void PlayDefaultSwingSound() override {
+		uint32_t handle = (sSwingSoundHandle_ != 0) ? sSwingSoundHandle_ : sDefaultSwingSoundHandle_;
+		if (handle != 0) {
+			AudioSettings::PlaySfx(handle, false, sSfxVolume_);
+		}
+	}
+protected:
+	const std::array<ComboAttackPattern, 3>& GetComboPatterns() const override { return comboPatterns_; }
+	const std::array<float, 3>& GetComboReach() const override { return kComboReach; }
+	const std::array<float, 3>& GetComboSwingHeight() const override { return kComboSwingHeight; }
+	const std::array<float, 3>& GetUpDownReach() const override { return kUpDownReach; }
+	const std::array<float, 3>& GetUpDownWidth() const override { return kUpDownWidth; }
+	const SRTOffset& GetDownAttackOffset() const override { return kDownAttackOffset; }
+
 private:
 	friend class DebugMenu;
-	WeaponState weaponState_ = WeaponState::kEquipped;
-	float equipTimer_ = 1.0f;
-	float equipDuration_ = 0.3f;
-	bool isTransitioning_ = false;
 
 	static inline SRTOffset holsterOffset_{
 	    {1.0f, 1.0f,  1.0f },
@@ -112,9 +127,17 @@ private:
 	static inline std::array<float, 3> kComboReach = {2.0f, 2.0f, 2.4f};
 	static inline std::array<float, 3> kComboSwingHeight = {1.8f, 1.8f, 2.0f};
 
+	// Player-side down attack (heavy: slower, wider)
+	static inline SRTOffset kDownAttackOffset{
+	    {1.0f, 1.0f,  1.0f},
+        {1.2f, 0.0f,  0.0f},
+        {0.0f, -1.0f, 0.0f}
+    };
+	static inline std::array<float, 3> kUpDownReach = {1.2f, 1.4f, 1.8f};
+	static inline std::array<float, 3> kUpDownWidth = {1.2f, 1.3f, 1.5f};
+
 	static inline float kLungeReach = 4.5f;
 
-	// [NEW]
 	static inline int kLungeDamage = 25;
 	static inline float kLungeImpactPower = 2.2f;
 
@@ -129,14 +152,25 @@ private:
 	static inline uint32_t sSwingSoundHandle_ = 0;
 	static inline uint32_t sLungeSoundHandle_ = 0;
 
-	// BaseMelee::PlayDefaultSwingSound()をoverrideして、専用ハンドルがあればそちらを鳴らす
-	void PlayDefaultSwingSound() override {
-		uint32_t handle = (sSwingSoundHandle_ != 0) ? sSwingSoundHandle_ : sDefaultSwingSoundHandle_;
-		if (handle != 0) {
-			KamataEngine::Audio::GetInstance()->PlayWave(handle, false, sSfxVolume_);
-		}
-	}
-
-public:
-	static float GetLungeReach() { return kLungeReach; }
+private: 
+	//プレイヤを使用
+	static inline SRTOffset kPlayerLungeAnticipatePose{
+	    {1.0f, 1.0f,   1.0f},
+        {0.0f, -0.3f,  0.6f},
+        {0.3f, -0.05f, 0.5f}
+    };
+	static inline SRTOffset kPlayerLungeExtendPose{
+	    {1.0f, 1.0f,  1.0f },
+        {0.0f, -0.1f, 1.5f },
+        {0.3f, -0.1f, -0.3f}
+    };
+	static inline float kPlayerLungeAnticipate = 21.0f; // frames
+	static inline float kPlayerLungeAttack = 18.0f;
+	static inline float kPlayerLungeRecovery = 15.0f;
+	static inline float kPlayerLungeSpeed = 0.35f;
+	static inline int kPlayerLungeDamage = 80;
+	static inline float kPlayerLungeImpact = 2.2f;
+	static inline float kPlayerLungeCooldown = 4.0f;
+	static inline float kPlayerLungeReach = 4.5f;
+	static inline float kPlayerLungeHeight = 1.4f;
 };

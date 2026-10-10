@@ -1,8 +1,23 @@
 #include "EnemyCuirassier.h"
 #include "GameScene.h"
+#include "GlobalVariables.h"
 #include "Player.h"
 
 using namespace KamataEngine;
+
+namespace {
+constexpr const char* kGroupName = "EnemyCuirassier";
+}
+
+void EnemyCuirassier::RegisterGlobalVariables() {
+	GlobalVariables::GetInstance()->CreateGroup(kGroupName);
+	RegisterBodyComboPoseSet(kGroupName, "BodyCombo", kBodyCombo);
+	RegisterBodyLungePoseSet(kGroupName, "BodyLunge", kBodyLunge);
+}
+void EnemyCuirassier::ApplyGlobalVariables() {
+	ApplyBodyComboPoseSet(kGroupName, "BodyCombo", kBodyCombo);
+	ApplyBodyLungePoseSet(kGroupName, "BodyLunge", kBodyLunge);
+}
 
 void EnemyCuirassier::Initialize(const std::array<PartResources, static_cast<size_t>(PartSlot::kCount)>& partResources, Camera* camera, const Vector3& position) {
 	BaseEnemy::Initialize(partResources, camera, position);
@@ -52,6 +67,9 @@ void EnemyCuirassier::UpdateMeleeVisual(const BaseMelee::GenericAttackAnimState*
 	isSwingActive_ = (attackState != nullptr && attackState->phase == BaseMelee::AttackPhase::kAttack);
 	if (attackState) {
 		currentComboIndex_ = attackState->comboIndex;
+		attackBodyPose_ = EvaluateBodyComboPose(kBodyCombo, static_cast<BodyAttackPhase>(static_cast<int>(attackState->phase)), attackState->t, attackState->comboIndex);
+	} else {
+		attackBodyPose_ = SRTOffset{};
 	}
 }
 
@@ -64,9 +82,9 @@ void EnemyCuirassier::UpdateLungeVisual(WeaponHeavySabre::AttackPhase lungePhase
 	currentMelee_->SetReactionPose(GetReactionPose());
 	currentMelee_->SetLungePositionGeneric(modelWorldTransform_.translation_, modelWorldTransform_.rotation_, facingRight, lungePhase, t);
 
-
 	isSwingActive_ = false;
 	isLungeActive_ = (lungePhase == WeaponHeavySabre::AttackPhase::kAttack);
+	attackBodyPose_ = EvaluateBodyLungePose(kBodyLunge, static_cast<BodyAttackPhase>(static_cast<int>(lungePhase)), t);
 }
 
 AABB EnemyCuirassier::GetSwingAABB() const { return currentMelee_->GetSwingAABBGeneric(worldTransform_.translation_, isRight(), currentComboIndex_); }

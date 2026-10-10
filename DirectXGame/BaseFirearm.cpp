@@ -1,7 +1,7 @@
 #include "BaseFirearm.h"
 #include "GlobalVariables.h"
 
-    using namespace KamataEngine;
+using namespace KamataEngine;
 
 namespace {
 constexpr const char* kGroupName = "BaseFirearm";
@@ -32,7 +32,51 @@ void BaseFirearm::Initialize(Model* model, uint32_t textureHandle, Camera* camer
 	textureHandle_ = textureHandle;
 	camera_ = camera;
 	worldTransform_.Initialize();
+
+	// Start loaded (virtual getters are safe here: the object is fully constructed).
+	currentAmmo_ = GetMaxAmmo();
+	isReloading_ = false;
+	reloadTimer_ = 0.0f;
+	reloadDurationCurrent_ = GetBaseReloadDuration();
 }
+
+#pragma region Ammo / reload
+bool BaseFirearm::TryFire() {
+	if (currentAmmo_ <= 0) {
+		return false;
+	}
+	--currentAmmo_;
+	if (!isReloading_) {
+		isReloading_ = true;
+		reloadTimer_ = 0.0f;
+	}
+	return true;
+}
+
+void BaseFirearm::TickReload() {
+	if (currentAmmo_ < GetMaxAmmo()) {
+		reloadTimer_ += 1.0f / 60.0f;
+		if (reloadTimer_ >= reloadDurationCurrent_) {
+			currentAmmo_ = GetMaxAmmo();
+			reloadTimer_ = 0.0f;
+			reloadDurationCurrent_ = GetBaseReloadDuration();
+			PlaySfxHandle(sLoadedSoundHandle_);
+		}
+	}
+	isReloading_ = (currentAmmo_ < GetMaxAmmo());
+}
+
+void BaseFirearm::NotifyDealtDamage() { reloadDurationCurrent_ = std::max(reloadDurationCurrent_ - GetReloadHitBonus(), GetReloadDurationMin()); }
+
+void BaseFirearm::RestoreDropState(DropItemState state) {
+	if (state != DropItemState::kOnCooldown)
+		return;
+	currentAmmo_ = 0;                                 // unloaded
+	reloadTimer_ = 0.0f;                              // reload restarts from zero (the "premature pickup" reset)
+	reloadDurationCurrent_ = GetBaseReloadDuration(); // hit bonuses from before the drop are discarded too
+	isReloading_ = true;
+}
+#pragma endregion
 
 // Shared by every firearm. Only reads the virtual offset getters -- no stats.
 void BaseFirearm::UpdateFollow(const WorldTransform& parentTransform, float localAimAngle, bool facingRight) {
@@ -45,8 +89,14 @@ void BaseFirearm::UpdateFollow(const WorldTransform& parentTransform, float loca
 	float facingSign = facingRight ? 1.0f : -1.0f;
 	float correctedAimAngle = localAimAngle * facingSign;
 
-	// Combat pose, blended toward knockback/stun when debuffed
-	const SRTOffset combat = ComputeCombatOffset(GetCombatOffset());
+	// Combat pose, blended toward knockback/stun/block when debuffed
+	SRTOffset combat = ComputeCombatOffset(GetCombatOffset());
+
+	// FIX: the extra offset (Player::firearmOffset_ / EnemyRifleman::firearmOffset_ via SetOffset) was stored but never used,
+	// because every firearm overrides GetCombatOffset(). Apply it on top of the combat pose.
+	combat.scale = {combat.scale.x * offset_.scale.x, combat.scale.y * offset_.scale.y, combat.scale.z * offset_.scale.z};
+	combat.rotation = combat.rotation + offset_.rotation;
+	combat.translation = combat.translation + offset_.translation;
 
 	// Stowed pose: reload pose while "showing reload", otherwise holster
 	const SRTOffset& stowed = isShowingReloadPose_ ? GetReloadOffset() : GetHolsterOffset();
@@ -62,7 +112,6 @@ void BaseFirearm::UpdateFollow(const WorldTransform& parentTransform, float loca
 
 	float combatRotY = parentTransform.rotation_.y + GetModelYawOffset() + combat.rotation.y;
 	// combat.rotation.z is a world-space roll authored facing right, so mirror it when facing left
-	// (otherwise knockback/stun/block would tilt the gun the wrong way on left-facing entities)
 	float combatRotZ = correctedAimAngle + combat.rotation.z * facingSign;
 
 	Vector3 blendedLocalOffset = Lerp(stowed.translation, combat.translation, equipFactor_);
