@@ -105,9 +105,10 @@ AABB Goal::GetAABB() const {
 }
 
 void Goal::Draw() {
-	if (model_) {
-		Model::PreDraw();
-		model_->Draw(worldTransform_, *camera_, textureHandle_);
-		Model::PostDraw();
+	if (!model_ || isCleared_) { 
+		return;
 	}
+	Model::PreDraw();
+	model_->Draw(worldTransform_, *camera_, textureHandle_);
+	Model::PostDraw();
 }

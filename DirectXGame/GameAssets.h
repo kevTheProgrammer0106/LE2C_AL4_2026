@@ -78,6 +78,13 @@ public:
 	std::unordered_map<uint8_t, uint32_t> blockTexVariants;
 	std::unordered_map<uint8_t, uint32_t> platformTexVariants;
 
+	uint32_t glassTex = 0;
+	uint32_t breakableTex[3] = {0, 0, 0}; // intact, cracked, nearly broken
+	uint32_t explosiveTex = 0;
+	uint32_t spikeTex = 0;
+	uint32_t slowBlockTex = 0;
+	uint32_t fragileTex = 0;
+
 	// --- Goal / Gate / Switch / HealthBlock ---
 	std::unique_ptr<KamataEngine::Model> modelGoal;
 	uint32_t goalTex = 0;
@@ -146,6 +153,11 @@ public:
 	uint32_t sfxGateOpen = 0;
 	uint32_t sfxGoalReached = 0;
 	uint32_t sfxItemPickup = 0; // not loaded anywhere yet (was always 0 in GameScene); set it here when you have a file
+	uint32_t sfxGlassBreak = 0;
+	uint32_t sfxBlockHit = 0;
+	uint32_t sfxBlockBreak = 0;
+	uint32_t sfxExplosion = 0;
+	uint32_t sfxSpikeHit = 0;
 
 	// -- Audio: arena / wave ---
 	uint32_t sfxArenaStart = 0;

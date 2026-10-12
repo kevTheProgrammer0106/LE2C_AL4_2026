@@ -92,7 +92,7 @@ public:
 	// ============================================================
 	// Zones. ONE chip does everything: an 'F' chip is the zoom point AND the centre of its own trigger area.
 	// While the player overlaps the area the camera eases to (chip position + offset) and holds there; when the player
-	// leaves it, a timer (`exitDelay`) runs; when it expires the camera eases back. Re-entering resets the timer
+	// leaves it eases back. Re-entering reactivates it after `reentryCooldown` seconds of continuous presence
 	// (the very first entry is immediate).
 	// The 'F' chip's SUB ID (2nd char) picks the preset in GetCameraConfig, e.g. "F10" = preset 1.
 	// ============================================================
@@ -104,13 +104,14 @@ public:
 		float returnDuration = 0.8f;
 		Ease enterEase = Ease::kInOut;
 		Ease returnEase = Ease::kInOut;
-		float exitDelay = 0.5f; 
+		float reentryCooldown = 1.0f;
 	};
 	struct Zone {
 		KamataEngine::Vector3 focusPoint{}; // the 'F' chip position: zoom point and centre of the trigger area
 		ZoneConfig config;
 		bool active = false;
-		float exitTimer = 0.0f;
+		bool hasActivated = false;
+		float enterTimer = 0.0f;
 		bool playerInside = false; // debug readout
 	};
 

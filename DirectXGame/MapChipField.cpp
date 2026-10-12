@@ -6,6 +6,8 @@
 #include <fstream>
 #include <map>
 #include <sstream>
+#include <queue>
+#include <unordered_set>
 
 using namespace KamataEngine;
 
@@ -15,8 +17,6 @@ uint32_t MapChipField::GetNumBlockHorizontal() const { return totalBlockHorizont
 namespace {
 std::map<char, MapChipType> mapChipTypeTable = {
     {'B', MapChipType::kBlock        },
-    {'U', MapChipType::kBlockHalfUp  },
-    {'D', MapChipType::kBlockHalfDown},
     {'P', MapChipType::kPlayer       },
     {'E', MapChipType::kEnemy        },
     {'T', MapChipType::kPlatform     },
@@ -42,6 +42,13 @@ std::map<char, MapChipType> mapChipTypeTable = {
 	{'F', MapChipType::kArenaCamera},
     {'H', MapChipType::kHealthBlock   },
     {'G', MapChipType::kCameraTrigger },
+    {'Y', MapChipType::kGlass         },
+    {'V', MapChipType::kBreakable     },
+    {'Z', MapChipType::kExplosive     },
+    {'I', MapChipType::kSpike         },
+    {'9', MapChipType::kFragile       },
+    {'Q', MapChipType::kMeleeSpawner  },
+    {'O', MapChipType::kFirearmSpawner},
 };
 } // namespace
 
@@ -51,23 +58,22 @@ TileInfo MapChipField::GetTileInfo(uint32_t xIndex, uint32_t yIndex) {
 
 	switch (type) {
 	case MapChipType::kBlock:
+	case MapChipType::kGlass:
+	case MapChipType::kBreakable:
+	case MapChipType::kFragile:
 		info.width = kBlockWidth;
 		info.height = kBlockHeight;
 		info.offset = {0.0f, 0.0f, 0.0f};
 		info.isSolid = true;
 		info.isOneWay = false;
 		return info;
-	case MapChipType::kBlockHalfUp:
+	case MapChipType::kExplosive:
+	case MapChipType::kSpike:
 		info.width = kBlockWidth;
-		info.height = kBlockHeight * 0.5f;
-		info.offset = {0.0f, kBlockHeight * 0.25f, 0.0f};
-		info.isSolid = true;
-		return info;
-	case MapChipType::kBlockHalfDown:
-		info.width = kBlockWidth;
-		info.height = kBlockHeight * 0.5f;
-		info.offset = {0.0f, -kBlockHeight * 0.25f, 0.0f};
-		info.isSolid = true;
+		info.height = kBlockHeight;
+		info.offset = {0.0f, 0.0f, 0.0f};
+		info.isSolid = false;
+		info.isOneWay = false;
 		return info;
 	case MapChipType::kPlatform:
 		info.width = kBlockWidth;
@@ -294,4 +300,43 @@ bool MapChipField::IsSlowAtPosition(const Vector3& position) {
 		return false;
 	Rect rect = GetRectByIndex(indexSet.xIndex, indexSet.yIndex);
 	return position.x >= rect.left && position.x <= rect.right && position.y >= rect.bottom && position.y <= rect.top;
+}
+void MapChipField::ClearMapChipByIndex(uint32_t xIndex, uint32_t yIndex) {
+	if (xIndex >= totalBlockHorizontal_ || yIndex >= totalBlockVertical_)
+		return;
+	MapChipDataUnit& unit = mapChipData_.data[yIndex][xIndex];
+	unit.type = MapChipType::kBlank;
+	unit.subID = 0;
+	unit.linkID = 0;
+}
+
+std::vector<MapChipField::IndexSet> MapChipField::CollectConnectedByType(uint32_t xIndex, uint32_t yIndex, MapChipType type) {
+	std::vector<IndexSet> result;
+	if (GetMapChipTypeByIndex(xIndex, yIndex) != type)
+		return result;
+
+	auto key = [](uint32_t x, uint32_t y) { return (static_cast<uint64_t>(x) << 32) | y; };
+	std::unordered_set<uint64_t> visited;
+	std::queue<IndexSet> open;
+	open.push({xIndex, yIndex});
+	visited.insert(key(xIndex, yIndex));
+
+	constexpr int dx[4] = {1, -1, 0, 0};
+	constexpr int dy[4] = {0, 0, 1, -1};
+	while (!open.empty()) {
+		IndexSet cur = open.front();
+		open.pop();
+		result.push_back(cur);
+		for (int d = 0; d < 4; ++d) {
+			int nx = static_cast<int>(cur.xIndex) + dx[d];
+			int ny = static_cast<int>(cur.yIndex) + dy[d];
+			if (nx < 0 || ny < 0)
+				continue;
+			uint32_t ux = static_cast<uint32_t>(nx), uy = static_cast<uint32_t>(ny);
+			if (GetMapChipTypeByIndex(ux, uy) != type || !visited.insert(key(ux, uy)).second)
+				continue;
+			open.push({ux, uy});
+		}
+	}
+	return result;
 }

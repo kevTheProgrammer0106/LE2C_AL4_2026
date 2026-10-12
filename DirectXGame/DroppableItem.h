@@ -43,11 +43,18 @@ public:
 	// プレイヤーの向きへ放る初速
 	static KamataEngine::Vector3 MakeThrowVelocity(bool facingRight);
 
+	void SetSpawnerID(int32_t id) { spawnerID_ = id; }
+	int32_t GetSpawnerID() const { return spawnerID_; }
+	void PlaceStatic(); // sits on its tile, never expires (call right after Initialize)
+
 private:
 	// 放り出し〜バウンド中の更新
 	void UpdateBounce();
 	// 静止後のふわふわ更新
 	void UpdateIdle();
+
+	int32_t spawnerID_ = -1;
+	bool persistent_ = false;
 
 	float lifeTimer_ = 0.0f;
 	bool isExpired_ = false;

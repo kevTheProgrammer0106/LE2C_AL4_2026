@@ -3,6 +3,8 @@
 #include <KamataEngine.h>
 #include <string>
 #include <vector>
+#include <map>
+#include <set>
 
 struct StageData {
 	std::string name;
@@ -12,6 +14,15 @@ struct StageData {
 
 class StageManager {
 public:
+	struct WorldState {
+		std::set<uint64_t> brokenCells;      // glass / breakable / explosive / fragile that are gone ((x<<32)|y)
+		std::set<uint64_t> killedEnemyCells; // 'E' spawn cells whose enemy died
+		std::set<uint8_t> clearedArenas;
+		std::set<uint8_t> pressedSwitches;         // switch button IDs
+		std::set<uint64_t> usedHealthCells;        // one-time health blocks already used
+		std::map<uint64_t, int32_t> breakableHp;   // damaged but intact breakables
+		std::map<uint64_t, int32_t> explosiveHits; // explosives that took melee damage
+	};
 	// --- Checkpoint data, survives GameScene reload (Retry), wiped on Restart / Main Menu ---
 	struct CheckpointData {
 		bool hasCheckpoint = false;
@@ -24,6 +35,7 @@ public:
 		uint32_t oldestLoadedChunk = 0;
 		uint32_t loadedTopChunkRow = 1;
 		uint32_t loadedBottomChunkRow = 1;
+		WorldState world;
 	};
 
 	void SetCheckpoint(const CheckpointData& data) { checkpoint_ = data; }

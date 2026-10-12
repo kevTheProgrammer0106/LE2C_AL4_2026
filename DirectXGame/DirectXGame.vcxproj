@@ -196,6 +196,8 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClCompile Include="DebugCollisionDraw.cpp" />
     <ClCompile Include="DebugMenu.cpp" />
     <ClCompile Include="DroppableItem.cpp" />
+    <ClCompile Include="EffectMuzzleFlash.cpp" />
+    <ClCompile Include="EffectParticleBurst.cpp" />
     <ClCompile Include="EnemyCuirassier.cpp" />
     <ClCompile Include="EnemyFighter.cpp" />
     <ClCompile Include="EnemyHUD.cpp" />
@@ -228,6 +230,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClCompile Include="ProjectileBall.cpp" />
     <ClCompile Include="RandomGenerator.cpp" />
     <ClCompile Include="RiflemanBehavior.cpp" />
+    <ClCompile Include="ScreenFlash.cpp" />
     <ClCompile Include="Skydome.cpp" />
     <ClCompile Include="SlidingGate.cpp" />
     <ClCompile Include="StageManager.cpp" />
@@ -258,6 +261,8 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClInclude Include="DebugCollisionDraw.h" />
     <ClInclude Include="DebugMenu.h" />
     <ClInclude Include="DroppableItem.h" />
+    <ClInclude Include="EffectMuzzleFlash.h" />
+    <ClInclude Include="EffectParticleBurst.h" />
     <ClInclude Include="EnemyCuirassier.h" />
     <ClInclude Include="EnemyFighter.h" />
     <ClInclude Include="EnemyHUD.h" />
@@ -289,6 +294,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClInclude Include="ProjectileBall.h" />
     <ClInclude Include="RandomGenerator.h" />
     <ClInclude Include="RiflemanBehavior.h" />
+    <ClInclude Include="ScreenFlash.h" />
     <ClInclude Include="Skydome.h" />
     <ClInclude Include="SlidingGate.h" />
     <ClInclude Include="StageManager.h" />

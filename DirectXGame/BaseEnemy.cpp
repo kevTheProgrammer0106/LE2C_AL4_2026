@@ -37,6 +37,7 @@ void BaseEnemy::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "ModelProbeStepUp", kModelProbeStepUp);
 	gv->AddItem(kGroupName, "DropThroughDuration", kDropThroughDuration);
 	gv->AddItem(kGroupName, "DropThroughVelocity", kDropThroughVelocity);
+	gv->AddItem(kGroupName, "AttackEffectScale", kAttackEffectScale);
 	BaseEnemyBehavior::RegisterGlobalVariables();
 }
 
@@ -65,6 +66,7 @@ void BaseEnemy::ApplyGlobalVariables() {
 	kModelProbeStepUp = gv->GetFloatValue(kGroupName, "ModelProbeStepUp");
 	kDropThroughDuration = gv->GetFloatValue(kGroupName, "DropThroughDuration");
 	kDropThroughVelocity = gv->GetFloatValue(kGroupName, "DropThroughVelocity");
+	kAttackEffectScale = gv->GetFloatValue(kGroupName, "AttackEffectScale");
 	BaseEnemyBehavior::ApplyGlobalVariables();
 }
 
@@ -125,10 +127,17 @@ AnimationManager::AnimationContext BaseEnemy::BuildAnimationContext() const {
 void BaseEnemy::UpdateMovementState() {
 	AnimationManager::MovementEvents events = animManager_->UpdateMovementState(BuildAnimationContext());
 	if (!behavior_->IsDeathBehavior()) {
-		if (events.justJumped)
+		const Vector3 feet = worldTransform_.translation_ + Vector3(0.0f, -kHeight * 0.5f, 0.0f);
+		if (events.justJumped) {
 			PlayJumpSound();
-		if (events.justLanded)
+			if (gameScene_)
+				gameScene_->CreateBurstEffect(BurstType::kJump, feet, {0.0f, 1.0f});
+		}
+		if (events.justLanded) {
 			PlayMovementSound();
+			if (gameScene_)
+				gameScene_->CreateBurstEffect(BurstType::kLand, feet, {0.0f, 1.0f});
+		}
 		if (events.footstepTick)
 			PlayFootstepSound();
 	}
@@ -230,8 +239,10 @@ void BaseEnemy::TakeDamage(int damage, const Vector3& hitDirection, float impact
 	pendingImpactPower_ = impactPower;
 
 	Vector3 effectPos = GetModelWorldPosition();
-	if (gameScene_)
+	if (gameScene_) {
 		gameScene_->CreateHitEffect(effectPos);
+		gameScene_->CreateBurstEffect(BurstType::kHit, effectPos, {hitDirection.x, hitDirection.y}); // 被弾の火花
+	}
 
 	if (hp_ <= 0) {
 		behavior_->RequestBehavior(Behavior::kDeath);
@@ -541,4 +552,21 @@ bool BaseEnemy::TryBlockAttack(const Vector3& attackerPos) {
 	if (gameScene_)
 		gameScene_->CreateBlockSparkEffect(sparkPos);
 	return true;
+}
+void BaseEnemy::DrawAttackEffect(bool active, const AABB& swingBox) {
+	if (!active || !modelAttack_ || !camera_ || isDead_)
+		return;
+
+	// 向きは lrDirection_ から直接決める(ルートの回転はターン補間中にずれる)
+	const bool facingRight = isRight();
+
+	// 斬撃は当たり判定(スイングAABB)の中心に置く。リーチや高さが変わっても判定の中に収まる
+	worldTransformAttack_.translation_ = {(swingBox.min.x + swingBox.max.x) * 0.5f, (swingBox.min.y + swingBox.max.y) * 0.5f, worldTransform_.translation_.z};
+	worldTransformAttack_.rotation_ = {0.0f, facingRight ? 1.570796f : 4.712389f, 0.0f};
+	worldTransformAttack_.scale_ = {kAttackEffectScale, kAttackEffectScale, kAttackEffectScale};
+	WorldTransformUpdate(worldTransformAttack_);
+
+	Model::PreDraw();
+	modelAttack_->Draw(worldTransformAttack_, *camera_, modelAttackTex_);
+	Model::PostDraw();
 }

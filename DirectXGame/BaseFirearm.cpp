@@ -15,6 +15,7 @@ void BaseFirearm::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "RecoilDuration", static_cast<int32_t>(kRecoilDuration));
 	gv->AddItem(kGroupName, "RecoilKick", kRecoilKick);
 	gv->AddItem(kGroupName, "EquipLerpSpeed", kEquipLerpSpeed);
+	gv->AddItem(kGroupName, "MuzzleOffset", kMuzzleOffset);
 }
 void BaseFirearm::ApplyGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
@@ -23,6 +24,7 @@ void BaseFirearm::ApplyGlobalVariables() {
 	kRecoilDuration = static_cast<uint32_t>(gv->GetIntValue(kGroupName, "RecoilDuration"));
 	kRecoilKick = gv->GetFloatValue(kGroupName, "RecoilKick");
 	kEquipLerpSpeed = gv->GetFloatValue(kGroupName, "EquipLerpSpeed");
+	kMuzzleOffset = gv->GetVector3Value(kGroupName, "MuzzleOffset");
 }
 
 void BaseFirearm::Initialize(Model* model, uint32_t textureHandle, Camera* camera) {

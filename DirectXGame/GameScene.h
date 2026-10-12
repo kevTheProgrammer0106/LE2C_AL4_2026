@@ -4,6 +4,9 @@
 #include <memory>
 #include <set>
 #include <vector>
+#include <functional>
+#include <unordered_map>
+#include <unordered_set>
 
 #include "BaseEffect.h"
 #include "BaseEnemy.h"
@@ -48,6 +51,10 @@
 #include "MusicManager.h"
 #include "UIMenu.h"
 
+#include "EffectMuzzleFlash.h"
+#include "ScreenFlash.h"
+#include "EffectParticleBurst.h"
+
 class StageManager;
 
 struct BlockVisual {
@@ -72,7 +79,7 @@ public:
 
 	void CheckAllCollisions();
 
-	enum class Phase { kFadeIn, kPlay, kPause, kDeath, kRetry, kFadeOut, kVictory };
+	enum class Phase { kFadeIn, kPlay, kPause, kDeath, kRetry, kFadeOut, kGoalSequence, kVictory };
 
 	void ChangePhase();
 
@@ -80,9 +87,12 @@ public:
 
 	void CreateHitEffect(KamataEngine::Vector3& spawnLocation, float rotationZ = 0.0f);
 	void CreateGuardEffect(KamataEngine::Vector3& spawnLocation);
-	void CreateMuzzleFlash(KamataEngine::Vector3& spawnLocation);
 	void CreateBlockSparkEffect(KamataEngine::Vector3& spawnLocation);
 	void CreateEnemyDeathParticles(const KamataEngine::Vector3& position);
+
+	void CreateMuzzleFlash(const KamataEngine::Vector3& muzzlePos, const KamataEngine::Vector2& aimDir, bool followPlayer);
+	// 爆発(煙 + 火の玉 + 火花)を position に出す
+	void CreateExplosion(const KamataEngine::Vector3& position);
 
 	void CreateFirearmProjectile(Owner owner, const KamataEngine::Vector3& position, const KamataEngine::Vector2& aimDirection, int damage = -1, int32_t lifeFrames = 0);
 	DroppableItem* CreateDroppableItem(const KamataEngine::Vector3& position, DropItemCategory category, DropWeaponKind kind, DropItemState state = DropItemState::kReady);
@@ -169,6 +179,9 @@ public:
 		float reentryCooldown = 1.0f; // seconds the player must stay inside after re-entering before the zoom starts again
 	};
 	void BindAssets();
+
+	void TriggerScreenFlash(ScreenFlash::Type type) { screenFlash_.Trigger(type); }
+	void CreateBurstEffect(BurstType type, const KamataEngine::Vector3& position, const KamataEngine::Vector2& dir);
 private:
 	friend class DebugMenu;
 	GameAssets assets_;
@@ -281,6 +294,7 @@ private:
 		uint8_t subID = 0;
 		bool spawned = false;
 		uint8_t placementState = 0; // EnemyPlacementState, from the chip's link ID
+		uint64_t cellKey = 0;
 	};
 	void ApplyEnemyPlacementState(BaseEnemy* enemy, uint8_t placementState);
 	std::vector<EnemySpawnPoint> enemySpawnPoints_;
@@ -349,4 +363,102 @@ private:
 	PlayerBlockUI playerBlockUI_;
 
 	ArenaManager* FindActiveArena() const;
+
+	ScreenFlash screenFlash_;
+
+	enum class HitSource { kMelee, kFirearm };
+	static uint64_t CellKey(uint32_t x, uint32_t y) { return (static_cast<uint64_t>(x) << 32) | y; }
+	void ForEachMapCellInAABB(const AABB& box, const std::function<void(uint32_t, uint32_t)>& fn);
+
+	// ---- glass / breakable ----
+	struct BreakableState {
+		int32_t hp = 3;
+		int32_t maxHp = 3;
+	};
+	std::unordered_map<uint64_t, BreakableState> breakables_;
+	std::set<uint64_t> breakableHitThisSwing_; // cells already hit by the current swing/lunge
+	static int BreakableStage(int32_t hp, int32_t maxHp) {
+		float ratio = static_cast<float>(hp) / static_cast<float>(maxHp);
+		return (ratio > 0.66f) ? 0 : (ratio > 0.33f) ? 1 : 2;
+	}
+	void RemoveBlockCell(uint32_t xIndex, uint32_t yIndex); // visual + chip + records it as broken
+	void BreakGlassConnected(uint32_t xIndex, uint32_t yIndex);
+	bool BreakGlassInAABB(const AABB& box);
+	void DamageBreakableCell(uint32_t xIndex, uint32_t yIndex, int32_t amount = 1);
+	bool DamageBreakablesInAABB(const AABB& box, HitSource source);
+	bool DamageExplosivesInAABB(const AABB& box, HitSource source);
+	bool HitDestructiblesInAABB(const AABB& box, HitSource source); // glass + breakable + explosive
+
+	// ---- explosive ----
+	std::unordered_map<uint64_t, int32_t> explosives_; // cell -> remaining melee hits
+	struct PendingExplosion {
+		uint32_t x, y;
+		float timer;
+	};
+	std::vector<PendingExplosion> pendingExplosions_;
+	void QueueExplosion(uint32_t xIndex, uint32_t yIndex, float delay);
+	void Explode(uint32_t xIndex, uint32_t yIndex);
+	void UpdateExplosions();
+	bool IsBlastExposed(const KamataEngine::Vector3& from, const KamataEngine::Vector3& to, int64_t skipX = -1, int64_t skipY = -1);
+	static inline float kExplosionFatalRadius = 3.0f;
+	static inline float kExplosionNormalRadius = 10.0f;
+	static inline int32_t kExplosionNormalDamage = 15;
+	static inline float kExplosionChainDelay = 0.15f;
+	static inline float kExplosionImpact = 2.5f;
+	// debug only: recent blasts (the block is gone, so the radii need their own record)
+	struct DebugBlast {
+		KamataEngine::Vector3 center;
+		float timer;
+	};
+	std::vector<DebugBlast> debugBlasts_;
+	static inline float kDebugBlastShowTime = 1.5f;
+
+	// ---- spike ----
+	struct SpikeTracker {
+		bool initialized = false;
+		float prevFootY = 0.0f;
+		std::unordered_set<uint64_t> immune;
+	};
+	SpikeTracker playerSpike_;
+	std::unordered_map<const BaseEnemy*, SpikeTracker> enemySpike_;
+	bool CheckSpikeHit(SpikeTracker& tracker, const AABB& box, bool onGround, float limitFallSpeed);
+	void UpdateSpikes();
+	static inline int32_t kSpikeDamage = 20;
+	static inline float kSpikeLaunchPower = 6.5f;
+	static inline float kSpikeMinFallRatio = 0.5f;
+
+	// ---- fragile ----
+	std::unordered_map<uint64_t, float> fragileTimers_;
+	void TriggerFragileUnder(const AABB& body, bool onGround);
+	void UpdateFragileBlocks();
+	static inline float kFragileBreakDelay = 3.0f;
+	static inline float kFragileShakeAmplitude = 0.08f;
+
+	// ---- weapon spawners ----
+	struct WeaponSpawnerPoint {
+		KamataEngine::Vector3 position = {};
+		DropItemCategory category = DropItemCategory::kMelee;
+		DropWeaponKind kind = DropWeaponKind::kSabreLight;
+		int32_t id = 0;
+		float timer = 0.0f;
+	};
+	std::vector<WeaponSpawnerPoint> weaponSpawners_;
+	int32_t nextWeaponSpawnerID_ = 0;
+	static inline float kWeaponRespawnDelay = 3.0f;
+	void UpdateWeaponSpawners();
+	bool IsWeaponSpawnerItemAlive(int32_t id) const;
+	static bool ResolveWeaponSpawnerKind(MapChipType type, uint8_t subID, DropItemCategory& outCategory, DropWeaponKind& outKind);
+
+	// ---- checkpoint-persistent world state ----
+	std::set<uint64_t> brokenCells_;
+	std::set<uint64_t> killedEnemyCells_;
+	std::set<uint64_t> usedHealthCells_;
+	std::set<uint8_t> clearedArenas_;
+	std::set<uint8_t> pressedSwitchIDs_;
+	std::unordered_map<const BaseEnemy*, uint64_t> enemyOrigin_;
+
+	float goalSequenceTimer_ = 0.0f;
+	static inline float kGoalSequenceDuration = 1.8f; // time before the victory menu appears
+	static inline float kGoalZoomDelta = 10.0f;       // camera moves 10 closer (z offset -10 nearer). Flip the sign to zoom out.
+	static inline float kGoalZoomDuration = 0.8f;
 };

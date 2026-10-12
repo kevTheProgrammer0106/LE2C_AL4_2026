@@ -73,6 +73,7 @@ void EnemyRifleman::Draw() {
 	BaseEnemy::Draw();
 	if (!isDead_ && !GetBehaviorModule().IsDeathBehavior() && currentFirearm_) {
 		currentFirearm_->Draw();
+		DrawAttackEffect(IsBayonetActive(), GetBayonetLungeAABB()); // 銃剣突進の斬撃
 	}
 }
 
@@ -145,7 +146,8 @@ void EnemyRifleman::ShootFirearm() {
 		// ShootFirearm 内
 		gameScene_->CreateFirearmProjectile(Owner::kEnemy, origin, aimDir, currentFirearm_->GetBulletDamage());
 		Vector3 muzzlePos = origin;
-		gameScene_->CreateMuzzleFlash(muzzlePos);
+		// 敵は銃口に追従させない
+		gameScene_->CreateMuzzleFlash(currentFirearm_->GetMuzzleWorldPosition(), aimDir, false);
 	}
 	currentFirearm_->TriggerRecoil(isRight());
 	BaseFirearm::PlayFireSound();

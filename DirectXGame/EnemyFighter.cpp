@@ -47,6 +47,7 @@ void EnemyFighter::Draw() {
 	BaseEnemy::Draw();
 	if (!isDead_ && !GetBehaviorModule().IsDeathBehavior() && currentMelee_) {
 		currentMelee_->Draw();
+		DrawAttackEffect(isSwingActive_, GetSwingAABB()); // 斬撃エフェクト(判定の中心に表示)
 	}
 }
 

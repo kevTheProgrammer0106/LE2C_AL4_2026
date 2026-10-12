@@ -58,8 +58,7 @@ bool PathFindingAlgorithm::IsWalkable(MapChipField* mapChipField, uint32_t xInde
 		return false;
 	}
 	MapChipType type = mapChipField->GetMapChipTypeByIndex(xIndex, yIndex);
-	// [FIX] kSlowBlockも当たり判定上は実体のある地面(IsGroundType)なので、通行不可セルとして扱う。
-	return type != MapChipType::kBlock && type != MapChipType::kBlockHalfUp && type != MapChipType::kBlockHalfDown && type != MapChipType::kSlowBlock;
+	return type != MapChipType::kBlock && type != MapChipType::kSlowBlock && type != MapChipType::kGlass && type != MapChipType::kBreakable && type != MapChipType::kFragile;
 }
 
 uint32_t PathFindingAlgorithm::GetAgentHeightCells(MapChipField* mapChipField) {
@@ -124,11 +123,14 @@ float PathFindingAlgorithm::GetTraversalCost(MapChipField* mapChipField, uint32_
 
 	switch (type) {
 	case MapChipType::kBlock:
-	case MapChipType::kBlockHalfUp:
-	case MapChipType::kBlockHalfDown:
 	case MapChipType::kSlowBlock:
+	case MapChipType::kGlass:
+	case MapChipType::kBreakable:
+	case MapChipType::kFragile:
 		// IsWalkableで除外されるため通常ここには来ない
 		return std::numeric_limits<float>::infinity();
+	case MapChipType::kSpike:
+		return 4.0f;
 	case MapChipType::kPlatform:
 		return 1.0f;
 	case MapChipType::kPathNode: {

@@ -161,6 +161,13 @@ public:
 	virtual int GetPelletCount() const { return 1; }                   // 1回の発射で出る弾数
 	virtual float GetPelletAngle(int /*index*/) const { return 0.0f; } // 各弾の角度ずれ(rad)
 	virtual int32_t GetProjectileLifeFrames() const { return 0; }      // 0=弾の既定寿命
+
+		// ---- 銃口(銃モデルのローカル座標。バレルの向きはローカル+Z) ----
+	virtual const KamataEngine::Vector3& GetMuzzleLocalOffset() const { return kMuzzleOffset; }
+	// 銃口のワールド座標(UpdateFollow 後の最新の姿勢から求める)
+	KamataEngine::Vector3 GetMuzzleWorldPosition() const { return TransformCoordinate(GetMuzzleLocalOffset(), worldTransform_.matWorld_); }
+	static inline KamataEngine::Vector3 kMuzzleOffset = {0.0f, 0.0f, 1.2f};
+
 protected:
 	static inline float kImpactPower = 1.2f;
 	static inline float kEquipLerpSpeed = 0.15f;

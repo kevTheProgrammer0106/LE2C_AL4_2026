@@ -123,6 +123,13 @@ public:
 	static float GetBodyWidth() { return kWidth; }
 	static float GetBodyHeight() { return kHeight; }
 
+	// 近接攻撃(スイング)中に出す斬撃エフェクトのモデル/テクスチャ(プレイヤーと同じものを渡す)
+	void SetAttackEffect(KamataEngine::Model* model, uint32_t textureHandle) {
+		modelAttack_ = model;
+		modelAttackTex_ = textureHandle;
+		worldTransformAttack_.Initialize();
+	}
+
 	// --- SFX ---
 	// デフォルトの被弾/死亡SFX(全敵共通のフォールバック)。GameSceneがロード後にセットする。
 	static void SetDefaultHurtSoundHandle(uint32_t handle) { sDefaultHurtSoundHandle_ = handle; }
@@ -158,6 +165,10 @@ public:
 
 	bool TryBlockAttack(const KamataEngine::Vector3& attackerPos);
 	virtual SRTOffset GetActionAnimOffset() const { return attackBodyPose_; }
+
+	bool IsOnGround() const { return onGround_; }
+	static float GetLimitFallSpeed() { return kLimitFallSpeed; }
+
 protected:
 	friend class DebugMenu;
 
@@ -350,4 +361,12 @@ protected:
 
 	// Written each frame by melee enemies' UpdateMeleeVisual / UpdateLungeVisual from their own pose set.
 	SRTOffset attackBodyPose_{};
+
+	// 斬撃エフェクトを描画する。active=スイングの攻撃フェーズ中。向きと位置は描画時の最新状態から決める
+	void DrawAttackEffect(bool active, const AABB& swingBox);
+
+	KamataEngine::Model* modelAttack_ = nullptr;
+	KamataEngine::WorldTransform worldTransformAttack_;
+	uint32_t modelAttackTex_ = 0;
+	static inline float kAttackEffectScale = 1.0f;  // 斬撃モデルの大きさ(判定の中心に置いたまま拡縮)
 };

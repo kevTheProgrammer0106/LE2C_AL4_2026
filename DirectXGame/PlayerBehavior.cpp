@@ -372,14 +372,6 @@ void PlayerBehavior::BehaviorAttackUpdate() {
 			attackVelocity_ = {0.0f, 0.0f, 0.0f};
 		}
 
-		Vector3 facingOffset;
-		if (owner_.lrDirection_ == Player::LRDirection::kRight)
-			facingOffset = {kHitEffectOffset, 0.0f, 0.0f};
-		else
-			facingOffset = {-kHitEffectOffset, 0.0f, 0.0f};
-		owner_.worldTransformAttack_.translation_ = owner_.worldTransform_.translation_ + facingOffset;
-		owner_.worldTransformAttack_.rotation_ = owner_.worldTransform_.rotation_;
-
 		float attackDuration = melee ? melee->GetComboAttackDuration(comboIndex_, Owner::kPlayer) : 8.0f;
 		if (static_cast<float>(attackParameter_) >= attackDuration) {
 			attackPhase_ = AttackPhase::kRecovery;
@@ -429,6 +421,15 @@ void PlayerBehavior::BehaviorAttackUpdate() {
 	CollisionInfo collisionMapInfo;
 	collisionMapInfo.move = finalMove;
 	owner_.MapChipCollisionUpdate(collisionMapInfo);
+
+	// 斬撃モデルは移動後の位置と現在の向き(lrDirection_)に毎フレーム合わせる
+	// ルートの回転はターン補間中にずれるので使わない
+	{
+		const bool facingRight = (owner_.lrDirection_ == Player::LRDirection::kRight);
+		const float dir = facingRight ? 1.0f : -1.0f;
+		owner_.worldTransformAttack_.translation_ = owner_.worldTransform_.translation_ + Vector3(dir * kHitEffectOffset, 0.0f, 0.0f);
+		owner_.worldTransformAttack_.rotation_ = {0.0f, facingRight ? 1.570796f : 4.712389f, 0.0f};
+	}
 
 	WorldTransformUpdate(owner_.worldTransform_);
 	WorldTransformUpdate(owner_.worldTransformAttack_);

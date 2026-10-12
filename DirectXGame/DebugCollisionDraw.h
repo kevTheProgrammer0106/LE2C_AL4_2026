@@ -44,6 +44,8 @@ inline const KamataEngine::Vector4 kVisionSpotted = {1.0f, 0.3f, 0.3f, 1.0f}; //
 inline const KamataEngine::Vector4 kCameraZone = {1.0f, 0.6f, 0.1f, 1.0f};    // orange (camera trigger tile, idle)
 inline const KamataEngine::Vector4 kCameraZoneActive = {0.2f, 1.0f, 0.6f, 1.0f}; // mint (camera trigger tile, zoom active)
 inline const KamataEngine::Vector4 kCameraFocus = {1.0f, 0.2f, 1.0f, 1.0f};      // magenta (zoom point / camera position)
+inline const KamataEngine::Vector4 kBlastFatal = {1.0f, 0.1f, 0.1f, 1.0f};
+inline const KamataEngine::Vector4 kBlastNormal = {1.0f, 0.6f, 0.1f, 1.0f};
 } // namespace Color
 
 // Draws an enemy's vision triangle (eye -> left, eye -> right, left -> right).
@@ -67,6 +69,18 @@ inline void BoxAt(const KamataEngine::Vector3& center, float halfX, float halfY,
 	Box(box, color);
 }
 
+inline void Circle(const KamataEngine::Vector3& center, float radius, const KamataEngine::Vector4& color, int segments = 48) {
+	using namespace KamataEngine;
+	PrimitiveDrawer* drawer = PrimitiveDrawer::GetInstance();
+	const float step = 2.0f * std::numbers::pi_v<float> / static_cast<float>(segments);
+	Vector3 prev = {center.x + radius, center.y, center.z};
+	for (int i = 1; i <= segments; ++i) {
+		float a = step * static_cast<float>(i);
+		Vector3 next = {center.x + std::cos(a) * radius, center.y + std::sin(a) * radius, center.z};
+		drawer->DrawLine3d(prev, next, color);
+		prev = next;
+	}
+}
 inline void Line(const KamataEngine::Vector3& a, const KamataEngine::Vector3& b, const KamataEngine::Vector4& color) { KamataEngine::PrimitiveDrawer::GetInstance()->DrawLine3d(a, b, color); }
 // Line a -> b with an arrowhead at b, so direction is readable.
 inline void Arrow(const KamataEngine::Vector3& a, const KamataEngine::Vector3& b, const KamataEngine::Vector4& color) {

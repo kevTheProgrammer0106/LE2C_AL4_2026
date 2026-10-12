@@ -9,8 +9,13 @@ enum class MapChipType {
 	kGoal,
 
 	kBlock,
-	kBlockHalfUp,
-	kBlockHalfDown,
+	kGlass,          // 'Y'
+	kBreakable,      // 'V'
+	kExplosive,      // 'Z' passable
+	kSpike,          // 'I' passable
+	kFragile,        // '9'
+	kMeleeSpawner,   // 'Q'
+	kFirearmSpawner, // 'O'
 	kPlatform,
 	kSlowBlock,
 	kBarrier,
@@ -93,6 +98,8 @@ public:
 		uint32_t xIndex;
 		uint32_t yIndex;
 	};
+	void ClearMapChipByIndex(uint32_t xIndex, uint32_t yIndex);
+	std::vector<IndexSet> CollectConnectedByType(uint32_t xIndex, uint32_t yIndex, MapChipType type);
 	IndexSet GetMapChipIndexSetByPosition(const KamataEngine::Vector3& position);
 	struct Rect {
 		float left;
@@ -109,8 +116,9 @@ public:
 	float GetWorldWidth() const { return static_cast<float>(GetNumBlockHorizontal()) * kBlockWidth; }
 	float GetWorldHeight() const { return static_cast<float>(GetNumBlockVertical()) * kBlockHeight; }
 
-	static bool IsGroundType(MapChipType type) {
-		return type == MapChipType::kBlock || type == MapChipType::kBlockHalfUp || type == MapChipType::kBlockHalfDown || type == MapChipType::kPlatform || type == MapChipType::kSlowBlock;
+static bool IsGroundType(MapChipType type) {
+		return type == MapChipType::kBlock || type == MapChipType::kPlatform || type == MapChipType::kSlowBlock || type == MapChipType::kGlass || type == MapChipType::kBreakable ||
+		       type == MapChipType::kFragile;
 	}
 
 	bool IsKillAtPosition(const KamataEngine::Vector3& position);

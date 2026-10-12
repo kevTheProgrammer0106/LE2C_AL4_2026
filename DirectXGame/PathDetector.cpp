@@ -38,8 +38,9 @@ std::vector<PathDetector::Segment> PathDetector::Scan(const Vector3& footPos, bo
 			// Platforms are intentionally excluded here: they are one-way and never
 			// block horizontal movement (see BlockDetector::IsSolidIgnoringOneWay),
 			// so they must never be treated as a "wall" to jump over.
-			bool isWallSolid = (wallType == MapChipType::kBlock) || (wallType == MapChipType::kBlockHalfUp) || (wallType == MapChipType::kBlockHalfDown) || (wallType == MapChipType::kSlowBlock) ||
-			                   (wallType == MapChipType::kBarrier);
+			bool isWallSolid = (wallType == MapChipType::kBlock) || (wallType == MapChipType::kSlowBlock) ||
+				(wallType == MapChipType::kGlass) || (wallType == MapChipType::kBreakable) ||
+				(wallType == MapChipType::kFragile) || (wallType == MapChipType::kBarrier);
 
 			if (isWallSolid) {
 				topHeight = h;

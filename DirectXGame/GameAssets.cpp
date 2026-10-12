@@ -123,6 +123,24 @@ void GameAssets::LoadModelsAndTextures() {
 	inGamePauseButtonTex = TextureManager::Load("./Resources/UserInterface/buttonIngamePause.png");
 	cursorTex[0] = TextureManager::Load("./Resources/UserInterface/directionAim.png");
 	cursorTex[1] = TextureManager::Load("./Resources/UserInterface/directionArrow.png");
+
+	// glassTex = loadOr("./Resources/block/glass.png", blockTex);
+	// breakableTex[0] = loadOr("./Resources/block/breakable.png", blockTex);
+	// breakableTex[1] = loadOr("./Resources/block/breakable_cracked1.png", breakableTex[0]);
+	// breakableTex[2] = loadOr("./Resources/block/breakable_cracked2.png", breakableTex[1]);
+	// explosiveTex = loadOr("./Resources/block/explosive.png", blockTex);
+	// spikeTex = loadOr("./Resources/block/spike.png", blockTex);
+	// slowBlockTex = loadOr("./Resources/block/slowBlock.png", blockTexVariants[0]);
+	// fragileTex = loadOr("./Resources/block/fragile.png", blockTex);
+
+	glassTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
+	breakableTex[0] = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
+	breakableTex[1] = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
+	breakableTex[2] = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
+	explosiveTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
+	spikeTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
+	slowBlockTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
+	fragileTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
 }
 
 void GameAssets::LoadAudio() {
@@ -164,6 +182,12 @@ void GameAssets::LoadAudio() {
 	sfxSwitchPress = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
 	sfxGateOpen = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
 	sfxGoalReached = audio->LoadWave("./Resources/sfx_bgm/victoryJingle.wav");
+
+	sfxGlassBreak = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
+	sfxBlockHit = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
+	sfxBlockBreak = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
+	sfxExplosion = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
+	sfxSpikeHit = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
 
 	// Arena SFX (placeholders — swap in real wavs; handle 0 = silent)
 	sfxArenaStart = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/defaultSound.wav");

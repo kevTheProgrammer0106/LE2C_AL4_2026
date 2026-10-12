@@ -45,6 +45,7 @@ void EnemyCuirassier::Draw() {
 	BaseEnemy::Draw();
 	if (!isDead_ && !GetBehaviorModule().IsDeathBehavior() && currentMelee_) {
 		currentMelee_->Draw();
+		DrawAttackEffect(isSwingActive_ || isLungeActive_, isLungeActive_ ? GetLungeAABB() : GetSwingAABB());
 	}
 }
 

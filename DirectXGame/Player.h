@@ -149,8 +149,21 @@ public:
 
 	void TakeDamage(int damage, const KamataEngine::Vector3& hitDirection, float impactPower, BaseEnemy* attacker = nullptr);
 
-	void SetStunned(float duration) { behavior_.RequestStun(duration); }
-	void SetKnockback(const KamataEngine::Vector3& direction, float power) { behavior_.RequestHitKnockback(direction, power); }
+	// 無敵状態: 被弾・ブロック・ジャンプ/着地で付与される。ノックバック中は常に無敵。
+	// 無敵中はノックバック/スタンなどの「リアクション」を受け付けない(ダメージ自体は通る)
+	bool IsInvulnerable() const { return invulnTimer_ > 0.0f || behavior_.IsKnockback(); }
+	float GetInvulnerabilityRemaining() const { return invulnTimer_; }
+
+	void SetStunned(float duration) {
+		if (IsInvulnerable())
+			return;
+		behavior_.RequestStun(duration);
+	}
+	void SetKnockback(const KamataEngine::Vector3& direction, float power) {
+		if (IsInvulnerable())
+			return;
+		behavior_.RequestHitKnockback(direction, power);
+	}
 	void SetBlocking(bool blocking) { behavior_.SetBlocking(blocking); }
 	bool IsBlocking() const { return behavior_.IsBlocking(); }
 
@@ -217,6 +230,17 @@ public:
 
 	bool IsDefeated() const { return isDead_ || behavior_.IsDeathBehavior(); }
 
+	bool IsOnGround() const { return onGround_; }
+	static float GetLimitFallSpeed() { return kLimitFallSpeed; }
+	int32_t GetMeleeSourceSpawner() const { return meleeSourceSpawnerID_; }
+	void SetMeleeSourceSpawner(int32_t id) { meleeSourceSpawnerID_ = id; }
+	int32_t GetFirearmSourceSpawner() const { return firearmSourceSpawnerID_; }
+	void SetFirearmSourceSpawner(int32_t id) { firearmSourceSpawnerID_ = id; }
+	void ResetToPosition(const KamataEngine::Vector3& position);
+
+	void BeginGoalSequence(const KamataEngine::Vector3& goalPosition);
+	bool IsGoalSequenceActive() const { return goalSeqActive_; }
+
 private:
 	bool controlLocked_ = false;
 
@@ -229,6 +253,14 @@ private:
 	float slowTimer_ = 0.0f;
 	void TickDebuffs();
 	bool IsOnSlowTerrain() const;
+
+	// --- 無敵 ---
+	void GrantInvulnerability(float seconds); // 残り時間より長い場合のみ上書き(重ね掛けしない)
+	void TickInvulnerability();
+	float invulnTimer_ = 0.0f;
+	static inline float kInvulnJumpLand = 1.0f; // ジャンプ・着地時
+	static inline float kInvulnDamage = 3.0f;   // 被弾時
+	static inline float kInvulnBlock = 1.0f;    // ブロック成功時
 
 	DropWeaponKind currentMeleeKind_ = DropWeaponKind::kSabreLight;
 	DropWeaponKind currentFirearmKind_ = DropWeaponKind::kMusketLong;
@@ -393,4 +425,18 @@ private:
 	static inline float kLungeHoldTime = 0.3f;
 
 	std::vector<const void*> lungeHits_;
+
+	int32_t meleeSourceSpawnerID_ = -1;
+	int32_t firearmSourceSpawnerID_ = -1;
+
+	void UpdateGoalSequence();
+	bool goalSeqActive_ = false;
+	float goalSeqTimer_ = 0.0f;
+	KamataEngine::Vector3 goalSeqStart_{};
+	KamataEngine::Vector3 goalSeqTarget_{};
+	static inline float kGoalMoveDuration = 0.8f;  // seconds to ease into the goal
+	static inline float kGoalJumpHeight = 1.8f;    // arc height while travelling
+	static inline float kGoalSpinSpeed = 0.35f;    // rad/frame around Y
+	static inline float kGoalLoopHopHeight = 0.8f; // hop height after arriving
+	static inline float kGoalLoopHopPeriod = 0.6f; // seconds per hop
 };

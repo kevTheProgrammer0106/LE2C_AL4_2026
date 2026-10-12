@@ -235,7 +235,7 @@ void BlockDetector::BottomCollision(CollisionInfo& collisionInfo) {
 			} else {
 				// Don't double count stacked blocks.
 				MapChipType above = mapChipField_->GetMapChipTypeByIndex(index.xIndex, index.yIndex - 1);
-				if (above == MapChipType::kBlock)
+				if (MapChipField::IsGroundType(above) && above != MapChipType::kPlatform)
 					continue;
 			}
 

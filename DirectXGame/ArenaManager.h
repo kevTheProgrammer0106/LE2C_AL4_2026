@@ -22,6 +22,8 @@ public:
 	void Activate();
 	void Update(GameScene* gameScene);
 
+	void RestoreCleared() { state_ = State::kCleared; }
+
 	uint8_t GetArenaID() const { return arenaID_; }
 	State GetState() const { return state_; }
 

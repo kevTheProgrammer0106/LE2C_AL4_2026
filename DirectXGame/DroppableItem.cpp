@@ -111,7 +111,13 @@ void DroppableItem::Initialize(Model* model, uint32_t textureHandle, Camera* cam
 	restitution_ = RandRange(kRestitutionMin, kRestitutionMax);
 	maxBounces_ = RandRangeInt(std::min(kBounceCountMin, kBounceCountMax), std::max(kBounceCountMin, kBounceCountMax));
 }
-
+void DroppableItem::PlaceStatic() {
+	persistent_ = true;
+	isSettled_ = true;
+	launchChecked_ = true;
+	velocity_ = {};
+	basePosition_ = worldTransform_.translation_;
+}
 bool DroppableItem::WillLandSafely(const Vector3& startPos, const Vector3& startVel) {
 	if (!mapChipField_) {
 		return true;
@@ -195,10 +201,12 @@ void DroppableItem::Update() {
 		return;
 	}
 
-	lifeTimer_ += 1.0f / 60.0f;
-	if (lifeTimer_ >= kLifeTime) {
-		isExpired_ = true;
-		return;
+	if (!persistent_) {
+		lifeTimer_ += 1.0f / 60.0f;
+		if (lifeTimer_ >= kLifeTime) {
+			isExpired_ = true;
+			return;
+		}
 	}
 
 	if (!isSettled_) {

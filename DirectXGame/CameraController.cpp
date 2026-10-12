@@ -196,7 +196,7 @@ void CameraController::Reset() {
 		ResetCameraPerspectives();
 		break;
 	case Mode::kForcedScroll:
-		targetOffset_ = {0.0f, 0.0f, -25.0f};
+		targetOffset_ = {0.0f, 0.0f, -15.0f};
 		scrollX_ = movableArea_.left;
 		break;
 	default:
@@ -260,8 +260,8 @@ void CameraController::DrawDebugControls() {
 	for (auto& [key, z] : zones_) {
 		ImGui::PushID(static_cast<int>(key));
 		ImGui::Text(
-		    "Zone #%d at (%.0f, %.0f)  area %.0f x %.0f  inside=%s  exit timer=%.2fs  active=%s", static_cast<int>(key), z.focusPoint.x, z.focusPoint.y, z.config.areaWidth, z.config.areaHeight,
-		    z.playerInside ? "yes" : "no", z.exitTimer, z.active ? "yes" : "no");
+		    "Zone #%d at (%.0f, %.0f)  area %.0f x %.0f  inside=%s  entered=%.2fs  active=%s", static_cast<int>(key), z.focusPoint.x, z.focusPoint.y, z.config.areaWidth, z.config.areaHeight,
+		    z.playerInside ? "yes" : "no", z.enterTimer, z.active ? "yes" : "no");
 		ImGui::Text("  shot camera z: %.1f", z.focusPoint.z + z.config.offset.z);
 		if (ImGui::Button("Force zoom"))
 			ForceZone(key);
@@ -310,7 +310,7 @@ void CameraController::UpdateCameraPerspectives(const KamataEngine::WorldTransfo
 void CameraController::ResetCameraPerspectives() {
 	switch (perspectiveType) {
 	case PerspectiveType::Sidescroll:
-		targetOffset_ = {0.0f, 0.0f, -18.5f};
+		targetOffset_ = {0.0f, 0.0f, -18.5f}; 
 		break;
 	default:
 		targetOffset_ = {0.0f, 0.0f, 0.0f};
@@ -404,9 +404,9 @@ Vector3 CameraController::ComputeClampedFollowPosition() const {
 const std::vector<CameraController::ZonePreset>& CameraController::GetZonePresets() {
 	// areaWidth / areaHeight = the trigger area centred on the 'F' chip (world units, 1 tile = 1). Placeholder sizes: set them per room.
 	static const std::vector<ZonePreset> presets = {
-	    {.stageIndex = 1, .presetID = 0, .config = {.offset = {0.0f, 0.0f, -30.0f}, .areaWidth = 24.0f, .areaHeight = 14.0f, .enterDuration = 1.0f, .returnDuration = 1.0f, .exitDelay = 1.0f}},
-	    {.stageIndex = -1, .presetID = 1, .config = {.offset = {0.0f, 0.0f, -35.0f}, .areaWidth = 20.0f, .areaHeight = 12.0f}                                                                  },
-	    {.stageIndex = -1, .presetID = 2, .config = {.offset = {0.0f, 0.0f, -35.0f}, .areaWidth = 20.0f, .areaHeight = 12.0f, .enterEase = Ease::kOut}                                         },
+	    {.stageIndex = -1, .presetID = 0, .config = {.offset = {0.0f, 0.0f, -35.0f}, .areaWidth = 24.0f, .areaHeight = 14.0f, .enterDuration = 1.0f, .returnDuration = 1.0f, .reentryCooldown = 1.0f}},
+	    {.stageIndex = -1, .presetID = 1, .config = {.offset = {0.0f, 0.0f, -35.0f}, .areaWidth = 20.0f, .areaHeight = 12.0f}                                                                        },
+	    {.stageIndex = -1, .presetID = 2, .config = {.offset = {0.0f, 0.0f, -35.0f}, .areaWidth = 20.0f, .areaHeight = 12.0f, .enterEase = Ease::kOut}                                               },
 	    // stage-specific override example:
 	    // {.stageIndex = 2, .presetID = 1, .config = {.offset = {0.0f, 2.0f, -40.0f}, .areaWidth = 30.0f, .areaHeight = 16.0f}},
 	};
@@ -476,6 +476,7 @@ void CameraController::BeginZoneShot(Zone& zone, uint32_t zoneKey) {
 	StartFocus(shot);
 
 	zone.active = true;
+	zone.hasActivated = true;
 	activeZoneID_ = static_cast<int32_t>(zoneKey);
 }
 
@@ -521,20 +522,18 @@ void CameraController::UpdateZones(const AABB& playerAABB, bool enabled) {
 		zone.playerInside = inside;
 
 		if (!inside) {
-			if (static_cast<int32_t>(key) == activeZoneID_ && !zoneForced_) {
-				zone.exitTimer += kDt; // outside: count down to easing back
-				if (zone.exitTimer >= zone.config.exitDelay)
-					ReleaseActiveZone();
-			} else {
-				zone.exitTimer = 0.0f;
-			}
+			zone.enterTimer = 0.0f; // leaving resets the re-entry timer
+			if (static_cast<int32_t>(key) == activeZoneID_ && !zoneForced_)
+				ReleaseActiveZone();
 			continue;
 		}
 
-		zone.exitTimer = 0.0f; // back inside: timer resets
-
 		if (activeZoneID_ >= 0)
-			continue; // already active (this zone, or another one owns the camera)
+			continue; // another zone owns the camera
+
+		zone.enterTimer += kDt;
+		if (zone.hasActivated && zone.enterTimer < zone.config.reentryCooldown)
+			continue; // re-entry cooldown
 
 		BeginZoneShot(zone, key);
 	}

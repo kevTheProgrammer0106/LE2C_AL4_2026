@@ -10,6 +10,7 @@
 #include "GlobalVariables.h"
 #include "MapChipField.h"
 #include "Player.h"
+#include "EffectMuzzleFlash.h"
 
 using namespace KamataEngine;
 
@@ -77,6 +78,9 @@ void Player::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "BlockRegenRate", kBlockRegenRate);
 	gv->AddItem(kGroupName, "BlockRegenDelay", kBlockRegenDelay);
 	gv->AddItem(kGroupName, "LungeHoldTime", kLungeHoldTime);
+	gv->AddItem(kGroupName, "InvulnJumpLand", kInvulnJumpLand);
+	gv->AddItem(kGroupName, "InvulnDamage", kInvulnDamage);
+	gv->AddItem(kGroupName, "InvulnBlock", kInvulnBlock);
 }
 void Player::ApplyGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
@@ -120,6 +124,9 @@ void Player::ApplyGlobalVariables() {
 	kBlockRegenDelay = gv->GetFloatValue(kGroupName, "BlockRegenDelay");
 
 	kLungeHoldTime = gv->GetFloatValue(kGroupName, "LungeHoldTime");
+	kInvulnJumpLand = gv->GetFloatValue(kGroupName, "InvulnJumpLand");
+	kInvulnDamage = gv->GetFloatValue(kGroupName, "InvulnDamage");
+	kInvulnBlock = gv->GetFloatValue(kGroupName, "InvulnBlock");
 }
 #pragma endregion
 
@@ -138,7 +145,12 @@ void Player::TickDebuffs() {
 	if (slowTimer_ <= 0.0f)
 		ClearSlow();
 }
+void Player::GrantInvulnerability(float seconds) { invulnTimer_ = std::max(invulnTimer_, seconds); }
 
+void Player::TickInvulnerability() {
+	if (invulnTimer_ > 0.0f)
+		invulnTimer_ = std::max(0.0f, invulnTimer_ - 1.0f / 60.0f);
+}
 void Player::ApplySlow(float factor, float duration) {
 	slowActive_ = true;
 	slowFactor_ = std::clamp(factor, 0.05f, 1.0f);
@@ -271,11 +283,19 @@ void Player::UpdateMovementState() {
 	// アニメーションが返すイベント(ジャンプ/着地/足音)でSFXを鳴らす
 	AnimationManager::MovementEvents events = animManager_.UpdateMovementState(context);
 	if (!isDead_ && !behavior_.IsDeathBehavior()) {
+		// 足元(ルート座標の下端)
+		const Vector3 feet = worldTransform_.translation_ + Vector3(0.0f, -kHeight * 0.5f, 0.0f);
 		if (events.justJumped) {
+			GrantInvulnerability(kInvulnJumpLand);
 			PlayMovementSfxHandle(sJumpSoundHandle_);
+			if (gameScene_)
+				gameScene_->CreateBurstEffect(BurstType::kJump, feet, {0.0f, 1.0f});
 		}
 		if (events.justLanded) {
+			GrantInvulnerability(kInvulnJumpLand); 
 			PlayMovementSfxHandle(sLandSoundHandle_);
+			if (gameScene_)
+				gameScene_->CreateBurstEffect(BurstType::kLand, feet, {0.0f, 1.0f});
 		}
 		if (events.footstepTick) {
 			PlayMovementSfxHandle(sFootstepSoundHandle_);
@@ -313,7 +333,8 @@ void Player::UseFirearm() {
 			gameScene_->CreateFirearmProjectile(Owner::kPlayer, origin, dir, currentFirearm_->GetBulletDamage(), currentFirearm_->GetProjectileLifeFrames());
 		}
 		Vector3 muzzlePos = origin;
-		gameScene_->CreateMuzzleFlash(muzzlePos); // マズルフラッシュは1回だけ
+		// 銃口(バレル先端)から発砲エフェクトを出す。銃の動きに追従させる
+		gameScene_->CreateMuzzleFlash(currentFirearm_->GetMuzzleWorldPosition(), aimDir, true);
 	}
 	currentFirearm_->TriggerRecoil(lrDirection_ == LRDirection::kRight);
 	BaseFirearm::PlayFireSound();
@@ -366,6 +387,47 @@ void Player::UseMeleeWeapon() {
 		normalAttack();
 	}
 }
+void Player::BeginGoalSequence(const Vector3& goalPosition) {
+	goalSeqActive_ = true;
+	goalSeqTimer_ = 0.0f;
+	goalSeqStart_ = worldTransform_.translation_;
+	goalSeqTarget_ = goalPosition;
+	velocity_ = {};
+	onGround_ = false;
+	controlLocked_ = true;
+
+	// drop any attack/block so no slash effect or guard pose lingers
+	behavior_.SetBlocking(false);
+	behavior_.RequestBehavior(Behavior::kRoot);
+	behavior_.ResolveBehaviorRequest();
+}
+
+void Player::UpdateGoalSequence() {
+	constexpr float kDt = 1.0f / 60.0f;
+	goalSeqTimer_ += kDt;
+
+	Vector3 pos;
+	if (goalSeqTimer_ < kGoalMoveDuration) {
+		float t = std::clamp(goalSeqTimer_ / kGoalMoveDuration, 0.0f, 1.0f);
+		pos = Lerp(goalSeqStart_, goalSeqTarget_, EaseInOut(0.0f, 1.0f, t));
+		pos.y += std::sin(std::numbers::pi_v<float> * t) * kGoalJumpHeight; // jump arc
+	} else {
+		float loop = goalSeqTimer_ - kGoalMoveDuration;
+		pos = goalSeqTarget_;
+		pos.y += std::fabs(std::sin(std::numbers::pi_v<float> * loop / kGoalLoopHopPeriod)) * kGoalLoopHopHeight; // keeps hopping
+	}
+
+	worldTransform_.translation_ = pos;
+	worldTransform_.rotation_.y += kGoalSpinSpeed; // spin the whole time
+	WorldTransformUpdate(worldTransform_);
+
+	velocity_ = {};
+	onGround_ = false;
+
+	UpdateModelCollision();
+	UpdateMeleeVisual();
+	UpdateBodyParts();
+}
 void Player::UpdateTurnRotation() {
 	if (turnTimer_ > 0.0f) {
 		turnTimer_ -= 1.0f / 60.0f;
@@ -376,7 +438,12 @@ void Player::UpdateTurnRotation() {
 }
 void Player::Update() {
 	ApplyGlobalVariables();
+	if (goalSeqActive_) {
+		UpdateGoalSequence();
+		return;
+	}
 	TickDebuffs();
+	TickInvulnerability();
 	TickBlockGauge();
 	TickLungeCooldowns();
 
@@ -441,6 +508,8 @@ void Player::Update() {
 	if (currentFirearm_) {
 		currentFirearm_->SetOffset(firearmOffset_.scale, firearmOffset_.rotation, firearmOffset_.translation);
 		UpdateAimAndFirearm();
+		if (gameScene_)
+			EffectMuzzleFlash::SetPlayerAnchor(currentFirearm_->GetMuzzleWorldPosition());
 	}
 
 	if (canAct) {
@@ -455,7 +524,17 @@ void Player::Draw() {
 		if (!isDead_ && part.model)
 			part.model->Draw(part.transform, *camera_, part.textureHandle);
 	}
-	if (behavior_.IsAttacking() && behavior_.GetAttackAnimState().phase == PlayerBehavior::AttackPhase::kAttack) {
+	// 斬撃: 通常コンボの攻撃フェーズ、または突進(ヘビーサーベル/銃剣)の当たり判定中に表示する
+	const bool comboSlash = behavior_.IsAttacking() && !behavior_.IsLunge() && behavior_.GetAttackAnimState().phase == PlayerBehavior::AttackPhase::kAttack;
+	const bool lungeSlash = IsLungeHitActive();
+	if (lungeSlash) {
+		// 突進の判定ボックスの中心に置く(向きは lrDirection_ から決める)
+		const AABB box = GetLungeAABB();
+		worldTransformAttack_.translation_ = {(box.min.x + box.max.x) * 0.5f, (box.min.y + box.max.y) * 0.5f, worldTransform_.translation_.z};
+		worldTransformAttack_.rotation_ = {0.0f, (lrDirection_ == LRDirection::kRight) ? 1.570796f : 4.712389f, 0.0f};
+		WorldTransformUpdate(worldTransformAttack_);
+	}
+	if (comboSlash || lungeSlash) {
 		modelAttack_->Draw(worldTransformAttack_, *camera_, modelAttackTex_);
 	}
 	Model::PostDraw();
@@ -588,15 +667,23 @@ void Player::TakeDamage(int damage, const Vector3& hitDirection, float impactPow
 	if (isDead_ || behavior_.IsDeathBehavior())
 		return;
 
-	Vector3 effectPos = GetWorldPosition();
-	if (gameScene_)
-		gameScene_->CreateHitEffect(effectPos);
+	// 無敵の判定はタイマーを更新する前に行う(この一撃自身で無敵になって自分のノックバックを消さないため)
+	const bool wasInvulnerable = IsInvulnerable();
 
+	Vector3 effectPos = GetWorldPosition();
+	if (gameScene_) {
+		gameScene_->CreateHitEffect(effectPos);
+		// 被弾: モデル中心から火花が弾ける(向きは攻撃を受けた方向)
+		gameScene_->CreateBurstEffect(BurstType::kHit, GetModelWorldPosition(), {hitDirection.x, hitDirection.y});
+		gameScene_->TriggerScreenFlash(ScreenFlash::Type::kDamage); // 被弾: 赤
+	}
 	hp_ = std::max(0, hp_ - damage);
+	GrantInvulnerability(kInvulnDamage); // 被弾で3秒(残りがそれ以上ならそのまま)
+
 	if (hp_ <= 0)
 		behavior_.RequestDeath(hitDirection, impactPower);
-	else
-		behavior_.RequestHitKnockback(hitDirection, impactPower);
+	else if (!wasInvulnerable)
+		behavior_.RequestHitKnockback(hitDirection, impactPower); // 無敵中はノックバックしない(スタンロック防止)
 	PlayerBehavior::PlayHurtSound();
 }
 
@@ -627,6 +714,8 @@ void Player::OnBlocked(const Vector3& hitDirection, float impactPower, BaseEnemy
 	if (isDead_ || behavior_.IsDeathBehavior())
 		return;
 
+	const bool wasInvulnerable = IsInvulnerable();
+
 	blockLatched_ = true;
 	blockGauge_ = std::max(0.0f, blockGauge_ - kBlockCostPerHit);
 	blockRegenDelayTimer_ = kBlockRegenDelay;
@@ -634,10 +723,14 @@ void Player::OnBlocked(const Vector3& hitDirection, float impactPower, BaseEnemy
 		blockBroken_ = true;
 	Vector3 effectPos = GetModelWorldPosition();
 	effectPos.x += (isRight() ? 1.0f : -1.0f) * (kWidth * 0.5f);
-	if (gameScene_)
+	if (gameScene_) {
 		gameScene_->CreateBlockSparkEffect(effectPos);
+		gameScene_->TriggerScreenFlash(ScreenFlash::Type::kBlock); // ブロック成功: 白
+	}
 
-	behavior_.RequestHitKnockback(hitDirection, impactPower * 0.3f);
+	GrantInvulnerability(kInvulnBlock); // ブロック成功で1秒
+	if (!wasInvulnerable)
+		behavior_.RequestHitKnockback(hitDirection, impactPower * 0.3f); // 無敵中はプレイヤー側の押し戻しなし
 
 	if (attacker) {
 		// gameplay direction: root to root
@@ -654,11 +747,10 @@ void Player::OnBlocked(const Vector3& hitDirection, float impactPower, BaseEnemy
 	}
 	PlayerBehavior::PlayBlockImpactSound();
 }
-
 void Player::OnCollision(const BaseEnemy* enemy) {
 	if (behavior_.IsKnockback())
 		return;
-	if (isAttack()) {
+	if (enemy->WasBlocked() && !IsInvulnerable()) {
 		if (enemy->WasBlocked()) {
 			float pushDirection = (lrDirection_ == LRDirection::kRight) ? -1.0f : 1.0f;
 			behavior_.RequestKnockback(pushDirection);
@@ -673,7 +765,30 @@ void Player::OnCollision() {
 		return;
 	TakeDamage(hp_, {0.0f, 1.0f, 0.0f}, 1.0f);
 }
+void Player::ResetToPosition(const Vector3& position) {
+	const float baseRotationY = std::numbers::pi_v<float> / 2.0f; // same base as Initialize(): facing right
 
+	worldTransform_.translation_ = position;
+	worldTransform_.rotation_ = {0.0f, baseRotationY, 0.0f};
+	worldTransform_.scale_ = {1.0f, 1.0f, 1.0f};
+
+	lrDirection_ = LRDirection::kRight;
+	turnTimer_ = 0.0f;
+	turnFirstRotationY_ = baseRotationY;
+
+	velocity_ = {};
+	onGround_ = false;
+
+	worldTransformAttack_.rotation_ = worldTransform_.rotation_;
+
+	modelStandOffsetY_ = 0.0f;
+	modelWorldTransform_.translation_ = position;
+	modelWorldTransform_.rotation_ = worldTransform_.rotation_;
+	modelWorldTransform_.scale_ = worldTransform_.scale_;
+
+	WorldTransformUpdate(worldTransform_);
+	WorldTransformUpdate(modelWorldTransform_);
+}
 void Player::PositionUpdate(const CollisionInfo& collisionInfo) { worldTransform_.translation_ += collisionInfo.move; }
 void Player::CeillingCollision(const CollisionInfo& collisionInfo) {
 	if (collisionInfo.isHitTop)

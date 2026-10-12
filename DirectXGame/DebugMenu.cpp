@@ -92,6 +92,8 @@ const char* PhaseName(GameScene::Phase p) {
 		return "FadeOut";
 	case GameScene::Phase::kVictory:
 		return "Victory";
+	case GameScene::Phase::kGoalSequence:
+		return "GoalSequence";
 	}
 	return "?";
 }

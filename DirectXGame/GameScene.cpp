@@ -7,6 +7,7 @@
 #include "StageManager.h"
 #include <fstream>
 
+
 using namespace KamataEngine;
 // ============================================================
 // [NEW] GlobalVariables registration for GameScene's static inline tunables
@@ -54,6 +55,18 @@ void GameScene::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "BackgroundDepthOffset", kBackgroundDepthOffset);
 	gv->AddItem(kGroupName, "VerticalChunkLoadTriggerMargin", kVerticalChunkLoadTriggerMargin);
 	gv->AddItem(kGroupName, "InteractionRange", kInteractionRange);
+	gv->AddItem(kGroupName, "SlowSpeedFactor", MapChipField::kSlowSpeedFactor);
+	gv->AddItem(kGroupName, "WeaponRespawnDelay", kWeaponRespawnDelay);
+	gv->AddItem(kGroupName, "ExplosionFatalRadius", kExplosionFatalRadius);
+	gv->AddItem(kGroupName, "ExplosionNormalRadius", kExplosionNormalRadius);
+	gv->AddItem(kGroupName, "ExplosionNormalDamage", kExplosionNormalDamage);
+	gv->AddItem(kGroupName, "ExplosionChainDelay", kExplosionChainDelay);
+	gv->AddItem(kGroupName, "ExplosionImpact", kExplosionImpact);
+	gv->AddItem(kGroupName, "SpikeDamage", kSpikeDamage);
+	gv->AddItem(kGroupName, "SpikeLaunchPower", kSpikeLaunchPower);
+	gv->AddItem(kGroupName, "SpikeMinFallRatio", kSpikeMinFallRatio);
+	gv->AddItem(kGroupName, "FragileBreakDelay", kFragileBreakDelay);
+	gv->AddItem(kGroupName, "FragileShakeAmplitude", kFragileShakeAmplitude);
 }
 
 void GameScene::ApplyGlobalVariables() {
@@ -65,6 +78,18 @@ void GameScene::ApplyGlobalVariables() {
 	kBackgroundDepthOffset = gv->GetFloatValue(kGroupName, "BackgroundDepthOffset");
 	kVerticalChunkLoadTriggerMargin = gv->GetFloatValue(kGroupName, "VerticalChunkLoadTriggerMargin");
 	kInteractionRange = gv->GetFloatValue(kGroupName, "InteractionRange");
+	MapChipField::kSlowSpeedFactor = gv->GetFloatValue(kGroupName, "SlowSpeedFactor");
+	kWeaponRespawnDelay = gv->GetFloatValue(kGroupName, "WeaponRespawnDelay");
+	kExplosionFatalRadius = gv->GetFloatValue(kGroupName, "ExplosionFatalRadius");
+	kExplosionNormalRadius = gv->GetFloatValue(kGroupName, "ExplosionNormalRadius");
+	kExplosionNormalDamage = gv->GetIntValue(kGroupName, "ExplosionNormalDamage");
+	kExplosionChainDelay = gv->GetFloatValue(kGroupName, "ExplosionChainDelay");
+	kExplosionImpact = gv->GetFloatValue(kGroupName, "ExplosionImpact");
+	kSpikeDamage = gv->GetIntValue(kGroupName, "SpikeDamage");
+	kSpikeLaunchPower = gv->GetFloatValue(kGroupName, "SpikeLaunchPower");
+	kSpikeMinFallRatio = gv->GetFloatValue(kGroupName, "SpikeMinFallRatio");
+	kFragileBreakDelay = gv->GetFloatValue(kGroupName, "FragileBreakDelay");
+	kFragileShakeAmplitude = gv->GetFloatValue(kGroupName, "FragileShakeAmplitude");
 }
 void GameScene::debugMenu() {
 #ifdef _DEBUG
@@ -120,8 +145,23 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	loadingCoverActive_ = true;
 
 	stageManager_ = stageDataManager;
+	if (stageManager_->HasCheckpoint()) {
+		const StageManager::WorldState& w = stageManager_->GetCheckpoint().world;
+		brokenCells_ = w.brokenCells;
+		killedEnemyCells_ = w.killedEnemyCells;
+		usedHealthCells_ = w.usedHealthCells;
+		clearedArenas_ = w.clearedArenas;
+		pressedSwitchIDs_ = w.pressedSwitches;
+	}
+
+	const float savedMaster = AudioSettings::GetMasterVolume();
+	const float savedMusic = AudioSettings::GetMusicSetting();
+	const float savedSfx = AudioSettings::GetSfxSetting();
 
 	GlobalVariables::GetInstance()->LoadFiles();
+	AudioSettings::SetMasterVolume(savedMaster);
+	AudioSettings::SetMusicVolume(savedMusic);
+	AudioSettings::SetSfxVolume(savedSfx);
 
 	Goal::RegisterGlobalVariables();
 	SlidingGate::RegisterGlobalVariables();
@@ -151,6 +191,10 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	HealthBlock::RegisterGlobalVariables();
 	GameScene::RegisterGlobalVariables();
 	MusicManager::RegisterGlobalVariables();
+	EffectMuzzleFlash::RegisterGlobalVariables();
+	ScreenFlash::RegisterGlobalVariables();
+	EffectParticleBurst::RegisterGlobalVariables();     
+
 
 	originPoint.Initialize();
 
@@ -201,8 +245,12 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 
 	HitEffect::SetModel(assets_.hitEffectModel.get());
 	HitEffect::SetCamera(&camera_);
+	EffectMuzzleFlash::SetModel(assets_.hitEffectModel.get());
+	EffectMuzzleFlash::SetCamera(&camera_);
 	GuardEffect::SetModel(assets_.guardEffectModel.get());
 	GuardEffect::SetCamera(&camera_);
+	EffectParticleBurst::SetModel(assets_.hitEffectModel.get());
+	EffectParticleBurst::SetCamera(&camera_);
 
 	interactionPrompt_.Initialize(assets_.interactionPromptTex);
 
@@ -211,6 +259,9 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 
 	cursor_.Initialize(assets_.cursorTex, 2, &camera_);
 	playerHealthUI_.Initialize(assets_.healthBarBackgroundTex, assets_.healthBarFillTex);
+
+	screenFlash_.Initialize(assets_.healthBarBackgroundTex);
+
 	enemyHUD_.Initialize(assets_.enemyIconArrowTex, assets_.enemyIconFighterTex);
 	{
 		WeaponStatusUI::Textures icons;
@@ -254,10 +305,7 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 			LoadVerticalRow(row);
 		}
 
-		WorldTransform wt;
-		wt.translation_ = cp.playerPosition;
-		player_->SetWorldTransform(wt);
-		player_->ResetVelocity();
+		player_->ResetToPosition(cp.playerPosition);
 		player_->SetHP(cp.playerHP);
 		{
 			Model* m = nullptr;
@@ -424,13 +472,24 @@ void GameScene::CreateGuardEffect(Vector3& spawnLocation) {
 	GuardEffect* newGuardEffect = GuardEffect::Create(assets_.guardEffectTex, spawnLocation);          
 	visualEffects_.push_back(std::unique_ptr<BaseEffect>(newGuardEffect));
 }
-void GameScene::CreateMuzzleFlash(Vector3& spawnLocation) {
-	HitEffect* flash = HitEffect::Create(assets_.hitEffectTex, spawnLocation);
+void GameScene::CreateMuzzleFlash(const Vector3& muzzlePos, const Vector2& aimDir, bool followPlayer) {
+	EffectMuzzleFlash* flash = EffectMuzzleFlash::Create(assets_.hitEffectTex, muzzlePos, aimDir, followPlayer);
 	visualEffects_.push_back(std::unique_ptr<BaseEffect>(flash));
 }
+void GameScene::CreateExplosion(const Vector3& position) {
+	// 描画順は生成順。煙(奥) -> 火の玉 -> 火花(手前)
+	CreateBurstEffect(BurstType::kSmoke, position, {0.0f, 1.0f});
+	CreateBurstEffect(BurstType::kExplosion, position, {0.0f, 1.0f});
+	CreateBurstEffect(BurstType::kHit, position, {0.0f, 1.0f}); // 既存の被弾火花を爆発の火花として流用
+}
+
 void GameScene::CreateBlockSparkEffect(Vector3& spawnLocation) {
 	HitEffect* spark = HitEffect::Create(assets_.hitEffectTex, spawnLocation);
 	visualEffects_.push_back(std::unique_ptr<BaseEffect>(spark));
+}
+void GameScene::CreateBurstEffect(BurstType type, const Vector3& position, const Vector2& dir) {
+	EffectParticleBurst* burst = EffectParticleBurst::Create(assets_.hitEffectTex, type, position, dir);
+	visualEffects_.push_back(std::unique_ptr<BaseEffect>(burst));
 }
 void GameScene::CreateEnemyDeathParticles(const Vector3& position) {
 	auto particles = std::make_unique<DeathParticles>();
@@ -453,11 +512,7 @@ void GameScene::CreateFirearmProjectile(Owner owner, const KamataEngine::Vector3
 void GameScene::ChangePhase() {
 	switch (phase_) {
 	case Phase::kFadeIn:
-		// fade_->Update();
-		// if (fade_->IsFinished()) {
 		phase_ = Phase::kPlay;
-		//	fade_->Stop();
-		//}
 		break;
 	case Phase::kFadeOut:
 		fade_->Update();
@@ -539,6 +594,17 @@ void GameScene::ChangePhase() {
 		enemyBullets_.erase(std::remove_if(enemyBullets_.begin(), enemyBullets_.end(), [](const std::unique_ptr<ProjectileBall>& bullet) { return bullet->IsDead(); }), enemyBullets_.end());
 
 		visualEffects_.erase(std::remove_if(visualEffects_.begin(), visualEffects_.end(), [](const std::unique_ptr<BaseEffect>& effect) { return effect->IsFinished(); }), visualEffects_.end());
+
+			for (const std::unique_ptr<BaseEnemy>& enemy : enemies_) {
+			if (!enemy || !enemy->IsDead())
+				continue;
+			auto it = enemyOrigin_.find(enemy.get());
+			if (it != enemyOrigin_.end()) {
+				killedEnemyCells_.insert(it->second);
+				enemyOrigin_.erase(it);
+			}
+		}
+
 		enemies_.erase(std::remove_if(enemies_.begin(), enemies_.end(), [](const std::unique_ptr<BaseEnemy>& enemy) { return enemy->IsDead(); }), enemies_.end());
 
 		{
@@ -613,7 +679,33 @@ void GameScene::ChangePhase() {
 		break;
 	case Phase::kPause:
 		break;
+	case Phase::kGoalSequence: {
+		fade_->Update();
+		if (player_)
+			player_->Update(); // runs the goal sequence
+		if (goal_)
+			goal_->Update();
+
+		for (std::unique_ptr<BaseEffect>& effect : visualEffects_)
+			if (effect)
+				effect->Update();
+		visualEffects_.erase(std::remove_if(visualEffects_.begin(), visualEffects_.end(), [](const std::unique_ptr<BaseEffect>& e) { return e->IsFinished(); }), visualEffects_.end());
+
+		for (std::vector<BlockInstance>& line : worldTransformBlocks_)
+			for (BlockInstance& block : line)
+				if (block.transform)
+					WorldTransformUpdate(*block.transform);
+
+		goalSequenceTimer_ += 1.0f / 60.0f;
+		if (goalSequenceTimer_ >= kGoalSequenceDuration) {
+			phase_ = Phase::kVictory;
+			victoryMenuInput_.StartButtonFade(true, kButtonFadeDuration);
+		}
+		break;
+	}
 	case Phase::kVictory:
+		if (player_)
+			player_->Update(); // player keeps hopping/spinning behind the victory menu
 		break;
 	}
 }
@@ -637,6 +729,8 @@ ArenaManager* GameScene::GetOrCreateArena(uint8_t arenaID) {
 			return arena.get();
 	auto newArena = std::make_unique<ArenaManager>();
 	newArena->Initialize(arenaID);
+	if (clearedArenas_.contains(arenaID))
+		newArena->RestoreCleared();
 	arenas_.push_back(std::move(newArena));
 	return arenas_.back().get();
 }
@@ -660,6 +754,18 @@ void GameScene::SetCheckpoint(const Vector3& position) {
 	data.oldestLoadedChunk = oldestLoadedChunk_;
 	data.loadedTopChunkRow = loadedTopChunkRow_;
 	data.loadedBottomChunkRow = loadedBottomChunkRow_;
+
+	StageManager::WorldState& w = data.world;
+	w.brokenCells = brokenCells_;
+	w.killedEnemyCells = killedEnemyCells_;
+	w.usedHealthCells = usedHealthCells_;
+	w.clearedArenas = clearedArenas_;
+	w.pressedSwitches = pressedSwitchIDs_;
+	for (const auto& [key, s] : breakables_)
+		if (s.hp < s.maxHp)
+			w.breakableHp[key] = s.hp;
+	for (const auto& [key, hits] : explosives_)
+		w.explosiveHits[key] = hits;
 	stageManager_->SetCheckpoint(data);
 }
 
@@ -683,16 +789,21 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 
 	uint32_t jStart = chunkIndex * MapChipField::kChunkBlockSize;
 	uint32_t jEnd = std::min(jStart + MapChipField::kChunkBlockSize, numHorizontalTotal);
-	uint32_t iStart = chunkRow * MapChipField::kChunkBlockSize; // [FIX] row-scoped
+	uint32_t iStart = chunkRow * MapChipField::kChunkBlockSize; 
 	uint32_t iEnd = std::min(iStart + MapChipField::kChunkBlockSize, numVertical);
+
+	for (uint64_t keyCells : brokenCells_) {
+		uint32_t bx = static_cast<uint32_t>(keyCells >> 32), by = static_cast<uint32_t>(keyCells & 0xFFFFFFFFu);
+		if (bx >= jStart && bx < jEnd && by >= iStart && by < iEnd)
+			mapChipField_->ClearMapChipByIndex(bx, by);
+	}
 
 	for (uint32_t i = iStart; i < iEnd; ++i) {
 		for (uint32_t j = jStart; j < jEnd; ++j) {
+
 			MapChipType mapChipType = mapChipField_->GetMapChipTypeByIndex(j, i);
 			switch (mapChipType) {
 			case MapChipType::kBlock:
-			case MapChipType::kBlockHalfUp:
-			case MapChipType::kBlockHalfDown:
 			case MapChipType::kSlowBlock: {
 				uint8_t subID = mapChipField_->GetMapChipSubIDByIndex(j, i);
 				delete worldTransformBlocks_[i][j].transform;
@@ -703,6 +814,8 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 				Model* shapeModel = assets_.blockModel.get();
 				uint32_t tex = assets_.blockTex;
 				tex = assets_.ResolveBlockTexture(assets_.blockTexVariants, subID, assets_.blockTex);
+				if (mapChipType == MapChipType::kSlowBlock)
+					tex = assets_.slowBlockTex;
 				worldTransformBlocks_[i][j] = {worldTransform, shapeModel, tex};
 			} break;
 			case MapChipType::kPlatform: {
@@ -736,7 +849,9 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 				uint8_t subID = mapChipField_->GetMapChipSubIDByIndex(j, i);
 				Vector3 enemyPosition = mapChipField_->GetMapChipPositionByIndex(j, i);
 				uint8_t placementState = mapChipField_->GetMapChipLinkIDByIndex(j, i); // 0 wander, 1 hold left, 2 hold right, 4 omniscient
-				enemySpawnPoints_.push_back({enemyPosition, subID, false, placementState});
+				uint64_t enemyCellKey = CellKey(j, i);
+				EnemySpawnPoint spawnPoint{enemyPosition, subID, killedEnemyCells_.contains(enemyCellKey), placementState, enemyCellKey}; // killed ones start as already spawned
+				enemySpawnPoints_.push_back(spawnPoint);
 			} break;
 			case MapChipType::kGoal: {
 				Vector3 goalPosition = mapChipField_->GetMapChipPositionByIndex(j, i);
@@ -756,7 +871,9 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 				Vector3 gatePosition = mapChipField_->GetMapChipPositionByIndex(j, i);
 				auto gate = std::make_unique<SlidingGate>();
 				gate->Initialize(assets_.modelGate.get(), assets_.gateTex, &camera_, gatePosition, mapChipType, textureVariant, buttonID);
-				GetOrCreateArena(buttonID)->RegisterGate(gate.get()); // [NEW] same ID doubles as arena tag
+				if (!gate->IsArenaGate() && pressedSwitchIDs_.contains(buttonID))
+					gate->SnapOpen();
+				GetOrCreateArena(buttonID)->RegisterGate(gate.get());
 				gates_.push_back(std::move(gate));
 			} break;
 			case MapChipType::kSwitch: {
@@ -764,12 +881,14 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 				Vector3 switchPosition = mapChipField_->GetMapChipPositionByIndex(j, i);
 				auto sw = std::make_unique<SwitchBlock>();
 				sw->Initialize(assets_.modelSwitch.get(), assets_.switchTex, &camera_, switchPosition, buttonID);
+				if (pressedSwitchIDs_.contains(buttonID))
+					sw->SetPressed(true);
 				switches_.push_back(std::move(sw));
 			} break;
 			case MapChipType::kArenaTrigger: {
 				uint8_t arenaID = mapChipField_->GetMapChipLinkIDByIndex(j, i);
 				Vector3 triggerPos = mapChipField_->GetMapChipPositionByIndex(j, i);
-				arenaTriggers_.push_back({triggerPos, arenaID, false});
+				arenaTriggers_.push_back({triggerPos, arenaID, clearedArenas_.contains(arenaID)});
 				GetOrCreateArena(arenaID);
 			} break;
 			case MapChipType::kEnemySpawner: {
@@ -796,10 +915,85 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 			case MapChipType::kHealthBlock: {
 				uint8_t subID = mapChipField_->GetMapChipSubIDByIndex(j, i);
 				Vector3 healthBlockPos = mapChipField_->GetMapChipPositionByIndex(j, i);
-				HealthBlock::Mode mode = (subID == 0) ? HealthBlock::Mode::kLimited : HealthBlock::Mode::kTimer;
+				HealthBlock::Mode mode = (subID == 0) ? HealthBlock::Mode::kLimited : HealthBlock::Mode::kTimer; 
+				if (mode == HealthBlock::Mode::kLimited && usedHealthCells_.contains(CellKey(j, i))) { break; } // checks if already consumed before checkpoint
 				auto healthBlock = std::make_unique<HealthBlock>();
 				healthBlock->Initialize(assets_.modelHealthBlock.get(), assets_.healthBlockTex, &camera_, healthBlockPos, mode);
 				healthBlocks_.push_back(std::move(healthBlock));
+			} break;
+			case MapChipType::kGlass: {
+				delete worldTransformBlocks_[i][j].transform;
+				WorldTransform* worldTransform = new WorldTransform;
+				worldTransform->Initialize();
+				worldTransform->translation_ = mapChipField_->GetMapChipPositionByIndex(j, i);
+				worldTransformBlocks_[i][j] = {worldTransform, assets_.blockModel.get(), assets_.glassTex};
+			} break;
+
+			case MapChipType::kBreakable: {
+				uint8_t subID = mapChipField_->GetMapChipSubIDByIndex(j, i);
+				int32_t hits = (subID == 0) ? 3 : static_cast<int32_t>(subID);
+				int32_t hp = hits;
+				const uint64_t breakableKey = CellKey(j, i);
+				if (stageManager_->HasCheckpoint()) {
+					const auto& saved = stageManager_->GetCheckpoint().world.breakableHp;
+					auto it = saved.find(breakableKey);
+					if (it != saved.end())
+						hp = std::clamp(it->second, 1, hits);
+				}
+				breakables_[breakableKey] = {hp, hits};
+				delete worldTransformBlocks_[i][j].transform;
+				WorldTransform* worldTransform = new WorldTransform;
+				worldTransform->Initialize();
+				worldTransform->translation_ = mapChipField_->GetMapChipPositionByIndex(j, i);
+				worldTransformBlocks_[i][j] = {worldTransform, assets_.blockModel.get(), assets_.breakableTex[BreakableStage(hp, hits)]};
+			} break;
+
+			case MapChipType::kExplosive: {
+				uint8_t subID = mapChipField_->GetMapChipSubIDByIndex(j, i);
+				int32_t hits = (subID == 0) ? 3 : static_cast<int32_t>(subID);
+				if (stageManager_->HasCheckpoint()) {
+					const auto& saved = stageManager_->GetCheckpoint().world.explosiveHits;
+					auto it = saved.find(CellKey(j, i));
+					if (it != saved.end())
+						hits = std::clamp(it->second, 1, hits);
+				}
+				explosives_[CellKey(j, i)] = hits;
+				delete worldTransformBlocks_[i][j].transform;
+				WorldTransform* worldTransform = new WorldTransform;
+				worldTransform->Initialize();
+				worldTransform->translation_ = mapChipField_->GetMapChipPositionByIndex(j, i);
+				worldTransformBlocks_[i][j] = {worldTransform, assets_.blockModel.get(), assets_.explosiveTex};
+			} break;
+
+			case MapChipType::kSpike: {
+				delete worldTransformBlocks_[i][j].transform;
+				WorldTransform* worldTransform = new WorldTransform;
+				worldTransform->Initialize();
+				worldTransform->translation_ = mapChipField_->GetMapChipPositionByIndex(j, i);
+				worldTransformBlocks_[i][j] = {worldTransform, assets_.blockModel.get(), assets_.spikeTex};
+			} break;
+
+			case MapChipType::kFragile: {
+				delete worldTransformBlocks_[i][j].transform;
+				WorldTransform* worldTransform = new WorldTransform;
+				worldTransform->Initialize();
+				worldTransform->translation_ = mapChipField_->GetMapChipPositionByIndex(j, i);
+				worldTransformBlocks_[i][j] = {worldTransform, assets_.blockModel.get(), assets_.fragileTex};
+			} break;
+
+			case MapChipType::kMeleeSpawner:
+			case MapChipType::kFirearmSpawner: {
+				DropItemCategory category;
+				DropWeaponKind kind;
+				if (!ResolveWeaponSpawnerKind(mapChipType, mapChipField_->GetMapChipSubIDByIndex(j, i), category, kind))
+					break;
+				WeaponSpawnerPoint sp;
+				sp.position = mapChipField_->GetMapChipPositionByIndex(j, i);
+				sp.category = category;
+				sp.kind = kind;
+				sp.id = nextWeaponSpawnerID_++;
+				sp.timer = kWeaponRespawnDelay; // spawns on the first update
+				weaponSpawners_.push_back(sp);
 			} break;
 			default:
 				break;
@@ -887,6 +1081,9 @@ void GameScene::Update() {
 	HealthBlock::ApplyGlobalVariables();
 	GameScene::ApplyGlobalVariables();
 	MusicManager::ApplyGlobalVariables();
+	EffectMuzzleFlash::ApplyGlobalVariables();
+	ScreenFlash::ApplyGlobalVariables();
+	EffectParticleBurst::ApplyGlobalVariables();        
 
 	debugMenu();
 
@@ -909,12 +1106,21 @@ void GameScene::Update() {
 		UpdatePauseMenu();
 	else if (phase_ == Phase::kRetry)
 		UpdateRetryMenu();
-	else if (phase_ == Phase::kVictory)
+	else if (phase_ == Phase::kVictory) {
 		UpdateVictoryMenu();
-	else
+		cameraController_->Update();
+	} else
 		cameraController_->Update();
 
 	ChangePhase();
+	// 出続ける色(スタン=黄 / 低HP=赤)。死亡演出中は低HPのまま赤、リトライ画面などでは消える
+	if (player_) {
+		const bool playing = (phase_ == Phase::kPlay);
+		screenFlash_.SetStunned(playing && player_->IsStunnedState());
+		screenFlash_.SetLowHealth(playing && player_->GetHP() <= ScreenFlash::GetLowHpThreshold());
+	}
+	if (phase_ != Phase::kPause) // ポーズ中は止める
+		screenFlash_.Update();
 	if (pendingReturnToMenu_) {
 		fade_->Update();
 		if (fade_->IsFinished()) {
@@ -933,6 +1139,10 @@ void GameScene::Update() {
 	UpdateCheckpointTriggers();
 	UpdatePeriodicEnemySpawners();
 	UpdateHealthBlocks();
+	UpdateWeaponSpawners();
+	UpdateExplosions();
+	UpdateSpikes();
+	UpdateFragileBlocks();
 	musicManager_.Update();
 #ifdef _DEBUG
 	if (isDebugCameraActive_) {
@@ -984,7 +1194,10 @@ void GameScene::CheckAllCollisions() {
 		}
 	}
 
-	if (player_->IsMeleeSwingActive()) {
+	const bool swingActive = player_->IsMeleeSwingActive() && player_->GetAttackAnimState().phase == Player::AttackPhase::kAttack;
+	const bool lungeActive = player_->IsLungeHitActive();
+
+	if (swingActive) {
 		BaseMelee* melee = player_->GetCurrentMelee();
 		AABB meleeAABB = melee->GetSwingAABB(*player_, player_->GetComboIndex());
 
@@ -997,7 +1210,10 @@ void GameScene::CheckAllCollisions() {
 			hitRotZ = 0.0f;
 			break;
 		}
-
+		if (!swingActive && !lungeActive)
+			breakableHitThisSwing_.clear(); // next swing/lunge may hit the same block again
+		if (melee)
+			HitDestructiblesInAABB(melee->GetSwingAABB(*player_, player_->GetComboIndex()), HitSource::kMelee);
 		for (const std::unique_ptr<BaseEnemy>& enemy : enemies_) {
 			if (!enemy || enemy->IsCollisionDisabled())
 				continue;
@@ -1036,9 +1252,10 @@ void GameScene::CheckAllCollisions() {
 			}
 		}
 	}
-	if (player_->IsLungeHitActive()) {
+	if (lungeActive) {
 		const AABB lungeAABB = player_->GetLungeAABB();
 		const LungeSpec spec = player_->GetLungeSpec(player_->GetCurrentLungeSource());
+		HitDestructiblesInAABB(player_->GetLungeAABB(), HitSource::kMelee);
 		for (const std::unique_ptr<BaseEnemy>& enemy : enemies_) {
 			if (!enemy || enemy->IsDead() || enemy->IsCollisionDisabled())
 				continue;
@@ -1075,6 +1292,10 @@ void GameScene::CheckAllCollisions() {
 		if (bullet->IsDead())
 			continue;
 		AABB bulletAABB = bullet->GetAABB();
+		if (HitDestructiblesInAABB(bulletAABB, HitSource::kFirearm)) {
+			bullet->OnCollision();
+			continue;
+		}
 		for (const std::unique_ptr<BaseEnemy>& enemy : enemies_) {
 			if (!enemy || enemy->IsCollisionDisabled())
 				continue;
@@ -1201,6 +1422,10 @@ void GameScene::CheckAllCollisions() {
 	for (auto& bullet : enemyBullets_) {
 		if (bullet->IsDead())
 			continue;
+		if (HitDestructiblesInAABB(bullet->GetAABB(), HitSource::kFirearm)) {
+			bullet->OnCollision();
+			continue;
+		}
 		if (resolveAttackOnPlayer(bullet->GetAABB(), bullet->GetWorldPosition(), bullet->GetDamage(bullet->GetOwner()), bullet->GetImpactPower(), nullptr))
 			bullet->OnCollision();
 	}
@@ -1288,6 +1513,7 @@ void GameScene::Draw() {
 #ifdef _DEBUG
 	DrawCollisionDebug();
 #endif
+	screenFlash_.Draw();
 	enemyHUD_.Draw();
 	interactionPrompt_.Draw();
 
@@ -1344,6 +1570,7 @@ BaseEnemy* GameScene::SpawnEnemyAt(const Vector3& position, uint8_t subID) {
 		newEnemy->SetGameScene(this);
 		newEnemy->Initialize(parts, &camera_, position);
 		newEnemy->SetMusketModel(assets_.modelMusketBayonet.get(), assets_.musketBayonetTex);
+		newEnemy->SetAttackEffect(assets_.modelSlashEffect.get(), assets_.slashEffectTex);
 		newEnemy->SetHUDIconTexture(assets_.enemyIconRiflemanTex);
 		enemies_.push_back(std::move(newEnemy));
 	} break;
@@ -1358,6 +1585,7 @@ BaseEnemy* GameScene::SpawnEnemyAt(const Vector3& position, uint8_t subID) {
 		newEnemy->SetGameScene(this);
 		newEnemy->Initialize(parts, &camera_, position);
 		newEnemy->SetMeleeModel(assets_.modelSabreHeavy.get(), assets_.texSabreHeavy);
+		newEnemy->SetAttackEffect(assets_.modelSlashEffect.get(), assets_.slashEffectTex); // 斬撃エフェクト(プレイヤーと共通)
 		newEnemy->SetHUDIconTexture(assets_.enemyIconCuirassierTex);
 		enemies_.push_back(std::move(newEnemy));
 	} break;
@@ -1370,6 +1598,7 @@ BaseEnemy* GameScene::SpawnEnemyAt(const Vector3& position, uint8_t subID) {
 		newEnemy->SetGameScene(this);
 		newEnemy->Initialize(parts, &camera_, position);
 		newEnemy->SetMeleeModel(assets_.modelSabreLight.get(), assets_.texSabreLight);
+		newEnemy->SetAttackEffect(assets_.modelSlashEffect.get(), assets_.slashEffectTex);
 		newEnemy->SetHUDIconTexture(assets_.enemyIconFighterTex);
 		enemies_.push_back(std::move(newEnemy));
 	} break;
@@ -1408,6 +1637,8 @@ void GameScene::UpdateEnemySpawning() {
 
 		if (shouldSpawn) {
 			BaseEnemy* spawned = SpawnEnemyAt(sp.position, sp.subID);
+			if (spawned)
+				enemyOrigin_[spawned] = sp.cellKey;
 			ApplyEnemyPlacementState(spawned, sp.placementState);
 			sp.spawned = true;
 		}
@@ -1456,37 +1687,39 @@ DroppableItem* GameScene::CreateDroppableItem(const Vector3& position, DropItemC
 }
 
 void GameScene::ApplyItemPickup(const DroppableItem& item) {
-	// Copy everything we need FIRST: CreateDroppableItem() below pushes into droppableItems_,
-	// which can reallocate and leave `item` dangling.
+	// Copy first: CreateDroppableItem() pushes into droppableItems_ and can leave `item` dangling.
 	const DropWeaponKind pickedKind = item.GetWeaponKind();
 	const DropItemCategory pickedCategory = item.GetCategory();
 	const DropItemState pickedState = item.GetState();
+	const int32_t pickedSpawnerID = item.GetSpawnerID();
 	Vector3 dropPos = player_->GetWorldPosition();
 
-	if (assets_.sfxItemPickup != 0) {
+	if (assets_.sfxItemPickup != 0)
 		AudioSettings::PlaySfx(assets_.sfxItemPickup, false, 1.0f);
-	}
 
 	Model* model = nullptr;
 	uint32_t tex = 0;
 	if (!ResolveWeaponVisual(assets_, pickedKind, model, tex))
 		return;
 
-		// 手放す武器はプレイヤーの向いている方向へ放り出す
 	const Vector3 throwVelocity = DroppableItem::MakeThrowVelocity(player_->isRight());
 
 	if (pickedCategory == DropItemCategory::kMelee) {
-		if (DroppableItem* dropped = CreateDroppableItem(dropPos, DropItemCategory::kMelee, player_->GetCurrentMeleeKind(), player_->GetCurrentMeleeState()))
+		if (DroppableItem* dropped = CreateDroppableItem(dropPos, DropItemCategory::kMelee, player_->GetCurrentMeleeKind(), player_->GetCurrentMeleeState())) {
+			dropped->SetSpawnerID(player_->GetMeleeSourceSpawner());
 			dropped->Launch(throwVelocity);
-		CreateDroppableItem(dropPos, DropItemCategory::kMelee, player_->GetCurrentMeleeKind(), player_->GetCurrentMeleeState());
+		}
 		player_->SetMeleeModel(model, tex, pickedKind);
-		player_->RestoreMeleeState(pickedState); // premature re-pickup: cooldown restarts
+		player_->SetMeleeSourceSpawner(pickedSpawnerID);
+		player_->RestoreMeleeState(pickedState);
 		player_->SetWeaponMode(Player::WeaponMode::kMelee);
 	} else if (pickedCategory == DropItemCategory::kFirearm) {
-		if (DroppableItem* dropped = CreateDroppableItem(dropPos, DropItemCategory::kFirearm, player_->GetCurrentFirearmKind(), player_->GetCurrentFirearmState()))
+		if (DroppableItem* dropped = CreateDroppableItem(dropPos, DropItemCategory::kFirearm, player_->GetCurrentFirearmKind(), player_->GetCurrentFirearmState())) {
+			dropped->SetSpawnerID(player_->GetFirearmSourceSpawner());
 			dropped->Launch(throwVelocity);
-		CreateDroppableItem(dropPos, DropItemCategory::kFirearm, player_->GetCurrentFirearmKind(), player_->GetCurrentFirearmState());
+		}
 		player_->SetMusketModel(model, tex, pickedKind);
+		player_->SetFirearmSourceSpawner(pickedSpawnerID);
 		player_->RestoreFirearmState(pickedState);
 		player_->SetWeaponMode(Player::WeaponMode::kFirearm);
 	}
@@ -1641,6 +1874,26 @@ void GameScene::UnloadChunkVisuals(uint32_t chunkIndex) {
 	}
 
 	enemySpawners_.erase(std::remove_if(enemySpawners_.begin(), enemySpawners_.end(), [&](const std::unique_ptr<EnemySpawner>& s) { return !s || inRange(s->GetPosition().x); }), enemySpawners_.end());
+
+		weaponSpawners_.erase(std::remove_if(weaponSpawners_.begin(), weaponSpawners_.end(), [&](const WeaponSpawnerPoint& s) { return inRange(s.position.x); }), weaponSpawners_.end());
+
+	for (auto it = breakables_.begin(); it != breakables_.end();) {
+		uint32_t x = static_cast<uint32_t>(it->first >> 32);
+		it = (x >= xStart && x < xEnd) ? breakables_.erase(it) : std::next(it);
+	}
+	for (auto it = explosives_.begin(); it != explosives_.end();) {
+		uint32_t x = static_cast<uint32_t>(it->first >> 32);
+		it = (x >= xStart && x < xEnd) ? explosives_.erase(it) : std::next(it);
+	}
+	pendingExplosions_.erase(std::remove_if(pendingExplosions_.begin(), pendingExplosions_.end(), [&](const PendingExplosion& p) { return p.x >= xStart && p.x < xEnd; }), pendingExplosions_.end());
+	for (auto it = fragileTimers_.begin(); it != fragileTimers_.end();) {
+		uint32_t x = static_cast<uint32_t>(it->first >> 32);
+		it = (x >= xStart && x < xEnd) ? fragileTimers_.erase(it) : std::next(it);
+	}
+	// unloaded enemies are not kills: forget their origin link (put BEFORE the existing enemies_.erase)
+	for (const std::unique_ptr<BaseEnemy>& e : enemies_)
+		if (e && inRange(e->GetWorldPosition().x))
+			enemyOrigin_.erase(e.get());
 }
 
 void GameScene::TriggerLevelClear() {
@@ -1648,11 +1901,17 @@ void GameScene::TriggerLevelClear() {
 		return;
 	levelCleared_ = true;
 
-	phase_ = Phase::kVictory;
-	victoryMenuInput_.StartButtonFade(true, kButtonFadeDuration);
+	phase_ = Phase::kGoalSequence;
+	goalSequenceTimer_ = 0.0f;
+
+	if (player_)
+		player_->BeginGoalSequence(goal_ ? goal_->GetWorldPosition() : player_->GetWorldPosition());
+
+	cameraController_->ReleaseActiveZone(); // a zone's focus shot would override the zoom
+	cameraController_->ZoomTo(kGoalZoomDelta, kGoalZoomDuration);
 
 	if (assets_.sfxGoalReached != 0) {
-		AudioSettings::PlaySfx(assets_.sfxGoalReached, false, 1.0f); // 1.0f -> sSfxVolume_
+		AudioSettings::PlaySfx(assets_.sfxGoalReached, false, 1.0f);
 	}
 	if (stageManager_)
 		stageManager_->ClearCheckpoint();
@@ -1731,6 +1990,7 @@ void GameScene::TryInteract() {
 			AudioSettings::PlaySfx(assets_.sfxSwitchPress, false, 1.0f); // 1.0f -> sSfxVolume_
 		}
 		uint8_t buttonID = nearestInteractableSwitch_->GetButtonID();
+		pressedSwitchIDs_.insert(buttonID);
 		for (auto& gate : gates_) {
 			if (gate && !gate->IsArenaGate() && gate->GetButtonID() == buttonID) {
 				gate->Open();
@@ -1758,8 +2018,10 @@ void GameScene::UpdateArenaTriggers() {
 		float distSq = diff.x * diff.x + diff.y * diff.y;
 		if (distSq <= kTriggerRadius * kTriggerRadius) {
 			trigger.consumed = true;
-			GetOrCreateArena(trigger.arenaID)->Activate(); // plays arena-start SFX; no camera, no control lock
-			musicManager_.StartArenaMusic();
+			ArenaManager* arena = GetOrCreateArena(trigger.arenaID);
+			arena->Activate();
+			if (arena->GetState() == ArenaManager::State::kActive)
+				musicManager_.StartArenaMusic();
 		}
 	}
 }
@@ -1779,7 +2041,8 @@ void GameScene::UpdateArenas() {
 		ArenaManager::State prevState = arena->GetState();
 		arena->Update(this);
 
-		if (prevState == ArenaManager::State::kActive && arena->GetState() == ArenaManager::State::kCleared) {
+	if (prevState == ArenaManager::State::kActive && arena->GetState() == ArenaManager::State::kCleared) {
+			clearedArenas_.insert(arena->GetArenaID());
 			if (!FindActiveArena())
 				musicManager_.StopArenaMusic();
 		}
@@ -1832,7 +2095,12 @@ void GameScene::UpdateHealthBlocks() {
 			continue;
 		if (IsCollisionAABB(playerAABB, block->GetAABB())) {
 			player_->SetHP(player_->GetMaxHP());
+			screenFlash_.Trigger(ScreenFlash::Type::kHeal); // 回復: 緑
 			block->Consume();
+			if (block->GetMode() == HealthBlock::Mode::kLimited) {
+				MapChipField::IndexSet idx = mapChipField_->GetMapChipIndexSetByPosition(block->GetWorldPosition());
+				usedHealthCells_.insert(CellKey(idx.xIndex, idx.yIndex));
+			}
 		}
 	}
 }
@@ -1991,5 +2259,475 @@ void GameScene::DrawCollisionDebug() {
 	for (auto& gate : gates_)
 		if (gate && gate->IsBlocking())
 			Box(gate->GetAABB(), Color::kObject);
+	auto drawBlastRadius = [&](const Vector3& c) {
+		Circle(c, kExplosionFatalRadius, Color::kBlastFatal);
+		Circle(c, kExplosionNormalRadius, Color::kBlastNormal);
+	};
+	for (const auto& [key, hitsLeft] : explosives_) {
+		uint32_t x = static_cast<uint32_t>(key >> 32);
+		uint32_t y = static_cast<uint32_t>(key & 0xFFFFFFFFu);
+		Vector3 pos = mapChipField_->GetMapChipPositionByIndex(x, y);
+		if (!IsWithinActiveRange(pos, kEntityCullDistance))
+			continue;
+		Box(
+		    {
+		        {pos.x - 0.5f, pos.y - 0.5f, -0.5f},
+                {pos.x + 0.5f, pos.y + 0.5f, 0.5f }
+        },
+		    Color::kObject);
+		drawBlastRadius(pos);
+	}
+	for (const PendingExplosion& p : pendingExplosions_)
+		drawBlastRadius(mapChipField_->GetMapChipPositionByIndex(p.x, p.y));
+	for (const DebugBlast& b : debugBlasts_)
+		drawBlastRadius(b.center);
 #endif
 }
+void GameScene::RemoveBlockCell(uint32_t x, uint32_t y) {
+	if (y < worldTransformBlocks_.size() && x < worldTransformBlocks_[y].size()) {
+		delete worldTransformBlocks_[y][x].transform;
+		worldTransformBlocks_[y][x] = {};
+	}
+	mapChipField_->ClearMapChipByIndex(x, y);
+	brokenCells_.insert(CellKey(x, y));
+}
+
+void GameScene::ForEachMapCellInAABB(const AABB& box, const std::function<void(uint32_t, uint32_t)>& fn) {
+	const float maxX = static_cast<float>(mapChipField_->GetNumBlockHorizontal() - 1) + 0.5f;
+	const float maxY = static_cast<float>(mapChipField_->GetNumBlockVertical() - 1) + 0.5f;
+	Vector3 lo = {std::clamp(box.min.x, 0.0f, maxX), std::clamp(box.min.y, 0.0f, maxY), 0.0f};
+	Vector3 hi = {std::clamp(box.max.x, 0.0f, maxX), std::clamp(box.max.y, 0.0f, maxY), 0.0f};
+	MapChipField::IndexSet a = mapChipField_->GetMapChipIndexSetByPosition(lo); // lowest y -> largest yIndex
+	MapChipField::IndexSet b = mapChipField_->GetMapChipIndexSetByPosition(hi);
+	for (uint32_t y = b.yIndex; y <= a.yIndex; ++y)
+		for (uint32_t x = a.xIndex; x <= b.xIndex; ++x)
+			fn(x, y);
+}
+
+void GameScene::BreakGlassConnected(uint32_t xIndex, uint32_t yIndex) {
+	std::vector<MapChipField::IndexSet> cells = mapChipField_->CollectConnectedByType(xIndex, yIndex, MapChipType::kGlass);
+	if (cells.empty())
+		return;
+	for (const MapChipField::IndexSet& c : cells) {
+		Vector3 pos = mapChipField_->GetMapChipPositionByIndex(c.xIndex, c.yIndex);
+		RemoveBlockCell(c.xIndex, c.yIndex);
+		CreateEnemyDeathParticles(pos);
+	}
+	if (assets_.sfxGlassBreak != 0)
+		AudioSettings::PlaySfx(assets_.sfxGlassBreak, false, 1.0f);
+}
+
+bool GameScene::BreakGlassInAABB(const AABB& box) {
+	bool broke = false;
+	ForEachMapCellInAABB(box, [&](uint32_t x, uint32_t y) {
+		if (mapChipField_->GetMapChipTypeByIndex(x, y) == MapChipType::kGlass) {
+			BreakGlassConnected(x, y);
+			broke = true;
+		}
+	});
+	return broke;
+}
+
+void GameScene::DamageBreakableCell(uint32_t x, uint32_t y, int32_t amount) {
+	auto it = breakables_.find(CellKey(x, y));
+	if (it == breakables_.end())
+		return;
+	Vector3 pos = mapChipField_->GetMapChipPositionByIndex(x, y);
+	BreakableState& s = it->second;
+	s.hp -= amount;
+
+	if (s.hp <= 0) {
+		RemoveBlockCell(x, y);
+		breakables_.erase(it);
+		CreateEnemyDeathParticles(pos);
+		if (assets_.sfxBlockBreak != 0)
+			AudioSettings::PlaySfx(assets_.sfxBlockBreak, false, 1.0f);
+		return;
+	}
+
+	CreateHitEffect(pos);
+	if (assets_.sfxBlockHit != 0)
+		AudioSettings::PlaySfx(assets_.sfxBlockHit, false, 1.0f);
+
+	int stage = BreakableStage(s.hp, s.maxHp);
+	if (y < worldTransformBlocks_.size() && x < worldTransformBlocks_[y].size())
+		worldTransformBlocks_[y][x].textureHandle = assets_.breakableTex[stage];
+}
+
+// melee: a cell takes at most one hit per swing/lunge. bullets are consumed on impact.
+bool GameScene::DamageBreakablesInAABB(const AABB& box, HitSource source) {
+	const bool oncePerSwing = (source == HitSource::kMelee);
+	bool hit = false;
+	ForEachMapCellInAABB(box, [&](uint32_t x, uint32_t y) {
+		if (mapChipField_->GetMapChipTypeByIndex(x, y) != MapChipType::kBreakable)
+			return;
+		if (oncePerSwing && !breakableHitThisSwing_.insert(CellKey(x, y)).second)
+			return;
+		DamageBreakableCell(x, y);
+		hit = true;
+	});
+	return hit;
+}
+
+bool GameScene::HitDestructiblesInAABB(const AABB& box, HitSource source) {
+	bool glass = BreakGlassInAABB(box); // separate statements: no short-circuit
+	bool breakable = DamageBreakablesInAABB(box, source);
+	bool explosive = DamageExplosivesInAABB(box, source);
+	return glass || breakable || explosive;
+}
+bool GameScene::DamageExplosivesInAABB(const AABB& box, HitSource source) {
+	bool hit = false;
+	ForEachMapCellInAABB(box, [&](uint32_t x, uint32_t y) {
+		if (mapChipField_->GetMapChipTypeByIndex(x, y) != MapChipType::kExplosive)
+			return;
+		auto it = explosives_.find(CellKey(x, y));
+		if (it == explosives_.end())
+			return; // already queued / detonating
+		hit = true;
+
+		if (source == HitSource::kFirearm) { // one shot is enough
+			QueueExplosion(x, y, 0.0f);
+			return;
+		}
+		if (!breakableHitThisSwing_.insert(CellKey(x, y)).second)
+			return;
+		if (--it->second <= 0) {
+			QueueExplosion(x, y, 0.0f);
+		} else {
+			Vector3 p = mapChipField_->GetMapChipPositionByIndex(x, y);
+			CreateHitEffect(p);
+			if (assets_.sfxBlockHit != 0)
+				AudioSettings::PlaySfx(assets_.sfxBlockHit, false, 1.0f);
+		}
+	});
+	return hit;
+}
+
+void GameScene::QueueExplosion(uint32_t x, uint32_t y, float delay) {
+	if (!explosives_.erase(CellKey(x, y)))
+		return;
+	pendingExplosions_.push_back({x, y, delay});
+}
+
+void GameScene::UpdateExplosions() {
+#ifdef _DEBUG
+	for (DebugBlast& b : debugBlasts_)
+		b.timer -= 1.0f / 60.0f;
+	debugBlasts_.erase(std::remove_if(debugBlasts_.begin(), debugBlasts_.end(), [](const DebugBlast& b) { return b.timer <= 0.0f; }), debugBlasts_.end());
+#endif
+	if (pendingExplosions_.empty() || phase_ != Phase::kPlay)
+		return;
+	std::vector<PendingExplosion> ready;
+	for (auto it = pendingExplosions_.begin(); it != pendingExplosions_.end();) {
+		it->timer -= 1.0f / 60.0f;
+		if (it->timer <= 0.0f) {
+			ready.push_back(*it);
+			it = pendingExplosions_.erase(it);
+		} else {
+			++it;
+		}
+	}
+	for (const PendingExplosion& p : ready)
+		Explode(p.x, p.y);
+}
+
+bool GameScene::IsBlastExposed(const Vector3& from, const Vector3& to, int64_t skipX, int64_t skipY) {
+	const float dx = to.x - from.x, dy = to.y - from.y;
+	const float dist = std::sqrt(dx * dx + dy * dy);
+	constexpr float kStep = 0.25f;
+	const int steps = static_cast<int>(std::ceil(dist / kStep));
+	for (int i = 1; i < steps; ++i) {
+		float t = static_cast<float>(i) / static_cast<float>(steps);
+		Vector3 p = {std::max(0.0f, from.x + dx * t), std::max(0.0f, from.y + dy * t), 0.0f};
+		MapChipField::IndexSet idx = mapChipField_->GetMapChipIndexSetByPosition(p);
+		if (static_cast<int64_t>(idx.xIndex) == skipX && static_cast<int64_t>(idx.yIndex) == skipY)
+			continue;
+		MapChipType type = mapChipField_->GetMapChipTypeByIndex(idx.xIndex, idx.yIndex);
+		// glass shatters, platforms are one-way, explosives/spikes are passable: none shield
+		if (MapChipField::IsGroundType(type) && type != MapChipType::kGlass && type != MapChipType::kPlatform)
+			return false;
+	}
+	return true;
+}
+
+void GameScene::Explode(uint32_t cx, uint32_t cy) {
+	if (mapChipField_->GetMapChipTypeByIndex(cx, cy) != MapChipType::kExplosive)
+		return;
+	const Vector3 center = mapChipField_->GetMapChipPositionByIndex(cx, cy);
+#ifdef _DEBUG
+	debugBlasts_.push_back({center, kDebugBlastShowTime});
+#endif
+
+	RemoveBlockCell(cx, cy); // remove first so it never shields its own blast
+
+	CreateEnemyDeathParticles(center);
+	Vector3 flashPos = center;
+	CreateHitEffect(flashPos);
+	if (assets_.sfxExplosion != 0)
+		AudioSettings::PlaySfx(assets_.sfxExplosion, false, 1.0f);
+
+	// ---- entities ----
+	auto exposedTo = [&](const AABB& box) {
+		const float mx = (box.min.x + box.max.x) * 0.5f;
+		const Vector3 pts[3] = {
+		    {mx, (box.min.y + box.max.y) * 0.5f, 0.0f},
+            {mx, box.max.y - 0.1f,               0.0f},
+            {mx, box.min.y + 0.1f,               0.0f}
+        };
+		for (const Vector3& p : pts)
+			if (IsBlastExposed(center, p))
+				return true;
+		return false;
+	};
+	auto outward = [&](const Vector3& pos) {
+		Vector3 d = pos - center;
+		float len = std::sqrt(d.x * d.x + d.y * d.y);
+		if (len > 0.0001f) {
+			d.x /= len;
+			d.y /= len;
+		} else {
+			d = {0.0f, 1.0f, 0.0f};
+		}
+		d.y += 0.4f;
+		return d;
+	};
+
+	for (const std::unique_ptr<BaseEnemy>& enemy : enemies_) {
+		if (!enemy || enemy->IsDead())
+			continue;
+		Vector3 ep = enemy->GetWorldPosition();
+		if (std::hypot(ep.x - center.x, ep.y - center.y) > kExplosionNormalRadius)
+			continue;
+		if (!exposedTo(enemy->GetAABB()))
+			continue;
+		enemy->TakeDamage(enemy->GetHP() + 1, outward(ep), kExplosionImpact); // instant death at any radius
+	}
+
+	if (player_ && !player_->IsDefeated()) {
+		Vector3 pp = player_->GetWorldPosition();
+		float dist = std::hypot(pp.x - center.x, pp.y - center.y);
+		if (dist <= kExplosionNormalRadius && exposedTo(player_->GetAABB())) {
+			if (dist <= kExplosionFatalRadius)
+				player_->KillInstant();
+			else
+				player_->TakeDamage(kExplosionNormalDamage, outward(pp), kExplosionImpact);
+		}
+	}
+
+	// ---- blocks: collect first, apply after ----
+	struct BreakableHit {
+		uint32_t x, y;
+		int32_t amount;
+	};
+	std::vector<MapChipField::IndexSet> glassCells, chainCells;
+	std::vector<BreakableHit> breakableHits;
+
+	const int r = static_cast<int>(std::ceil(kExplosionNormalRadius));
+	for (int dy = -r; dy <= r; ++dy) {
+		for (int dx = -r; dx <= r; ++dx) {
+			int nx = static_cast<int>(cx) + dx, ny = static_cast<int>(cy) + dy;
+			if (nx < 0 || ny < 0 || (dx == 0 && dy == 0))
+				continue;
+			uint32_t ux = static_cast<uint32_t>(nx), uy = static_cast<uint32_t>(ny);
+			MapChipType type = mapChipField_->GetMapChipTypeByIndex(ux, uy);
+			if (type != MapChipType::kGlass && type != MapChipType::kBreakable && type != MapChipType::kExplosive)
+				continue;
+			Vector3 cellPos = mapChipField_->GetMapChipPositionByIndex(ux, uy);
+			float dist = std::hypot(cellPos.x - center.x, cellPos.y - center.y);
+			if (dist > kExplosionNormalRadius || !IsBlastExposed(center, cellPos, nx, ny))
+				continue;
+
+			if (type == MapChipType::kGlass)
+				glassCells.push_back({ux, uy});
+			else if (type == MapChipType::kBreakable)
+				breakableHits.push_back({ux, uy, dist <= kExplosionFatalRadius ? 999 : 1});
+			else
+				chainCells.push_back({ux, uy});
+		}
+	}
+	for (const MapChipField::IndexSet& c : glassCells)
+		if (mapChipField_->GetMapChipTypeByIndex(c.xIndex, c.yIndex) == MapChipType::kGlass) // may be gone via a connected cell
+			BreakGlassConnected(c.xIndex, c.yIndex);
+	for (const BreakableHit& b : breakableHits)
+		DamageBreakableCell(b.x, b.y, b.amount);
+	for (const MapChipField::IndexSet& c : chainCells)
+		QueueExplosion(c.xIndex, c.yIndex, kExplosionChainDelay);
+}
+bool GameScene::CheckSpikeHit(SpikeTracker& t, const AABB& body, bool onGround, float limitFallSpeed) {
+	AABB box = body; // shrink horizontally so brushing a neighbour's side never counts
+	box.min.x += 0.1f;
+	box.max.x -= 0.1f;
+
+	const float foot = box.min.y;
+	if (!t.initialized) {
+		t.initialized = true;
+		t.prevFootY = foot;
+	}
+
+	bool hit = false;
+	if (onGround) {
+		// standing / walking inside spikes is safe, and so is jumping out and landing back
+		t.immune.clear();
+		ForEachMapCellInAABB(box, [&](uint32_t x, uint32_t y) {
+			if (mapChipField_->GetMapChipTypeByIndex(x, y) == MapChipType::kSpike)
+				t.immune.insert(CellKey(x, y));
+		});
+	} else if (t.prevFootY - foot >= limitFallSpeed * kSpikeMinFallRatio) {
+		AABB sweep = box;
+		sweep.max.y = t.prevFootY;
+		ForEachMapCellInAABB(sweep, [&](uint32_t x, uint32_t y) {
+			if (hit || mapChipField_->GetMapChipTypeByIndex(x, y) != MapChipType::kSpike)
+				return;
+			uint64_t key = CellKey(x, y);
+			if (t.immune.count(key))
+				return;
+			const float top = mapChipField_->GetMapChipPositionByIndex(x, y).y + 0.5f;
+			if (t.prevFootY >= top - 0.02f && foot < top) { // crossed the top edge going down
+				t.immune.insert(key);
+				hit = true;
+			}
+		});
+	}
+	t.prevFootY = foot;
+	return hit;
+}
+
+void GameScene::UpdateSpikes() {
+	if (phase_ != Phase::kPlay)
+		return;
+
+	if (player_ && !player_->IsDefeated()) {
+		if (CheckSpikeHit(playerSpike_, player_->GetAABB(), player_->IsOnGround(), Player::GetLimitFallSpeed())) {
+			player_->TakeDamage(kSpikeDamage, {0.0f, 1.0f, 0.0f}, kSpikeLaunchPower);
+			if (assets_.sfxSpikeHit != 0)
+				AudioSettings::PlaySfx(assets_.sfxSpikeHit, false, 1.0f);
+		}
+	}
+
+	for (auto it = enemySpike_.begin(); it != enemySpike_.end();) {
+		bool alive = std::any_of(enemies_.begin(), enemies_.end(), [&](const std::unique_ptr<BaseEnemy>& e) { return e.get() == it->first; });
+		it = alive ? std::next(it) : enemySpike_.erase(it);
+	}
+	for (const std::unique_ptr<BaseEnemy>& enemy : enemies_) {
+		if (!enemy || enemy->IsDead() || enemy->GetBehaviorModule().IsDeathBehavior())
+			continue;
+		if (CheckSpikeHit(enemySpike_[enemy.get()], enemy->GetAABB(), enemy->IsOnGround(), BaseEnemy::GetLimitFallSpeed())) {
+			enemy->KillInstant();
+			if (assets_.sfxSpikeHit != 0)
+				AudioSettings::PlaySfx(assets_.sfxSpikeHit, false, 1.0f);
+		}
+	}
+}
+void GameScene::TriggerFragileUnder(const AABB& body, bool onGround) {
+	if (!onGround)
+		return;
+	AABB under;
+	under.min = {body.min.x + 0.1f, body.min.y - 0.1f, -0.5f};
+	under.max = {body.max.x - 0.1f, body.min.y, 0.5f};
+	ForEachMapCellInAABB(under, [&](uint32_t x, uint32_t y) {
+		if (mapChipField_->GetMapChipTypeByIndex(x, y) == MapChipType::kFragile)
+			fragileTimers_.try_emplace(CellKey(x, y), kFragileBreakDelay);
+	});
+}
+
+void GameScene::UpdateFragileBlocks() {
+	if (phase_ != Phase::kPlay)
+		return;
+
+	if (player_ && !player_->IsDefeated())
+		TriggerFragileUnder(player_->GetAABB(), player_->IsOnGround());
+	for (const std::unique_ptr<BaseEnemy>& enemy : enemies_) {
+		if (enemy && !enemy->IsDead() && !enemy->GetBehaviorModule().IsDeathBehavior())
+			TriggerFragileUnder(enemy->GetAABB(), enemy->IsOnGround());
+	}
+
+	for (auto it = fragileTimers_.begin(); it != fragileTimers_.end();) {
+		const uint32_t x = static_cast<uint32_t>(it->first >> 32);
+		const uint32_t y = static_cast<uint32_t>(it->first & 0xFFFFFFFFu);
+
+		if (mapChipField_->GetMapChipTypeByIndex(x, y) != MapChipType::kFragile) {
+			it = fragileTimers_.erase(it);
+			continue;
+		}
+
+		it->second -= 1.0f / 60.0f;
+		const Vector3 pos = mapChipField_->GetMapChipPositionByIndex(x, y);
+
+		if (it->second <= 0.0f) { // breaks for good
+			RemoveBlockCell(x, y);
+			CreateEnemyDeathParticles(pos);
+			if (assets_.sfxBlockBreak != 0)
+				AudioSettings::PlaySfx(assets_.sfxBlockBreak, false, 1.0f);
+			it = fragileTimers_.erase(it);
+			continue;
+		}
+
+		// shake (visual only), stronger as the timer runs down
+		const float progress = 1.0f - it->second / kFragileBreakDelay;
+		const float amp = kFragileShakeAmplitude * (0.3f + 0.7f * progress);
+		const float frames = (kFragileBreakDelay - it->second) * 60.0f;
+		if (y < worldTransformBlocks_.size() && x < worldTransformBlocks_[y].size() && worldTransformBlocks_[y][x].transform) {
+			WorldTransform* wt = worldTransformBlocks_[y][x].transform;
+			wt->translation_ = pos + Vector3(std::sin(frames * 1.7f) * amp, std::cos(frames * 2.3f) * amp * 0.6f, 0.0f);
+			WorldTransformUpdate(*wt);
+		}
+		++it;
+	}
+}
+bool GameScene::ResolveWeaponSpawnerKind(MapChipType type, uint8_t subID, DropItemCategory& outCategory, DropWeaponKind& outKind) {
+	if (type == MapChipType::kMeleeSpawner) {
+		outCategory = DropItemCategory::kMelee;
+		switch (subID) {
+		case 0:
+			outKind = DropWeaponKind::kSabreLight;
+			return true;
+		case 1:
+			outKind = DropWeaponKind::kSabreHeavy;
+			return true;
+		}
+	} else if (type == MapChipType::kFirearmSpawner) {
+		outCategory = DropItemCategory::kFirearm;
+		switch (subID) {
+		case 0:
+			outKind = DropWeaponKind::kMusketLong;
+			return true;
+		case 1:
+			outKind = DropWeaponKind::kMusketBayonet;
+			return true;
+		case 2:
+			outKind = DropWeaponKind::kShotgun;
+			return true;
+		}
+	}
+	return false;
+}
+
+bool GameScene::IsWeaponSpawnerItemAlive(int32_t id) const {
+	if (player_ && (player_->GetMeleeSourceSpawner() == id || player_->GetFirearmSourceSpawner() == id))
+		return true;
+	for (const auto& item : droppableItems_) {
+		if (item && item->GetSpawnerID() == id && !item->IsPickedUp() && !item->IsExpired())
+			return true;
+	}
+	return false;
+}
+
+void GameScene::UpdateWeaponSpawners() {
+	if (!player_ || phase_ != Phase::kPlay)
+		return;
+	for (WeaponSpawnerPoint& sp : weaponSpawners_) {
+		if (IsWeaponSpawnerItemAlive(sp.id)) {
+			sp.timer = 0.0f;
+			continue;
+		}
+		sp.timer += 1.0f / 60.0f;
+		if (sp.timer < kWeaponRespawnDelay)
+			continue;
+		sp.timer = 0.0f;
+		if (DroppableItem* item = CreateDroppableItem(sp.position, sp.category, sp.kind)) {
+			item->SetSpawnerID(sp.id);
+			item->PlaceStatic();
+		}
+	}
+}
+

@@ -49,10 +49,9 @@ std::vector<Vector3> GetAxesXY(const std::vector<Vector3>& rect, const std::vect
 	return axes;
 }
 
-// [FIX] 視線を遮るのは実体のある地形ブロックのみ。
 // 以前はkBlockだけだったので、kSlowBlock/半ブロック越しにプレイヤーが見えてしまっていた。
 // プラットフォーム(一方通行)とバリア(カメラ用の見えない壁)は遮らない。
-bool BlocksLineOfSight(MapChipType type) { return type == MapChipType::kBlock || type == MapChipType::kBlockHalfUp || type == MapChipType::kBlockHalfDown || type == MapChipType::kSlowBlock; }
+bool BlocksLineOfSight(MapChipType type) { return type == MapChipType::kBlock || type == MapChipType::kBreakable || type == MapChipType::kFragile || type == MapChipType::kSlowBlock; }
 } // namespace
 
 void VisionSensor::RegisterGlobalVariables() {

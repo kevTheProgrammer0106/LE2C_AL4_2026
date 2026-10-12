@@ -31,10 +31,13 @@ void ArenaManager::PlaySfx(uint32_t handle) {
 }
 void ArenaManager::RegisterGate(SlidingGate* gate) {
 	gates_.push_back(gate);
-	if (!gate || !gate->IsArenaGate())
+	if (!gate)
 		return;
-	// Arena gates wait open until the arena fires. If this one streams in after the arena already
-	// started or ended, it must be closed (it never reopens).
+	if (!gate->IsArenaGate()) {
+		if (state_ == State::kCleared)
+			gate->SnapOpen(); // arena cleared before: the gate it opens stays open
+		return;
+	}
 	if (state_ == State::kDormant)
 		gate->SnapOpen();
 	else
