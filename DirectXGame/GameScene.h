@@ -22,9 +22,15 @@
 
 #include "Player.h"
 
+#include "EnemyRifleman.h"
 #include "EnemyCuirassier.h"
 #include "EnemyFighter.h"
-#include "EnemyRifleman.h"
+#include "EnemyCarabinier.h"
+#include "EnemyShotgunner.h"
+#include "EnemyGrenadier.h"
+#include "EnemyOfficer.h"
+#include "EnemySapper.h"
+
 
 #include "CameraController.h"
 #include "DeathParticles.h"
@@ -40,6 +46,7 @@
 #include "WeaponSabre.h"
 
 #include "FirearmMusket.h"
+#include "Grenade.h"
 
 #include "DroppableItem.h"
 #include "UserInterfaceGameplayHUD.h"
@@ -95,6 +102,8 @@ public:
 	void CreateExplosion(const KamataEngine::Vector3& position);
 
 	void CreateFirearmProjectile(Owner owner, const KamataEngine::Vector3& position, const KamataEngine::Vector2& aimDirection, int damage = -1, int32_t lifeFrames = 0);
+	void CreateGrenade(const KamataEngine::Vector3& position, const KamataEngine::Vector3& velocity, Owner owner);
+
 	DroppableItem* CreateDroppableItem(const KamataEngine::Vector3& position, DropItemCategory category, DropWeaponKind kind, DropItemState state = DropItemState::kReady);
 	void ApplyItemPickup(const DroppableItem& item);
 
@@ -182,6 +191,10 @@ public:
 
 	void TriggerScreenFlash(ScreenFlash::Type type) { screenFlash_.Trigger(type); }
 	void CreateBurstEffect(BurstType type, const KamataEngine::Vector3& position, const KamataEngine::Vector2& dir);
+
+	bool IsOfficerBuffActive() const { return buffOfficer_ != nullptr; }
+	void ApplyOfficerBuff(BaseEnemy* officer);
+
 private:
 	friend class DebugMenu;
 	GameAssets assets_;
@@ -390,6 +403,19 @@ private:
 	bool HitDestructiblesInAABB(const AABB& box, HitSource source); // glass + breakable + explosive
 
 	// ---- explosive ----
+	std::vector<std::unique_ptr<Grenade>> grenades_;
+	void UpdateGrenades();
+
+	// One blast routine for barrels and grenades.
+	struct ExplosionParams {
+		float fatalRadius;
+		float normalRadius;
+		int32_t normalDamage;
+		float impact;
+		bool harmEnemies; // barrels kill enemies; enemy-thrown grenades don't
+	};
+	static ExplosionParams BarrelExplosionParams();
+	void ExplodeAt(const KamataEngine::Vector3& center, const ExplosionParams& params);
 	std::unordered_map<uint64_t, int32_t> explosives_; // cell -> remaining melee hits
 	struct PendingExplosion {
 		uint32_t x, y;
@@ -408,6 +434,8 @@ private:
 	// debug only: recent blasts (the block is gone, so the radii need their own record)
 	struct DebugBlast {
 		KamataEngine::Vector3 center;
+		float fatalRadius;
+		float normalRadius;
 		float timer;
 	};
 	std::vector<DebugBlast> debugBlasts_;
@@ -461,4 +489,7 @@ private:
 	static inline float kGoalSequenceDuration = 1.8f; // time before the victory menu appears
 	static inline float kGoalZoomDelta = 10.0f;       // camera moves 10 closer (z offset -10 nearer). Flip the sign to zoom out.
 	static inline float kGoalZoomDuration = 0.8f;
+
+	BaseEnemy* buffOfficer_ = nullptr; // the officer whose life the buff depends on
+	void UpdateOfficerBuff();
 };

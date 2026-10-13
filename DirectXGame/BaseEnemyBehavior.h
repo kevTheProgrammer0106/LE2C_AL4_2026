@@ -7,6 +7,7 @@
 #include "PathFindingAlgorithm.h"
 #include "RandomGenerator.h"
 #include "VisionSensor.h"
+#include "OfficerBuff.h"
 
 class BaseEnemy;
 class GameScene;
@@ -104,7 +105,9 @@ public:
 		kDuel,
 		kKnockback,
 		kStunned,
-		kBlock,
+		kBlock, 
+		kCommand,
+		kLeap
 	};
 
 	enum class FlankPreference { kPreferShortest, kPreferFlanking, kNeutral };
@@ -172,13 +175,13 @@ public:
 			return;
 		knockbackDirection_ = direction;
 		knockbackPower_ = power;
-		pendingStunAfterKnockback_ = kHitStunDuration;
+		pendingStunAfterKnockback_ = kHitStunDuration + GetStunDurationBonus();
 		behaviorRequest_ = Behavior::kKnockback;
 	}
 	void RequestStun(float duration) {
 		if (behavior_ == Behavior::kDeath || behaviorRequest_ == Behavior::kDeath)
 			return;
-		stunDuration_ = duration;
+		stunDuration_ = duration + GetStunDurationBonus();
 		behaviorRequest_ = Behavior::kStunned;
 	}
 	void ClearDebuffs() {
@@ -240,6 +243,8 @@ public:
 	float GetBlockCooldownRemaining() const { return blockCooldownTimer_; }
 	// Rolls GetBlockChanceWhenHit(); on success queues kBlock. Called by BaseEnemy::TryBlockAttack.
 	bool TryStartBlockOnHit();
+	// 外部要因のスタンに足す秒数(通常は0。Sapperだけ+6秒)
+	virtual float GetStunDurationBonus() const { return 0.0f; }
 
 	static inline float kBlockDuration = 1.5f;
 	static inline float kBlockCooldown = 10.0f; // counted from the END of the block
@@ -266,8 +271,14 @@ public:
 	// Override in melee behaviors: true while the current melee action is in its recovery phase.
 	virtual bool IsInMeleeRecovery() const { return false; }
 
+		// True when a chasing officer is nearby and this enemy has run ahead of it: it waits so the group moves together.
+	bool ShouldHoldForEscort() const;
 protected:
 	PostMode postMode_ = PostMode::kWander;
+
+	static inline float kEscortJoinRadius = 14.0f; // enemies this close to a chasing officer are "escorting" it
+	static inline float kEscortLeash = 5.0f;       // max distance an escort may get ahead of the officer
+	static inline float kEscortFreeRange = 8.0f;   // player this close: ignore the leash and fight
 
 	float pendingStunAfterKnockback_ = 0.0f;
 	static inline float kHitStunDuration = 0.6f; 

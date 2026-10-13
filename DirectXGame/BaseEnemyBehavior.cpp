@@ -5,6 +5,7 @@
 #include "MapChipField.h"
 #include "Player.h"
 #include "ObjectBounce.h"
+#include <limits>
 
 using namespace KamataEngine;
 
@@ -43,6 +44,9 @@ void BaseEnemyBehavior::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "xRetreatJumpableWallBlocks", kRetreatJumpableWallBlocks);
 	gv->AddItem(kGroupName, "xRetreatHopSpeed", kRetreatHopSpeed);
 	gv->AddItem(kGroupName, "xLungeLedgeGuardSpeed", kLungeLedgeGuardSpeed);
+	gv->AddItem(kGroupName, "xEscortJoinRadius", kEscortJoinRadius);
+	gv->AddItem(kGroupName, "xEscortLeash", kEscortLeash);
+	gv->AddItem(kGroupName, "xEscortFreeRange", kEscortFreeRange);
 }
 
 void BaseEnemyBehavior::ApplyGlobalVariables() {
@@ -69,6 +73,9 @@ void BaseEnemyBehavior::ApplyGlobalVariables() {
 	kRetreatJumpableWallBlocks = gv->GetIntValue(kGroupName, "xRetreatJumpableWallBlocks");
 	kRetreatHopSpeed = gv->GetFloatValue(kGroupName, "xRetreatHopSpeed");
 	kLungeLedgeGuardSpeed = gv->GetFloatValue(kGroupName, "xLungeLedgeGuardSpeed");
+	kEscortJoinRadius = gv->GetFloatValue(kGroupName, "xEscortJoinRadius");
+	kEscortLeash = gv->GetFloatValue(kGroupName, "xEscortLeash");
+	kEscortFreeRange = gv->GetFloatValue(kGroupName, "xEscortFreeRange");
 }
 
 void BaseEnemyBehavior::Initialize() {
@@ -148,7 +155,7 @@ void BaseEnemyBehavior::UpdateVisionAndChaseRequest() {
 					owner_.gameScene_->AlertNearbyEnemies(&owner_, lastKnownPlayerPos_, kAlertRadius);
 				}
 			} else {
-				chaseTimeoutTimer_ += 1.0f / 60.0f;
+				chaseTimeoutTimer_ += (1.0f / 60.0f) / OfficerBuff::ChaseTimeScale();
 				hasBroadcastAlertThisSighting_ = false;
 				if ((kEndlessChase || persistentAwareness_) && owner_.gameScene_->GetPlayer()) {
 					if (persistentAwareness_)
@@ -158,7 +165,7 @@ void BaseEnemyBehavior::UpdateVisionAndChaseRequest() {
 				}
 			}
 		} else {
-			chaseTimeoutTimer_ += 1.0f / 60.0f;
+			chaseTimeoutTimer_ += (1.0f / 60.0f) / OfficerBuff::ChaseTimeScale();
 			hasBroadcastAlertThisSighting_ = false;
 		}
 		bool shouldChase = IsChasing();
@@ -603,7 +610,48 @@ float BaseEnemyBehavior::ScaleRetreatSpeed(float distance, float outerRange, flo
 	return maxSpeed * amount;
 }
 void BaseEnemyBehavior::BehaviorRootInitialize() {}
-void BaseEnemyBehavior::BehaviorRootUpdate() { owner_.pathfindingModule_->Update(); }
+void BaseEnemyBehavior::BehaviorRootUpdate() {
+	if (ShouldHoldForEscort()) {
+		owner_.velocity_.x *= (1.0f - BaseEnemy::kAttenuation);
+		FacePlayer();
+		return;
+	}
+	owner_.pathfindingModule_->Update();
+}
+
+bool BaseEnemyBehavior::ShouldHoldForEscort() const {
+	if (owner_.IsEscortLeader() || !owner_.gameScene_ || !owner_.gameScene_->GetPlayer())
+		return false;
+
+	const Vector3 me = owner_.GetWorldPosition();
+	const BaseEnemy* leader = nullptr;
+	float best = kEscortJoinRadius;
+	for (const std::unique_ptr<BaseEnemy>& e : owner_.gameScene_->GetEnemies()) {
+		if (!e || e.get() == &owner_ || e->IsDead() || !e->IsEscortLeader())
+			continue;
+		const BaseEnemyBehavior& b = e->GetBehaviorModule();
+		if (b.IsDeathBehavior() || !b.IsChasing())
+			continue;
+		Vector3 lp = e->GetWorldPosition();
+		float dist = std::hypot(lp.x - me.x, lp.y - me.y);
+		if (dist < best) {
+			best = dist;
+			leader = e.get();
+		}
+	}
+	if (!leader)
+		return false;
+
+	const float playerX = owner_.gameScene_->GetPlayer()->GetWorldPosition().x;
+	const float leaderX = leader->GetWorldPosition().x;
+	const float toPlayer = std::abs(playerX - me.x);
+
+	if (toPlayer <= kEscortFreeRange)
+		return false; // the fight is on: don't stand around
+	if (std::abs(leaderX - me.x) <= kEscortLeash)
+		return false;                              // close enough
+	return toPlayer < std::abs(playerX - leaderX); // wait only if ahead of the officer
+}
 
 void BaseEnemyBehavior::BehaviorIdleInitialize() {
 	owner_.velocity_.x = 0.0f;

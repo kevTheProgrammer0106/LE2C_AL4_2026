@@ -78,10 +78,11 @@ void EnemyRifleman::Draw() {
 }
 
 void EnemyRifleman::SetMusketModel(Model* model, uint32_t textureHandle) {
-	// SetMusketModel 内: Initialize の前に持ち主を設定する
 	currentFirearm_ = std::make_unique<FirearmMusketBayonet>();
 	currentFirearm_->SetOwner(Owner::kEnemy);
 	currentFirearm_->Initialize(model, textureHandle, camera_);
+	currentFirearm_->SetReloadTimeScale(GetReloadTimeScale());
+	currentFirearm_->SetBayonetTimeScale(GetAttackTimeScale());
 	SnapWeaponEquipState(ignoreEquipStates_);
 }
 

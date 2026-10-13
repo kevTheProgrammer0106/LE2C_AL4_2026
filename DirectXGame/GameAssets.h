@@ -60,6 +60,46 @@ public:
 	uint32_t fighterHeadTex = 0;
 	uint32_t fighterHatTex = 0;
 
+	// --- Enemy: Carabinier --
+	std::unique_ptr<KamataEngine::Model> modelCarabinierBody;
+	std::unique_ptr<KamataEngine::Model> modelCarabinierHead;
+	std::unique_ptr<KamataEngine::Model> modelCarabinierHat;
+	uint32_t carabinierBodyTex = 0;
+	uint32_t carabinierHeadTex = 0;
+	uint32_t carabinierHatTex = 0;
+
+	// --- Enemy: Shotgunner --
+	std::unique_ptr<KamataEngine::Model> modelShotgunnerBody;
+	std::unique_ptr<KamataEngine::Model> modelShotgunnerHead;
+	std::unique_ptr<KamataEngine::Model> modelShotgunnerHat;
+	uint32_t shotgunnerBodyTex = 0;
+	uint32_t shotgunnerHeadTex = 0;
+	uint32_t shotgunnerHatTex = 0;
+
+	// --- Enemy: Grenadier --
+	std::unique_ptr<KamataEngine::Model> modelGrenadierBody;
+	std::unique_ptr<KamataEngine::Model> modelGrenadierHead;
+	std::unique_ptr<KamataEngine::Model> modelGrenadierHat;
+	uint32_t grenadierBodyTex= 0;
+	uint32_t grenadierHeadTex = 0;
+	uint32_t grenadierHatTex = 0;
+
+	// --- Enemy: Sapper --
+	std::unique_ptr<KamataEngine::Model> modelSapperBody;
+	std::unique_ptr<KamataEngine::Model> modelSapperHead;
+	std::unique_ptr<KamataEngine::Model> modelSapperHat;
+	uint32_t sapperBodyTex = 0;
+	uint32_t sapperHeadTex = 0;
+	uint32_t sapperHatTex = 0;
+
+	// --- Enemy: Officer --
+	std::unique_ptr<KamataEngine::Model> modelOfficerBody;
+	std::unique_ptr<KamataEngine::Model> modelOfficerHead;
+	std::unique_ptr<KamataEngine::Model> modelOfficerHat;
+	uint32_t officerBodyTex = 0;
+	uint32_t officerHeadTex = 0;
+	uint32_t officerHatTex = 0;
+
 	// --- Effects ---
 	std::unique_ptr<KamataEngine::Model> modelSlashEffect;
 	uint32_t slashEffectTex = 0;

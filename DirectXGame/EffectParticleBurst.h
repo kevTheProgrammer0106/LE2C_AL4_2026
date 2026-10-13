@@ -7,7 +7,7 @@
 #include <array>
 
 // バーストの種類
-enum class BurstType { kHit = 0, kJump, kLand, kExplosion, kSmoke, kCount };
+enum class BurstType { kHit = 0, kJump, kLand, kExplosion, kSmoke, kAura, kCount };
 
 /// <summary>
 /// 一発のパーティクルバースト(被弾の火花 / ジャンプ・着地の土煙)。使い捨て。
@@ -81,6 +81,8 @@ private:
 	        {24, {1.0f, 0.85f, 0.4f}, {0.7f, 0.1f, 0.0f}, 1.0f, 0.30f, 0.60f, 3.0f, 9.0f, 3.14f, -2.0f, 0.88f, 0.50f, 1.40f, 0.30f, 1},
          // kSmoke: 黒っぽい煙。ゆっくり広がりながら上昇し、長く残る(通常)
 	        {16, {0.35f, 0.33f, 0.31f}, {0.15f, 0.15f, 0.15f}, 0.7f, 1.00f, 1.80f, 0.8f, 2.5f, 3.14f, -1.5f, 0.95f, 0.50f, 1.60f, 0.40f, 0},
+         // kAura: officer buff. Gold motes drift up from the feet and shrink away (additive)
+	        {4, {1.0f, 0.85f, 0.3f}, {1.0f, 0.45f, 0.1f}, 0.9f, 0.50f, 0.90f, 0.4f, 1.2f, 0.7f, -1.5f, 0.97f, 0.22f, 0.0f, 0.45f, 1},
 	     }
     };
 };

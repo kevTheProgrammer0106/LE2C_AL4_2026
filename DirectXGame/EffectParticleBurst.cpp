@@ -5,15 +5,17 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <iterator>
 
 using namespace KamataEngine;
 
 namespace {
-constexpr float kDeltaTime = 1.0f / 60.0f; // BaseEffectと同じ固定60FPS
-const char* GroupName(size_t i) {
-	static const char* kNames[] = {"ParticleBurstHit", "ParticleBurstJump", "ParticleBurstLand", "ParticleBurstExplosion", "ParticleBurstSmoke"};
-	return kNames[i];
-}
+constexpr float kDeltaTime = 1.0f / 60.0f; // same fixed 60FPS as BaseEffect
+
+constexpr const char* kGroupNames[] = {"ParticleBurstHit", "ParticleBurstJump", "ParticleBurstLand", "ParticleBurstExplosion", "ParticleBurstSmoke", "ParticleBurstAura"};
+static_assert(std::size(kGroupNames) == static_cast<size_t>(BurstType::kCount), "kGroupNames must have one entry per BurstType");
+
+const char* GroupName(size_t i) { return kGroupNames[i]; }
 } // namespace
 
 Camera* EffectParticleBurst::camera_ = nullptr;

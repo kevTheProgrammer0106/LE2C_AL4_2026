@@ -27,9 +27,9 @@ void GameAssets::LoadModelsAndTextures() {
 	texSabreHeavy = TextureManager::Load("./Resources/sabreHeavy/sabre.png");
 
 	modelMusketLong.reset(Model::CreateFromOBJ("musketLong", true));
-	musketLongTex = TextureManager::Load("./Resources/musketLong/musketBody.png");
+	musketLongTex = TextureManager::Load("./Resources/musketLong/musketLong.png");
 	modelMusketBayonet.reset(Model::CreateFromOBJ("musketBayonet", true));
-	musketBayonetTex = TextureManager::Load("./Resources/musketBayonet/musketBody.png");
+	musketBayonetTex = TextureManager::Load("./Resources/musketBayonet/musketBayonet.png");
 	modelProjectileBall.reset(Model::CreateFromOBJ("firearmBall", true));
 	firearmBallTex = TextureManager::Load("./Resources/firearmBall/firearmBall.png");
 
@@ -56,6 +56,74 @@ void GameAssets::LoadModelsAndTextures() {
 	fighterBodyTex = TextureManager::Load("./Resources/fighterBody/fighterTorso.png");
 	fighterHeadTex = TextureManager::Load("./Resources/fighterHead/fighterHead.png");
 	fighterHatTex = TextureManager::Load("./Resources/fighterHat/fighterShako.png");
+
+	// --- Enemy: Carabinier ---
+	//modelCarabinierBody.reset(Model::CreateFromOBJ("carabinierBody", true));
+	//modelCarabinierHead.reset(Model::CreateFromOBJ("carabinierHead", true));
+	//modelCarabinierHat.reset(Model::CreateFromOBJ("carabinierHat", true));
+	//carabinierBodyTex = TextureManager::Load("./Resources/carabinierBody/carabinierTorso.png");
+	//carabinierHeadTex = TextureManager::Load("./Resources/carabinierHead/carabinierHead.png");
+	//carabinierHatTex = TextureManager::Load("./Resources/carabinierHat/carabinierHelmet.png");
+	modelCarabinierBody.reset(Model::CreateFromOBJ("cuirassierBody", true));
+	modelCarabinierHead.reset(Model::CreateFromOBJ("cuirassierHead", true));
+	modelCarabinierHat.reset(Model::CreateFromOBJ("cuirassierHat", true));
+	carabinierBodyTex = TextureManager::Load("./Resources/cuirassierBody/cuirassierTorso.png");
+	carabinierHeadTex = TextureManager::Load("./Resources/cuirassierHead/cuirassierHead.png");
+	carabinierHatTex = TextureManager::Load("./Resources/cuirassierHat/cuirassierHelmet.png");
+
+	// --- Enemy: Shotgunner ---
+	//modelShotgunnerBody.reset(Model::CreateFromOBJ("shotgunnerBody", true));
+	//modelShotgunnerHead.reset(Model::CreateFromOBJ("shotgunnerHead", true));
+	//modelShotgunnerHat.reset(Model::CreateFromOBJ("shotgunnerHat", true));
+	//shotgunnerBodyTex = TextureManager::Load("./Resources/shotgunnerBody/shotgunnerTorso.png");
+	//shotgunnerHeadTex = TextureManager::Load("./Resources/shotgunnerHead/shotgunnerHead.png");
+	//shotgunnerHatTex = TextureManager::Load("./Resources/shotgunnerHat/shotgunnerShako.png");
+
+	modelShotgunnerBody.reset(Model::CreateFromOBJ("riflemanBody", true));
+	modelShotgunnerHead.reset(Model::CreateFromOBJ("riflemanHead", true));
+	modelShotgunnerHat.reset(Model::CreateFromOBJ("riflemanHat", true));
+	shotgunnerBodyTex = TextureManager::Load("./Resources/riflemanBody/riflemanTorso.png");
+	shotgunnerHeadTex = TextureManager::Load("./Resources/riflemanHead/riflemanHead.png");
+	shotgunnerHatTex = TextureManager::Load("./Resources/riflemanHat/riflemanShako.png");
+
+	// --- Enemy: Grenadier ---
+	// modelGrenadierBody.reset(Model::CreateFromOBJ("grenadierBody", true));
+	// modelGrenadierHead.reset(Model::CreateFromOBJ("grenadierHead", true));
+	// modelGrenadierHat.reset(Model::CreateFromOBJ("grenadierHat", true));
+	// grenadierBodyTex = TextureManager::Load("./Resources/grenadierBody/grenadierTorso.png");
+	// grenadierHeadTex = TextureManager::Load("./Resources/grenadierHead/grenadierHead.png");
+	// grenadierHatTex = TextureManager::Load("./Resources/grenadierHat/grenadierShako.png");
+
+	modelGrenadierBody.reset(Model::CreateFromOBJ("fighterBody", true));
+	modelGrenadierHead.reset(Model::CreateFromOBJ("riflemanHead", true));
+	modelGrenadierHat.reset(Model::CreateFromOBJ("riflemanHat", true));
+	grenadierBodyTex = TextureManager::Load("./Resources/fighterBody/fighterTorso.png");
+	grenadierHeadTex = TextureManager::Load("./Resources/riflemanHead/riflemanHead.png");
+	grenadierHatTex = TextureManager::Load("./Resources/riflemanHat/riflemanShako.png");
+
+		// --- Enemy: Officer ---
+	// modelOfficerBody.reset(Model::CreateFromOBJ("officerBody", true));
+	// modelOfficerHead.reset(Model::CreateFromOBJ("officerHead", true));
+	// modelOfficerHat.reset(Model::CreateFromOBJ("officerHat", true));
+	// officerBodyTex = TextureManager::Load("./Resources/officerBody/officerTorso.png");
+	// officerHeadTex = TextureManager::Load("./Resources/officerHead/officerHead.png");
+	// officerHatTex = TextureManager::Load("./Resources/officerHat/officerShako.png");
+
+	modelOfficerBody.reset(Model::CreateFromOBJ("fighterBody", true));
+	modelOfficerHead.reset(Model::CreateFromOBJ("riflemanHead", true));
+	modelOfficerHat.reset(Model::CreateFromOBJ("riflemanHat", true));
+	officerBodyTex = TextureManager::Load("./Resources/fighterBody/fighterTorso.png");
+	officerHeadTex = TextureManager::Load("./Resources/riflemanHead/riflemanHead.png");
+	officerHatTex = TextureManager::Load("./Resources/riflemanHat/riflemanShako.png");
+
+	// --- Enemy: Sapper (仮: Cuirassierのモデルを流用) ---
+	modelSapperBody.reset(Model::CreateFromOBJ("cuirassierBody", true));
+	modelSapperHead.reset(Model::CreateFromOBJ("cuirassierHead", true));
+	modelSapperHat.reset(Model::CreateFromOBJ("cuirassierHat", true));
+	sapperBodyTex = TextureManager::Load("./Resources/cuirassierBody/cuirassierTorso.png");
+	sapperHeadTex = TextureManager::Load("./Resources/cuirassierHead/cuirassierHead.png");
+	sapperHatTex = TextureManager::Load("./Resources/cuirassierHat/cuirassierHelmet.png");
+
 
 	// --- Effects ---
 	slashEffectTex = TextureManager::Load("./Resources/hit_effect/hit_effect.png");

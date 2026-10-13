@@ -1,5 +1,4 @@
 #pragma once
-
 #include "Global.h"
 #include <KamataEngine.h>
 #include <algorithm>
@@ -147,11 +146,13 @@ public:
 	virtual bool TryFire();
 	bool CanFire() const { return currentAmmo_ > 0; }
 	virtual bool IsReloading() const { return isReloading_; }
-	virtual float GetReloadProgress01() const { return (isReloading_ && reloadDurationCurrent_ > 0.0f) ? std::clamp(reloadTimer_ / reloadDurationCurrent_, 0.0f, 1.0f) : 1.0f; }
-	virtual int GetCurrentAmmo() const { return currentAmmo_; }
-	// Hitting enemies shortens the NEXT reload.
 	virtual void NotifyDealtDamage();
-
+	void SetReloadTimeScale(float scale);
+	virtual float GetReloadProgress01() const {
+		const float total = reloadDurationCurrent_ * reloadTimeScale_;
+		return (isReloading_ && total > 0.0f) ? std::clamp(reloadTimer_ / total, 0.0f, 1.0f) : 1.0f;
+	}
+	virtual int GetCurrentAmmo() const { return currentAmmo_; }
 	// Drop state: kReady = loaded, kOnCooldown = unloaded.
 	virtual DropItemState GetDropState() const { return (currentAmmo_ < GetMaxAmmo()) ? DropItemState::kOnCooldown : DropItemState::kReady; }
 	// Called right after a picked-up gun is constructed. kOnCooldown restarts the reload from zero.
@@ -171,6 +172,8 @@ public:
 protected:
 	static inline float kImpactPower = 1.2f;
 	static inline float kEquipLerpSpeed = 0.15f;
+
+	float reloadTimeScale_ = 1.0f;
 
 	// ---- tuning supplied by each firearm ----
 	virtual int GetMaxAmmo() const = 0;

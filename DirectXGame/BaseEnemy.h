@@ -107,13 +107,16 @@ public:
 	void SpawnDropItem();
 	virtual void KillInstant();
 
-	void TakeDamage(int damage, const KamataEngine::Vector3& hitDirection, float impactPower);
+	// ignoreBuff: for effects that must kill regardless of the officer buff (barrel blast).
+	void TakeDamage(int damage, const KamataEngine::Vector3& hitDirection, float impactPower, bool ignoreBuff = false);
 	int GetHP() const { return hp_; }
 	int GetMaxHP() const { return maxHP_; }
 	void SetHP(int hp) { hp_ = std::clamp(hp, 0, maxHP_); }
 	void SetMaxHP(int maxHp) { maxHP_ = maxHp; }
 
-	void RequestKnockback(const KamataEngine::Vector3& direction, float power) { behavior_->RequestKnockback(direction, power); }
+	virtual void RequestKnockback(const KamataEngine::Vector3& direction, float power) { behavior_->RequestKnockback(direction, power); }
+	// ガード成功による押し戻し。RequestKnockbackを無効化している敵(Sapper)もこちらは受ける
+	void RequestBlockKnockback(const KamataEngine::Vector3& direction, float power) { behavior_->RequestKnockback(direction, power); }
 	void RequestStun(float duration) { behavior_->RequestStun(duration); }
 	void ClearDebuffs() { behavior_->ClearDebuffs(); }
 
@@ -169,6 +172,8 @@ public:
 	bool IsOnGround() const { return onGround_; }
 	static float GetLimitFallSpeed() { return kLimitFallSpeed; }
 
+	// Officers lead their escorts; see BaseEnemyBehavior::ShouldHoldForEscort.
+	virtual bool IsEscortLeader() const { return false; }
 protected:
 	friend class DebugMenu;
 
@@ -188,6 +193,11 @@ protected:
 	int maxHP_ = 100;
 	KamataEngine::Vector3 pendingHitDirection_ = {1.0f, 0.3f, 0.0f};
 	float pendingImpactPower_ = 1.0f;
+
+	// Officer buff aura: a burst of particles at the feet every kAuraInterval while the buff is active.
+	void UpdateBuffAura();
+	float auraTimer_ = 0.0f;
+	static inline float kAuraInterval = 0.3f;
 
 	uint8_t arenaID_ = 0; 
 
@@ -369,4 +379,7 @@ protected:
 	KamataEngine::WorldTransform worldTransformAttack_;
 	uint32_t modelAttackTex_ = 0;
 	static inline float kAttackEffectScale = 1.0f;  // 斬撃モデルの大きさ(判定の中心に置いたまま拡縮)
+
+		// true の間は PhysicsAndCollisionUpdate がマップ判定・重力・分離を行わず、速度をそのまま位置へ反映する(Sapperのジャンプ用)
+	bool ignoreMapCollision_ = false;
 };

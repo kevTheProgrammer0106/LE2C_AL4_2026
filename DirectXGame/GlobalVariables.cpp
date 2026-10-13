@@ -18,8 +18,8 @@ void GlobalVariables::Update()
 		ImGui::End();
 		return;
 	}
-	if (!ImGui::BeginMenuBar())
-	{
+	if (!ImGui::BeginMenuBar()) {
+		ImGui::End();
 		return;
 	}
 		

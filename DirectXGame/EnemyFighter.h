@@ -5,7 +5,7 @@
 #include "FighterBehavior.h"
 #include "WeaponSabre.h"
 
-class EnemyFighter final : public BaseEnemy {
+class EnemyFighter : public BaseEnemy {
 public:
 	static void RegisterGlobalVariables();
 	static void ApplyGlobalVariables();

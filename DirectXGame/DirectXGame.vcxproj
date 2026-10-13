@@ -198,10 +198,15 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClCompile Include="DroppableItem.cpp" />
     <ClCompile Include="EffectMuzzleFlash.cpp" />
     <ClCompile Include="EffectParticleBurst.cpp" />
+    <ClCompile Include="EnemyCarabinier.cpp" />
     <ClCompile Include="EnemyCuirassier.cpp" />
     <ClCompile Include="EnemyFighter.cpp" />
+    <ClCompile Include="EnemyGrenadier.cpp" />
     <ClCompile Include="EnemyHUD.cpp" />
+    <ClCompile Include="EnemyOfficer.cpp" />
     <ClCompile Include="EnemyRifleman.cpp" />
+    <ClCompile Include="EnemySapper.cpp" />
+    <ClCompile Include="EnemyShotgunner.cpp" />
     <ClCompile Include="EnemySpawner.cpp" />
     <ClCompile Include="Fade.cpp" />
     <ClCompile Include="FighterBehavior.cpp" />
@@ -213,6 +218,8 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClCompile Include="Global.cpp" />
     <ClCompile Include="GlobalVariables.cpp" />
     <ClCompile Include="Goal.cpp" />
+    <ClCompile Include="Grenade.cpp" />
+    <ClCompile Include="GrenadierBehavior.cpp" />
     <ClCompile Include="GuardEffect.cpp" />
     <ClCompile Include="HealthBlock.cpp" />
     <ClCompile Include="HitEffect.cpp" />
@@ -222,6 +229,8 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClCompile Include="MapChipField.cpp" />
     <ClCompile Include="MusicManager.cpp" />
     <ClCompile Include="ObjectBounce.cpp" />
+    <ClCompile Include="OfficerBehavior.cpp" />
+    <ClCompile Include="OfficerBuff.cpp" />
     <ClCompile Include="PathDetector.cpp" />
     <ClCompile Include="PathFindingAI.cpp" />
     <ClCompile Include="PathFindingAlgorithm.cpp" />
@@ -230,7 +239,9 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClCompile Include="ProjectileBall.cpp" />
     <ClCompile Include="RandomGenerator.cpp" />
     <ClCompile Include="RiflemanBehavior.cpp" />
+    <ClCompile Include="SapperBehavior.cpp" />
     <ClCompile Include="ScreenFlash.cpp" />
+    <ClCompile Include="ShotgunnerBehavior.cpp" />
     <ClCompile Include="Skydome.cpp" />
     <ClCompile Include="SlidingGate.cpp" />
     <ClCompile Include="StageManager.cpp" />
@@ -239,6 +250,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClCompile Include="UIMenu.cpp" />
     <ClCompile Include="UserInterfaceGameplayHUD.cpp" />
     <ClCompile Include="VisionSensor.cpp" />
+    <ClCompile Include="WeaponAxe.cpp" />
     <ClCompile Include="WeaponHeavySabre.cpp" />
     <ClCompile Include="WeaponSabre.cpp" />
   </ItemGroup>
@@ -263,10 +275,15 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClInclude Include="DroppableItem.h" />
     <ClInclude Include="EffectMuzzleFlash.h" />
     <ClInclude Include="EffectParticleBurst.h" />
+    <ClInclude Include="EnemyCarabinier.h" />
     <ClInclude Include="EnemyCuirassier.h" />
     <ClInclude Include="EnemyFighter.h" />
+    <ClInclude Include="EnemyGrenadier.h" />
     <ClInclude Include="EnemyHUD.h" />
+    <ClInclude Include="EnemyOfficer.h" />
     <ClInclude Include="EnemyRifleman.h" />
+    <ClInclude Include="EnemySapper.h" />
+    <ClInclude Include="EnemyShotgunner.h" />
     <ClInclude Include="EnemySpawner.h" />
     <ClInclude Include="Fade.h" />
     <ClInclude Include="FighterBehavior.h" />
@@ -278,6 +295,8 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClInclude Include="Global.h" />
     <ClInclude Include="GlobalVariables.h" />
     <ClInclude Include="Goal.h" />
+    <ClInclude Include="Grenade.h" />
+    <ClInclude Include="GrenadierBehavior.h" />
     <ClInclude Include="GuardEffect.h" />
     <ClInclude Include="HealthBlock.h" />
     <ClInclude Include="HitEffect.h" />
@@ -286,6 +305,8 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClInclude Include="MapChipField.h" />
     <ClInclude Include="MusicManager.h" />
     <ClInclude Include="ObjectBounce.h" />
+    <ClInclude Include="OfficerBehavior.h" />
+    <ClInclude Include="OfficerBuff.h" />
     <ClInclude Include="PathDetector.h" />
     <ClInclude Include="PathFindingAI.h" />
     <ClInclude Include="PathFindingAlgorithm.h" />
@@ -294,7 +315,9 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClInclude Include="ProjectileBall.h" />
     <ClInclude Include="RandomGenerator.h" />
     <ClInclude Include="RiflemanBehavior.h" />
+    <ClInclude Include="SapperBehavior.h" />
     <ClInclude Include="ScreenFlash.h" />
+    <ClInclude Include="ShotgunnerBehavior.h" />
     <ClInclude Include="Skydome.h" />
     <ClInclude Include="SlidingGate.h" />
     <ClInclude Include="StageManager.h" />
@@ -303,6 +326,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClInclude Include="UIMenu.h" />
     <ClInclude Include="UserInterfaceGameplayHUD.h" />
     <ClInclude Include="VisionSensor.h" />
+    <ClInclude Include="WeaponAxe.h" />
     <ClInclude Include="WeaponHeavySabre.h" />
     <ClInclude Include="WeaponSabre.h" />
   </ItemGroup>

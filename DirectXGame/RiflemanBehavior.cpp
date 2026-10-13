@@ -125,7 +125,8 @@ void RiflemanBehavior::BehaviorRootUpdate() {
 
 void RiflemanBehavior::BehaviorAimingInitialize() {
 	aimTimer_ = 0.0f;
-	currentAimDuration_ = kAimDuration; // full duration on first sight
+	currentAimDuration_ = kAimDuration * riflemanOwner_.GetAimTimeScale();
+
 
 	OwnerVelocity().x = 0.0f;
 	OwnerSetFirearmMode(1);

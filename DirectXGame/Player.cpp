@@ -743,7 +743,7 @@ void Player::OnBlocked(const Vector3& hitDirection, float impactPower, BaseEnemy
 			pushDir = {isRight() ? 1.0f : -1.0f, 0.0f, 0.0f};
 		}
 		pushDir.y += 0.3f;
-		attacker->RequestKnockback(pushDir, impactPower * kBlockAttackerKnockbackScale);
+		attacker->RequestBlockKnockback(pushDir, impactPower * kBlockAttackerKnockbackScale);
 	}
 	PlayerBehavior::PlayBlockImpactSound();
 }

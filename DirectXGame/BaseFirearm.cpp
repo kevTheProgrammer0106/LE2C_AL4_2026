@@ -1,3 +1,4 @@
+#define NOMINMAX
 #include "BaseFirearm.h"
 #include "GlobalVariables.h"
 
@@ -55,10 +56,12 @@ bool BaseFirearm::TryFire() {
 	return true;
 }
 
+void BaseFirearm::SetReloadTimeScale(float scale) { reloadTimeScale_ = std::max(scale, 0.01f); }
+
 void BaseFirearm::TickReload() {
 	if (currentAmmo_ < GetMaxAmmo()) {
 		reloadTimer_ += 1.0f / 60.0f;
-		if (reloadTimer_ >= reloadDurationCurrent_) {
+		if (reloadTimer_ >= reloadDurationCurrent_ * reloadTimeScale_) {
 			currentAmmo_ = GetMaxAmmo();
 			reloadTimer_ = 0.0f;
 			reloadDurationCurrent_ = GetBaseReloadDuration();

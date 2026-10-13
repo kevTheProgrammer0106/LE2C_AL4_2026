@@ -5,7 +5,7 @@
 #include "FirearmMusketBayonet.h"
 #include "ProjectileBall.h"
 
-class EnemyRifleman final : public BaseEnemy {
+class EnemyRifleman : public BaseEnemy {
 public:
 	static void RegisterGlobalVariables();
 	static void ApplyGlobalVariables();
@@ -45,6 +45,11 @@ public:
 	static void SetSfxVolume(float volume) { sSfxVolume_ = volume; }
 
 	SRTOffset GetActionAnimOffset() const override;
+
+	virtual float GetReloadTimeScale() const { return 1.0f; }
+	virtual float GetAttackTimeScale() const { return 1.0f; }
+	virtual float GetAimTimeScale() const { return 1.0f; }
+
 private:
 	friend class DebugMenu;
 
@@ -93,6 +98,7 @@ private:
 	};
 
 protected:
+
 	void RefreshWeaponVisual() override {
 		SetBayonetActive(false);
 		ResetBayonetHit();

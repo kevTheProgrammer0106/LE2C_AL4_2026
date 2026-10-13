@@ -32,11 +32,13 @@ public:
 	int GetLungeDamage() const { return kLungeDamage; }
 	float GetLungeImpactPower() const { return kLungeImpactPower; }
 
+	void SetBayonetTimeScale(float scale);
+
 	// Bayonet lunge timings (frames @60fps) and advance speed.
-	float GetBayonetAnticipateDuration() const { return kBayonetAnticipateDuration; }
-	float GetBayonetAttackDuration() const { return kBayonetAttackDuration; }
-	float GetBayonetRecoveryDuration() const { return kBayonetRecoveryDuration; }
-	float GetBayonetAttackSpeed() const { return kBayonetAttackSpeed; }
+	float GetBayonetAnticipateDuration() const { return kBayonetAnticipateDuration * bayonetTimeScale_; }
+	float GetBayonetAttackDuration() const { return kBayonetAttackDuration * bayonetTimeScale_; }
+	float GetBayonetRecoveryDuration() const { return kBayonetRecoveryDuration * bayonetTimeScale_; }
+	float GetBayonetAttackSpeed() const { return kBayonetAttackSpeed / bayonetTimeScale_; }
 	float GetBayonetReach() const { return kBayonetReach; }
 	float GetBayonetSwingHeight() const { return kBayonetSwingHeight; }
 
@@ -143,6 +145,7 @@ private:
 	static inline float kBayonetSwingHeight = 1.8f;
 
 	private:
+	float bayonetTimeScale_ = 1.0f;
 		// プレイヤを使用
 	    static inline BayonetLungePoses kPlayerLungePoses = {
 	        {{1.0f, 1.0f, 1.0f}, {-0.3f, -1.5707963f, 0.0f}, {0.45f, 0.05f, -0.5f}},

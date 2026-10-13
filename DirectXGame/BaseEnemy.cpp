@@ -4,6 +4,7 @@
 #include "GlobalVariables.h"
 #include "MapChipField.h"
 #include "Player.h"
+#include "OfficerBuff.h"
 
 using namespace KamataEngine;
 
@@ -38,6 +39,7 @@ void BaseEnemy::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "DropThroughDuration", kDropThroughDuration);
 	gv->AddItem(kGroupName, "DropThroughVelocity", kDropThroughVelocity);
 	gv->AddItem(kGroupName, "AttackEffectScale", kAttackEffectScale);
+	gv->AddItem(kGroupName, "AuraInterval", kAuraInterval);
 	BaseEnemyBehavior::RegisterGlobalVariables();
 }
 
@@ -67,6 +69,7 @@ void BaseEnemy::ApplyGlobalVariables() {
 	kDropThroughDuration = gv->GetFloatValue(kGroupName, "DropThroughDuration");
 	kDropThroughVelocity = gv->GetFloatValue(kGroupName, "DropThroughVelocity");
 	kAttackEffectScale = gv->GetFloatValue(kGroupName, "AttackEffectScale");
+	kAuraInterval = gv->GetFloatValue(kGroupName, "AuraInterval");
 	BaseEnemyBehavior::ApplyGlobalVariables();
 }
 
@@ -167,8 +170,22 @@ void BaseEnemy::Update() {
 	if (behavior_->IsDeathBehavior())
 		UpdateModelCollision(); // 死亡中は物理更新を通らないのでここでモデルを追従させる
 	UpdateBodyParts();
+	UpdateBuffAura();
 }
+void BaseEnemy::UpdateBuffAura() {
+	if (!OfficerBuff::gActive || !gameScene_ || isDead_ || behavior_->IsDeathBehavior()) {
+		auraTimer_ = 0.0f; // the first burst appears right away when the buff lands
+		return;
+	}
+	auraTimer_ -= 1.0f / 60.0f;
+	if (auraTimer_ > 0.0f)
+		return;
+	auraTimer_ = kAuraInterval;
 
+	// under the body: the model's feet, nudged up so the motes start inside the ground contact
+	Vector3 feet = GetModelWorldPosition() + Vector3(0.0f, -kHeight * 0.5f + 0.05f, 0.0f);
+	gameScene_->CreateBurstEffect(BurstType::kAura, feet, {0.0f, 1.0f});
+}
 void BaseEnemy::Draw() {
 	for (auto& part : parts_) {
 		if (!isDead_ && part.model) {
@@ -230,9 +247,12 @@ bool BaseEnemy::PerformJump() {
 	velocity_.y = kJumpAcceleration;
 	return true;
 }
-void BaseEnemy::TakeDamage(int damage, const Vector3& hitDirection, float impactPower) {
+void BaseEnemy::TakeDamage(int damage, const Vector3& hitDirection, float impactPower, bool ignoreBuff) {
 	if (behavior_->IsDeathBehavior() || isDead_)
 		return;
+
+	if (!ignoreBuff)
+		damage = OfficerBuff::ReduceDamage(damage);
 
 	hp_ -= damage;
 	pendingHitDirection_ = hitDirection;
@@ -372,14 +392,22 @@ void BaseEnemy::PhysicsAndCollisionUpdate() {
 	if (dropThroughTimer_ > 0.0f) {
 		dropThroughTimer_ = std::max(0.0f, dropThroughTimer_ - 1.0f / 60.0f);
 	}
-	behavior_->ApplySeparationFromOtherEnemies();
 
-	if (!onGround_) {
-		velocity_ += Vector3(0, -kGravityAcceleration, 0);
-		velocity_.y = std::max(velocity_.y, -kLimitFallSpeed);
+	if (ignoreMapCollision_) {
+		// マップ判定を無視する移動: 速度をそのまま位置へ反映する(重力は呼び出し側のBehaviorで扱う)
+		worldTransform_.translation_ += velocity_;
+		onGround_ = false;
+		hitWallThisFrame_ = false;
+	} else {
+		behavior_->ApplySeparationFromOtherEnemies();
+
+		if (!onGround_) {
+			velocity_ += Vector3(0, -kGravityAcceleration, 0);
+			velocity_.y = std::max(velocity_.y, -kLimitFallSpeed);
+		}
+
+		MapChipCollisionUpdate();
 	}
-
-	MapChipCollisionUpdate();
 
 	if (turnTimer_ > 0.0f) {
 		turnTimer_ -= 1.0f / 60.0f;
@@ -399,7 +427,7 @@ void BaseEnemy::MapChipCollisionUpdate() {
 	blockDetector_.SetIgnoreOneWay(IsDroppingThrough()); // ドロップスルー中は足場への着地だけ無視
 
 	CollisionInfo horizontalInfo{};
-	horizontalInfo.move.x = velocity_.x;
+	horizontalInfo.move.x = velocity_.x * OfficerBuff::MoveScale(behavior_ && behavior_->IsDebuffed());
 	blockDetector_.MapChipCollision(horizontalInfo);
 	if (behavior_) {
 		BaseEnemyBehavior::LedgeGuardRequest guard = behavior_->GetLedgeGuardRequest();

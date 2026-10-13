@@ -4,6 +4,7 @@
 
 #include "GameScene.h"
 #include "StageManager.h"
+#include "EnemyCarabinier.h"
 
 #include <array>
 #include <cstdio>
@@ -67,6 +68,16 @@ bool EditComboPatterns(const char* id, std::array<ComboAttackPattern, 3>& patter
 }
 
 const char* EnemyTypeName(BaseEnemy* e) {
+	if (dynamic_cast<EnemySapper*>(e))
+		return "Sapper";
+	if (dynamic_cast<EnemyGrenadier*>(e))
+		return "Grenadier";
+	if (dynamic_cast<EnemyOfficer*>(e))
+		return "Officer";
+	if (dynamic_cast<EnemyCarabinier*>(e))
+		return "Carabinier";
+	if (dynamic_cast<EnemyShotgunner*>(e))
+		return "Shotgunner";
 	if (dynamic_cast<EnemyFighter*>(e))
 		return "Fighter";
 	if (dynamic_cast<EnemyCuirassier*>(e))
@@ -141,7 +152,7 @@ void DebugMenu::Draw(GameScene* gs) {
 		return;
 	}
 
-	ImGui::TextDisabled("F1 collision boxes | F2 freeze enemies | F3 this window | P debug camera");
+	ImGui::TextDisabled("F1 Reload field | F2 freeze enemies | F3 this window | F4 collision boxes | P debug camera");
 	ImGui::TextDisabled("Values registered in GlobalVariables are edited in the Global Variables window, not here.");
 
 	if (ImGui::BeginTabBar("DebugMenuTabs")) {
@@ -195,7 +206,7 @@ void DebugMenu::DrawSceneTab(GameScene* gs) {
 		ImGui::Text("Stage: %s (index %d)", sm->GetCurrentStageData().name.c_str(), sm->GetCurrentStageIndex());
 	ImGui::Text("Debug camera (P): %s", gs->isDebugCameraActive_ ? "ON" : "off");
 
-	if (ImGui::Button("Reload Scene"))
+	if (ImGui::Button("Reload Scene") || Input::GetInstance()->TriggerKey(DIK_F1))
 		gs->reloadRequested_ = true;
 
 	if (sm) {
@@ -371,17 +382,36 @@ void DebugMenu::DrawSpawnTab(GameScene* gs) {
 	if (ImGui::Button("Spawn Rifleman (right)"))
 		gs->SpawnEnemyAt(right, 0);
 	ImGui::SameLine();
+	if (ImGui::Button("Spawn Cuirassier (left)"))
+		gs->SpawnEnemyAt(left, 1);
+	ImGui::SameLine();
 	if (ImGui::Button("Spawn Fighter (left)"))
 		gs->SpawnEnemyAt(left, 2);
 	ImGui::SameLine();
-	if (ImGui::Button("Spawn Cuirassier (left)"))
-		gs->SpawnEnemyAt(left, 1);
+	if (ImGui::Button("Spawn Carabiner (right)"))
+		gs->SpawnEnemyAt(right, 3);
+	ImGui::SameLine();
+	if (ImGui::Button("Spawn Shotgunner (right)"))
+		gs->SpawnEnemyAt(right, 4);
+
+	if (ImGui::Button("Spawn Grenadier (left)"))
+		gs->SpawnEnemyAt(left, 5);
+	ImGui::SameLine();
+	if (ImGui::Button("Spawn Officer (left)"))
+		gs->SpawnEnemyAt(left, 6);
+	if (ImGui::Button("Spawn Sapper (left)"))
+		gs->SpawnEnemyAt(left, 7);
 
 	if (ImGui::Button("Spawn one of each")) {
 		gs->SpawnEnemyAt(right, 0);
 		gs->SpawnEnemyAt(left, 2);
 		Vector3 farthest = {p.x - spawnOffsetX_ * 2.0f, p.y, p.z};
 		gs->SpawnEnemyAt(farthest, 1);
+		gs->SpawnEnemyAt(farthest, 3);
+		gs->SpawnEnemyAt(right, 4);
+		gs->SpawnEnemyAt(left, 5);
+		gs->SpawnEnemyAt(farthest, 6);
+		gs->SpawnEnemyAt(left, 7);
 	}
 
 	ImGui::Separator();
@@ -658,8 +688,8 @@ void DebugMenu::DrawCombatTab() {
 		DragF("Aim duration (s)", RiflemanBehavior::kAimDuration, 0.01f);
 		DragF("Retreat speed", RiflemanBehavior::kRetreatSpeed, 0.002f);
 		DragF("Retreat duration (s)", RiflemanBehavior::kRetreatDuration, 0.01f);
-		DragF("Firing range", RiflemanBehavior::kRetreatRange, 0.05f);
-		DragF("Firing range", RiflemanBehavior::kBayonetRange, 0.05f);
+		DragF("Retreat range", RiflemanBehavior::kRetreatRange, 0.05f);
+		DragF("Bayonet range", RiflemanBehavior::kBayonetRange, 0.05f);
 		DragF("Firing range", RiflemanBehavior::kFiringRange, 0.05f);
 	}
 }

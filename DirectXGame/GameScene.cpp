@@ -184,6 +184,11 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	EnemyRifleman::RegisterGlobalVariables();
 	EnemyFighter::RegisterGlobalVariables();
 	EnemyCuirassier::RegisterGlobalVariables();
+	EnemyCarabinier::RegisterGlobalVariables();
+	EnemyShotgunner::RegisterGlobalVariables();
+	EnemyOfficer::RegisterGlobalVariables();
+	EnemyGrenadier::RegisterGlobalVariables();
+	EnemySapper::RegisterGlobalVariables();
 	VisionSensor::RegisterGlobalVariables();
 	EnemySpawner::RegisterGlobalVariables();
 	EnemyHUD::RegisterGlobalVariables();
@@ -194,7 +199,11 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	EffectMuzzleFlash::RegisterGlobalVariables();
 	ScreenFlash::RegisterGlobalVariables();
 	EffectParticleBurst::RegisterGlobalVariables();     
+	Grenade::RegisterGlobalVariables();
 
+
+	buffOfficer_ = nullptr;
+	OfficerBuff::gActive = false;
 
 	originPoint.Initialize();
 
@@ -507,6 +516,38 @@ void GameScene::CreateFirearmProjectile(Owner owner, const KamataEngine::Vector3
 		playerBullets_.push_back(std::move(projectile));
 	else if (owner == Owner::kEnemy)
 		enemyBullets_.push_back(std::move(projectile));
+}
+void GameScene::CreateGrenade(const Vector3& position, const Vector3& velocity, Owner owner) {
+	auto grenade = std::make_unique<Grenade>();
+	// reuses the firearm ball assets
+	grenade->Initialize(assets_.modelProjectileBall.get(), assets_.firearmBallTex, &camera_, mapChipField_.get(), position, velocity, owner);
+	grenades_.push_back(std::move(grenade));
+}
+
+void GameScene::UpdateGrenades() {
+	if (phase_ != Phase::kPlay)
+		return;
+
+	struct Blast {
+		Vector3 pos;
+		Owner owner;
+	};
+	std::vector<Blast> blasts;
+	for (auto& g : grenades_) {
+		if (!g)
+			continue;
+		g->Update();
+		if (g->IsReadyToExplode()) {
+			blasts.push_back({g->GetWorldPosition(), g->GetOwner()});
+			g->MarkDead();
+		}
+	}
+	grenades_.erase(std::remove_if(grenades_.begin(), grenades_.end(), [](const std::unique_ptr<Grenade>& g) { return !g || g->IsDead(); }), grenades_.end());
+
+	for (const Blast& b : blasts) {
+		ExplodeAt(b.pos, {Grenade::GetFatalRadius(), Grenade::GetNormalRadius(), Grenade::GetNormalDamage(), Grenade::GetImpact(), b.owner == Owner::kPlayer});
+		ExplodeAt(b.pos, {Grenade::GetFatalRadius(), Grenade::GetNormalRadius(), Grenade::GetNormalDamage(), Grenade::GetImpact(), b.owner == Owner::kEnemy});
+	}
 }
 
 void GameScene::ChangePhase() {
@@ -1059,6 +1100,11 @@ void GameScene::Update() {
 	EnemyRifleman::ApplyGlobalVariables();
 	EnemyCuirassier::ApplyGlobalVariables();
 	EnemyFighter::ApplyGlobalVariables();
+	EnemyShotgunner::ApplyGlobalVariables();
+	EnemyCarabinier::ApplyGlobalVariables();
+	EnemyOfficer::ApplyGlobalVariables();
+	EnemyGrenadier::ApplyGlobalVariables();
+	EnemySapper::ApplyGlobalVariables();
 	Player::ApplyGlobalVariables();
 	HitEffect::ApplyGlobalVariables();
 	GuardEffect::ApplyGlobalVariables();
@@ -1084,6 +1130,7 @@ void GameScene::Update() {
 	EffectMuzzleFlash::ApplyGlobalVariables();
 	ScreenFlash::ApplyGlobalVariables();
 	EffectParticleBurst::ApplyGlobalVariables();        
+	Grenade::ApplyGlobalVariables();
 
 	debugMenu();
 
@@ -1113,6 +1160,7 @@ void GameScene::Update() {
 		cameraController_->Update();
 
 	ChangePhase();
+	UpdateOfficerBuff();
 	// 出続ける色(スタン=黄 / 低HP=赤)。死亡演出中は低HPのまま赤、リトライ画面などでは消える
 	if (player_) {
 		const bool playing = (phase_ == Phase::kPlay);
@@ -1141,6 +1189,7 @@ void GameScene::Update() {
 	UpdateHealthBlocks();
 	UpdateWeaponSpawners();
 	UpdateExplosions();
+	UpdateGrenades();
 	UpdateSpikes();
 	UpdateFragileBlocks();
 	musicManager_.Update();
@@ -1200,7 +1249,10 @@ void GameScene::CheckAllCollisions() {
 	if (swingActive) {
 		BaseMelee* melee = player_->GetCurrentMelee();
 		AABB meleeAABB = melee->GetSwingAABB(*player_, player_->GetComboIndex());
-
+		if (!swingActive && !lungeActive)
+			breakableHitThisSwing_.clear(); // next swing/lunge may hit the same block again
+		if (melee)
+			HitDestructiblesInAABB(melee->GetSwingAABB(*player_, player_->GetComboIndex()), HitSource::kMelee);
 		float hitRotZ = 0.0f;
 		switch (player_->GetAttackDirection()) {
 		case Player::AttackDirection::kDown:
@@ -1210,10 +1262,6 @@ void GameScene::CheckAllCollisions() {
 			hitRotZ = 0.0f;
 			break;
 		}
-		if (!swingActive && !lungeActive)
-			breakableHitThisSwing_.clear(); // next swing/lunge may hit the same block again
-		if (melee)
-			HitDestructiblesInAABB(melee->GetSwingAABB(*player_, player_->GetComboIndex()), HitSource::kMelee);
 		for (const std::unique_ptr<BaseEnemy>& enemy : enemies_) {
 			if (!enemy || enemy->IsCollisionDisabled())
 				continue;
@@ -1288,6 +1336,7 @@ void GameScene::CheckAllCollisions() {
 				player_->GetCurrentFirearm()->NotifyDealtDamage();
 		}
 	}
+
 	for (auto& bullet : playerBullets_) {
 		if (bullet->IsDead())
 			continue;
@@ -1410,6 +1459,18 @@ void GameScene::CheckAllCollisions() {
 				if (resolveAttackOnPlayer(rifleman->GetBayonetLungeAABB(), rifleman->GetWorldPosition(), damage, power, rifleman))
 					rifleman->MarkHitPlayerThisSwing();
 			}
+		} else if (EnemySapper* sapper = dynamic_cast<EnemySapper*>(enemyPtr)) {
+			WeaponAxe* melee = sapper->GetCurrentMelee();
+			bool active = sapper->IsSwingActive() || sapper->IsSmashActive();
+			if (active && melee && !melee->HasHit(player_.get())) {
+				bool smash = sapper->IsSmashActive();
+				AABB weaponAABB = smash ? sapper->GetSmashAABB() : sapper->GetSwingAABB();
+				int comboIdx = sapper->GetCurrentComboIndex();
+				int damage = smash ? melee->GetSmashDamage() : melee->GetDamage(comboIdx, Owner::kEnemy);
+				float power = smash ? melee->GetSmashImpactPower() : melee->GetImpactPower(comboIdx, Owner::kEnemy);
+				if (resolveAttackOnPlayer(weaponAABB, sapper->GetWorldPosition(), damage, power, sapper))
+					melee->MarkHit(player_.get());
+			}
 		}
 	};
 
@@ -1486,6 +1547,9 @@ void GameScene::Draw() {
 	}
 	for (auto& bullet : enemyBullets_)
 		bullet->Draw();
+	for (auto& g : grenades_)
+		if (g)
+			g->Draw();
 	for (auto& item : droppableItems_) {
 		if (!item || item->IsPickedUp())
 			continue;
@@ -1561,7 +1625,7 @@ void GameScene::Draw() {
 BaseEnemy* GameScene::SpawnEnemyAt(const Vector3& position, uint8_t subID) {
 	const size_t enemyCountBefore = enemies_.size();
 	switch (subID) {
-	case 0: {
+	case 0: { // Rifleman
 		std::array<PartResources, 3> parts = {
 		    {{assets_.modelRiflemanBody.get(), assets_.riflemanBodyTex}, {assets_.modelRiflemanHead.get(), assets_.riflemanHeadTex}, {assets_.modelRiflemanHat.get(), assets_.riflemanHatTex}}
         };
@@ -1574,7 +1638,7 @@ BaseEnemy* GameScene::SpawnEnemyAt(const Vector3& position, uint8_t subID) {
 		newEnemy->SetHUDIconTexture(assets_.enemyIconRiflemanTex);
 		enemies_.push_back(std::move(newEnemy));
 	} break;
-	case 1: {
+	case 1: { // Cuirassier
 		std::array<PartResources, 3> parts = {
 		    {{assets_.modelCuirassierBody.get(), assets_.cuirassierBodyTex},
 		     {assets_.modelCuirassierHead.get(), assets_.cuirassierHeadTex},
@@ -1589,7 +1653,7 @@ BaseEnemy* GameScene::SpawnEnemyAt(const Vector3& position, uint8_t subID) {
 		newEnemy->SetHUDIconTexture(assets_.enemyIconCuirassierTex);
 		enemies_.push_back(std::move(newEnemy));
 	} break;
-	case 2: {
+	case 2: { // Fighter
 		std::array<PartResources, 3> parts = {
 		    {{assets_.modelFighterBody.get(), assets_.fighterBodyTex}, {assets_.modelFighterHead.get(), assets_.fighterHeadTex}, {assets_.modelFighterHat.get(), assets_.fighterHatTex}}
         };
@@ -1600,6 +1664,73 @@ BaseEnemy* GameScene::SpawnEnemyAt(const Vector3& position, uint8_t subID) {
 		newEnemy->SetMeleeModel(assets_.modelSabreLight.get(), assets_.texSabreLight);
 		newEnemy->SetAttackEffect(assets_.modelSlashEffect.get(), assets_.slashEffectTex);
 		newEnemy->SetHUDIconTexture(assets_.enemyIconFighterTex);
+		enemies_.push_back(std::move(newEnemy));
+	} break;
+	case 3: { // Carabiner
+		std::array<PartResources, 3> parts = {
+		    {{assets_.modelCarabinierBody.get(), assets_.carabinierBodyTex}, {assets_.modelCarabinierHead.get(), assets_.carabinierHeadTex}, {assets_.modelCarabinierHat.get(), assets_.carabinierHatTex}}
+        };
+		auto newEnemy = std::make_unique<EnemyCarabinier>();
+		newEnemy->SetMapChipField(mapChipField_.get());
+		newEnemy->SetGameScene(this);
+		newEnemy->Initialize(parts, &camera_, position);
+		newEnemy->SetMusketModel(assets_.modelMusketBayonet.get(), assets_.musketBayonetTex);
+		newEnemy->SetAttackEffect(assets_.modelSlashEffect.get(), assets_.slashEffectTex);
+		newEnemy->SetHUDIconTexture(assets_.enemyIconRiflemanTex);
+		enemies_.push_back(std::move(newEnemy));
+	} break;
+	case 4: { // Shotgunner
+		// 仮: ボディ/HUDアイコンはライフルマンのものを流用(専用アセットができたら差し替える)
+		std::array<PartResources, 3> parts = {
+		    {{assets_.modelShotgunnerBody.get(), assets_.shotgunnerBodyTex}, {assets_.modelShotgunnerHead.get(), assets_.shotgunnerHeadTex}, {assets_.modelShotgunnerHat.get(), assets_.shotgunnerHatTex}}
+        };
+		auto newEnemy = std::make_unique<EnemyShotgunner>();
+		newEnemy->SetMapChipField(mapChipField_.get());
+		newEnemy->SetGameScene(this);
+		newEnemy->Initialize(parts, &camera_, position);
+		newEnemy->SetShotgunModel(assets_.modelMusketLong.get(), assets_.musketLongTex); // ResolveWeaponVisualのkShotgunと同じ見た目
+		newEnemy->SetAttackEffect(assets_.modelSlashEffect.get(), assets_.slashEffectTex);
+		newEnemy->SetHUDIconTexture(assets_.enemyIconRiflemanTex);
+		enemies_.push_back(std::move(newEnemy));
+	} break;
+	case 5: { // Grenadier
+		std::array<PartResources, 3> parts = {
+		    {{assets_.modelGrenadierBody.get(), assets_.grenadierBodyTex}, {assets_.modelGrenadierHead.get(), assets_.grenadierHeadTex}, {assets_.modelGrenadierHat.get(), assets_.grenadierHatTex}}
+        };
+		auto newEnemy = std::make_unique<EnemyGrenadier>();
+		newEnemy->SetMapChipField(mapChipField_.get());
+		newEnemy->SetGameScene(this);
+		newEnemy->Initialize(parts, &camera_, position);
+		newEnemy->SetMeleeModel(assets_.modelSabreLight.get(), assets_.texSabreLight);
+		newEnemy->SetAttackEffect(assets_.modelSlashEffect.get(), assets_.slashEffectTex);
+		newEnemy->SetHUDIconTexture(assets_.enemyIconFighterTex);
+		enemies_.push_back(std::move(newEnemy));
+	} break;
+	case 6: { // Officer
+		std::array<PartResources, 3> parts = {
+		    {{assets_.modelOfficerBody.get(), assets_.officerBodyTex}, {assets_.modelOfficerHead.get(), assets_.officerHeadTex}, {assets_.modelOfficerHat.get(), assets_.officerHatTex}}
+        };
+		auto newEnemy = std::make_unique<EnemyOfficer>();
+		newEnemy->SetMapChipField(mapChipField_.get());
+		newEnemy->SetGameScene(this);
+		newEnemy->Initialize(parts, &camera_, position);
+		newEnemy->SetMeleeModel(assets_.modelSabreLight.get(), assets_.texSabreLight); // spear later
+		newEnemy->SetAttackEffect(assets_.modelSlashEffect.get(), assets_.slashEffectTex);
+		newEnemy->SetHUDIconTexture(assets_.enemyIconFighterTex);
+		enemies_.push_back(std::move(newEnemy));
+	} break;
+	case 7: { // Sapper
+		// 仮: ボディはCuirassierのもの、斧はヘビーサーベルのモデルを流用
+		std::array<PartResources, 3> parts = {
+		    {{assets_.modelSapperBody.get(), assets_.sapperBodyTex}, {assets_.modelSapperHead.get(), assets_.sapperHeadTex}, {assets_.modelSapperHat.get(), assets_.sapperHatTex}}
+        };
+		auto newEnemy = std::make_unique<EnemySapper>();
+		newEnemy->SetMapChipField(mapChipField_.get());
+		newEnemy->SetGameScene(this);
+		newEnemy->Initialize(parts, &camera_, position);
+		newEnemy->SetMeleeModel(assets_.modelSabreHeavy.get(), assets_.texSabreHeavy);
+		newEnemy->SetAttackEffect(assets_.modelSlashEffect.get(), assets_.slashEffectTex);
+		newEnemy->SetHUDIconTexture(assets_.enemyIconCuirassierTex);
 		enemies_.push_back(std::move(newEnemy));
 	} break;
 	default:
@@ -1828,6 +1959,8 @@ void GameScene::LoadVerticalRow(uint32_t row) {
 }
 
 void GameScene::UnloadChunkVisuals(uint32_t chunkIndex) {
+	UpdateOfficerBuff();
+
 	uint32_t xStart = chunkIndex * MapChipField::kChunkBlockSize;
 	uint32_t xEnd = xStart + MapChipField::kChunkBlockSize;
 
@@ -1854,13 +1987,20 @@ void GameScene::UnloadChunkVisuals(uint32_t chunkIndex) {
 	auto inRange = [&](float x) { return x >= chunkMinX && x < chunkMaxX; };
 
 	cameraController_->RemoveZoneDataInRange(chunkMinX, chunkMaxX);
+	for (const std::unique_ptr<BaseEnemy>& e : enemies_)
+		if (e && inRange(e->GetWorldPosition().x))
+			enemyOrigin_.erase(e.get());
 
+	if (buffOfficer_ && inRange(buffOfficer_->GetWorldPosition().x)) {
+		buffOfficer_ = nullptr;
+		OfficerBuff::gActive = false;
+	}
 	enemies_.erase(std::remove_if(enemies_.begin(), enemies_.end(), [&](const std::unique_ptr<BaseEnemy>& e) { return !e || inRange(e->GetWorldPosition().x); }), enemies_.end());
 
 	droppableItems_.erase(
 	    std::remove_if(droppableItems_.begin(), droppableItems_.end(), [&](const std::unique_ptr<DroppableItem>& item) { return !item || inRange(item->GetWorldPosition().x); }),
 	    droppableItems_.end());
-
+	grenades_.erase(std::remove_if(grenades_.begin(), grenades_.end(), [&](const std::unique_ptr<Grenade>& g) { return !g || inRange(g->GetWorldPosition().x); }), grenades_.end());
 	gates_.erase(std::remove_if(gates_.begin(), gates_.end(), [&](const std::unique_ptr<SlidingGate>& g) { return !g || inRange(g->GetAABB().min.x); }), gates_.end());
 
 	switches_.erase(std::remove_if(switches_.begin(), switches_.end(), [&](const std::unique_ptr<SwitchBlock>& s) { return !s || inRange(s->GetAABB().min.x); }), switches_.end());
@@ -1890,10 +2030,6 @@ void GameScene::UnloadChunkVisuals(uint32_t chunkIndex) {
 		uint32_t x = static_cast<uint32_t>(it->first >> 32);
 		it = (x >= xStart && x < xEnd) ? fragileTimers_.erase(it) : std::next(it);
 	}
-	// unloaded enemies are not kills: forget their origin link (put BEFORE the existing enemies_.erase)
-	for (const std::unique_ptr<BaseEnemy>& e : enemies_)
-		if (e && inRange(e->GetWorldPosition().x))
-			enemyOrigin_.erase(e.get());
 }
 
 void GameScene::TriggerLevelClear() {
@@ -2168,7 +2304,7 @@ GameScene::ArenaSpawnEntry GameScene::ResolveArenaSpawnEntry(int32_t stageIndex,
 
 void GameScene::DrawCollisionDebug() {
 #ifdef _DEBUG
-	if (Input::GetInstance()->TriggerKey(DIK_F1))
+	if (Input::GetInstance()->TriggerKey(DIK_F4))
 		showCollisionDebug_ = !showCollisionDebug_;
 	if (!showCollisionDebug_ || !player_)
 		return;
@@ -2235,6 +2371,11 @@ void GameScene::DrawCollisionDebug() {
 		} else if (EnemyRifleman* rifleman = dynamic_cast<EnemyRifleman*>(enemy.get())) {
 			if (rifleman->IsBayonetActive())
 				Box(rifleman->GetBayonetLungeAABB(), Color::kAttack);
+		} else if (EnemySapper* sapper = dynamic_cast<EnemySapper*>(enemy.get())) {
+			if (sapper->IsSmashActive())
+				Box(sapper->GetSmashAABB(), Color::kAttack);
+			else if (sapper->IsSwingActive())
+				Box(sapper->GetSwingAABB(), Color::kAttack);
 		}
 	}
 
@@ -2259,9 +2400,9 @@ void GameScene::DrawCollisionDebug() {
 	for (auto& gate : gates_)
 		if (gate && gate->IsBlocking())
 			Box(gate->GetAABB(), Color::kObject);
-	auto drawBlastRadius = [&](const Vector3& c) {
-		Circle(c, kExplosionFatalRadius, Color::kBlastFatal);
-		Circle(c, kExplosionNormalRadius, Color::kBlastNormal);
+	auto drawBlastRadius = [&](const Vector3& c, float fatal, float normal) {
+		Circle(c, fatal, Color::kBlastFatal);
+		Circle(c, normal, Color::kBlastNormal);
 	};
 	for (const auto& [key, hitsLeft] : explosives_) {
 		uint32_t x = static_cast<uint32_t>(key >> 32);
@@ -2275,12 +2416,15 @@ void GameScene::DrawCollisionDebug() {
                 {pos.x + 0.5f, pos.y + 0.5f, 0.5f }
         },
 		    Color::kObject);
-		drawBlastRadius(pos);
+		drawBlastRadius(pos, kExplosionFatalRadius, kExplosionNormalRadius);
 	}
 	for (const PendingExplosion& p : pendingExplosions_)
-		drawBlastRadius(mapChipField_->GetMapChipPositionByIndex(p.x, p.y));
+		drawBlastRadius(mapChipField_->GetMapChipPositionByIndex(p.x, p.y), kExplosionFatalRadius, kExplosionNormalRadius);
 	for (const DebugBlast& b : debugBlasts_)
-		drawBlastRadius(b.center);
+		drawBlastRadius(b.center, b.fatalRadius, b.normalRadius);
+	for (const auto& g : grenades_)
+		if (g)
+			drawBlastRadius(g->GetWorldPosition(), Grenade::GetFatalRadius(), Grenade::GetNormalRadius());
 #endif
 }
 void GameScene::RemoveBlockCell(uint32_t x, uint32_t y) {
@@ -2450,19 +2594,23 @@ bool GameScene::IsBlastExposed(const Vector3& from, const Vector3& to, int64_t s
 	return true;
 }
 
+GameScene::ExplosionParams GameScene::BarrelExplosionParams() { return {kExplosionFatalRadius, kExplosionNormalRadius, kExplosionNormalDamage, kExplosionImpact, true}; }
+
 void GameScene::Explode(uint32_t cx, uint32_t cy) {
 	if (mapChipField_->GetMapChipTypeByIndex(cx, cy) != MapChipType::kExplosive)
 		return;
 	const Vector3 center = mapChipField_->GetMapChipPositionByIndex(cx, cy);
+	RemoveBlockCell(cx, cy); // remove first so it never shields its own blast
+	ExplodeAt(center, BarrelExplosionParams());
+}
+
+void GameScene::ExplodeAt(const Vector3& center, const ExplosionParams& p) {
 #ifdef _DEBUG
-	debugBlasts_.push_back({center, kDebugBlastShowTime});
+	debugBlasts_.push_back({center, p.fatalRadius, p.normalRadius, kDebugBlastShowTime});
 #endif
 
-	RemoveBlockCell(cx, cy); // remove first so it never shields its own blast
-
 	CreateEnemyDeathParticles(center);
-	Vector3 flashPos = center;
-	CreateHitEffect(flashPos);
+	CreateExplosion(center);
 	if (assets_.sfxExplosion != 0)
 		AudioSettings::PlaySfx(assets_.sfxExplosion, false, 1.0f);
 
@@ -2474,8 +2622,8 @@ void GameScene::Explode(uint32_t cx, uint32_t cy) {
             {mx, box.max.y - 0.1f,               0.0f},
             {mx, box.min.y + 0.1f,               0.0f}
         };
-		for (const Vector3& p : pts)
-			if (IsBlastExposed(center, p))
+		for (const Vector3& pt : pts)
+			if (IsBlastExposed(center, pt))
 				return true;
 		return false;
 	};
@@ -2492,25 +2640,27 @@ void GameScene::Explode(uint32_t cx, uint32_t cy) {
 		return d;
 	};
 
-	for (const std::unique_ptr<BaseEnemy>& enemy : enemies_) {
-		if (!enemy || enemy->IsDead())
-			continue;
-		Vector3 ep = enemy->GetWorldPosition();
-		if (std::hypot(ep.x - center.x, ep.y - center.y) > kExplosionNormalRadius)
-			continue;
-		if (!exposedTo(enemy->GetAABB()))
-			continue;
-		enemy->TakeDamage(enemy->GetHP() + 1, outward(ep), kExplosionImpact); // instant death at any radius
+	if (p.harmEnemies) {
+		for (const std::unique_ptr<BaseEnemy>& enemy : enemies_) {
+			if (!enemy || enemy->IsDead())
+				continue;
+			Vector3 ep = enemy->GetWorldPosition();
+			if (std::hypot(ep.x - center.x, ep.y - center.y) > p.normalRadius)
+				continue;
+			if (!exposedTo(enemy->GetAABB()))
+				continue;
+			enemy->TakeDamage(enemy->GetHP() + 1, outward(ep), p.impact, true);
+		}
 	}
 
 	if (player_ && !player_->IsDefeated()) {
 		Vector3 pp = player_->GetWorldPosition();
 		float dist = std::hypot(pp.x - center.x, pp.y - center.y);
-		if (dist <= kExplosionNormalRadius && exposedTo(player_->GetAABB())) {
-			if (dist <= kExplosionFatalRadius)
+		if (dist <= p.normalRadius && exposedTo(player_->GetAABB())) {
+			if (dist <= p.fatalRadius)
 				player_->KillInstant();
 			else
-				player_->TakeDamage(kExplosionNormalDamage, outward(pp), kExplosionImpact);
+				player_->TakeDamage(p.normalDamage, outward(pp), p.impact);
 		}
 	}
 
@@ -2522,7 +2672,10 @@ void GameScene::Explode(uint32_t cx, uint32_t cy) {
 	std::vector<MapChipField::IndexSet> glassCells, chainCells;
 	std::vector<BreakableHit> breakableHits;
 
-	const int r = static_cast<int>(std::ceil(kExplosionNormalRadius));
+	const MapChipField::IndexSet centerIdx = mapChipField_->GetMapChipIndexSetByPosition(Vector3(std::max(0.0f, center.x), std::max(0.0f, center.y), 0.0f));
+	const uint32_t cx = centerIdx.xIndex, cy = centerIdx.yIndex;
+
+	const int r = static_cast<int>(std::ceil(p.normalRadius));
 	for (int dy = -r; dy <= r; ++dy) {
 		for (int dx = -r; dx <= r; ++dx) {
 			int nx = static_cast<int>(cx) + dx, ny = static_cast<int>(cy) + dy;
@@ -2534,13 +2687,13 @@ void GameScene::Explode(uint32_t cx, uint32_t cy) {
 				continue;
 			Vector3 cellPos = mapChipField_->GetMapChipPositionByIndex(ux, uy);
 			float dist = std::hypot(cellPos.x - center.x, cellPos.y - center.y);
-			if (dist > kExplosionNormalRadius || !IsBlastExposed(center, cellPos, nx, ny))
+			if (dist > p.normalRadius || !IsBlastExposed(center, cellPos, nx, ny))
 				continue;
 
 			if (type == MapChipType::kGlass)
 				glassCells.push_back({ux, uy});
 			else if (type == MapChipType::kBreakable)
-				breakableHits.push_back({ux, uy, dist <= kExplosionFatalRadius ? 999 : 1});
+				breakableHits.push_back({ux, uy, dist <= p.fatalRadius ? 999 : 1});
 			else
 				chainCells.push_back({ux, uy});
 		}
@@ -2553,6 +2706,7 @@ void GameScene::Explode(uint32_t cx, uint32_t cy) {
 	for (const MapChipField::IndexSet& c : chainCells)
 		QueueExplosion(c.xIndex, c.yIndex, kExplosionChainDelay);
 }
+
 bool GameScene::CheckSpikeHit(SpikeTracker& t, const AABB& body, bool onGround, float limitFallSpeed) {
 	AABB box = body; // shrink horizontally so brushing a neighbour's side never counts
 	box.min.x += 0.1f;
@@ -2731,3 +2885,33 @@ void GameScene::UpdateWeaponSpawners() {
 	}
 }
 
+void GameScene::ApplyOfficerBuff(BaseEnemy* officer) {
+	if (!officer || buffOfficer_)
+		return; // only one buff at a time
+	buffOfficer_ = officer;
+	OfficerBuff::gActive = true;
+
+	// worldwide: a ring over every live enemy
+	for (const std::unique_ptr<BaseEnemy>& e : enemies_) {
+		if (!e || e->IsDead())
+			continue;
+		Vector3 pos = e->GetModelWorldPosition();
+		pos.y += 1.2f;
+		CreateGuardEffect(pos);
+	}
+}
+
+void GameScene::UpdateOfficerBuff() {
+	if (buffOfficer_) {
+		bool alive = false;
+		for (const std::unique_ptr<BaseEnemy>& e : enemies_) {
+			if (e.get() == buffOfficer_ && !e->IsDead() && !e->GetBehaviorModule().IsDeathBehavior()) {
+				alive = true;
+				break;
+			}
+		}
+		if (!alive)
+			buffOfficer_ = nullptr; // officer died: buff gone
+	}
+	OfficerBuff::gActive = (buffOfficer_ != nullptr);
+}

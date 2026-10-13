@@ -135,6 +135,8 @@ void FirearmMusketBayonet::SetPlayerLungePose(LungePhase phase, float t) {
 	lungePoseActive_ = true;
 }
 
+void FirearmMusketBayonet::SetBayonetTimeScale(float scale) { bayonetTimeScale_ = std::max(scale, 0.01f); }
+
 AABB FirearmMusketBayonet::GetPlayerLungeAABB(const AABB& body, bool facingRight) const {
 	constexpr float kOverlapMargin = 0.1f;
 	const float centerY = (body.min.y + body.max.y) * 0.5f;
