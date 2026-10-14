@@ -19,6 +19,10 @@ public:
 	void Update() override;
 	void Draw() override;
 
+	// 外部要因のスタンも受けない。スタンするのは急降下の着地後(自己スタン)だけ
+	void RequestStun(float /*duration*/) override {}
+
+
 	WeaponAxe* GetCurrentMelee() const { return currentMelee_.get(); }
 	void SetMeleeModel(KamataEngine::Model* model, uint32_t textureHandle);
 
@@ -61,7 +65,12 @@ protected:
 		if (currentMelee_)
 			currentMelee_->SnapWeaponState(equipped ? WeaponState::kEquipped : WeaponState::kHolstered);
 	}
-
+	// 倒すと斧を落とす(プレイヤーも使える)
+	bool GetDropInfo(DropItemCategory& outCategory, DropWeaponKind& outKind) const override {
+		outCategory = DropItemCategory::kMelee;
+		outKind = DropWeaponKind::kLongAxe;
+		return true;
+	}
 private:
 	std::unique_ptr<WeaponAxe> currentMelee_;
 

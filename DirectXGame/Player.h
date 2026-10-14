@@ -8,9 +8,14 @@
 #include "FirearmMusket.h"
 #include "FirearmMusketBayonet.h"
 #include "FirearmShotgun.h"
+#include "FirearmPistols.h"
+
 #include "ProjectileBall.h"
+
 #include "WeaponSabre.h"
 #include "WeaponHeavySabre.h"
+#include "WeaponAxe.h"
+#include "WeaponSpear.h"
 
 
 class GameScene;
@@ -428,6 +433,14 @@ private:
 
 	int32_t meleeSourceSpawnerID_ = -1;
 	int32_t firearmSourceSpawnerID_ = -1;
+
+	// Fires the current firearm once (projectiles, muzzle flash, sound, recoil knockback). TryFire() must have succeeded.
+	void FireCurrentFirearm();
+
+	// Dual pistols: hold the button after the first shot (both loaded) to fire the second pistol too
+	bool dualHoldArmed_ = false;
+	float dualHoldTimer_ = 0.0f;
+	static inline float kDualHoldTime = 0.25f;
 
 	void UpdateGoalSequence();
 	bool goalSeqActive_ = false;

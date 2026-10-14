@@ -62,7 +62,7 @@ void FighterBehavior::BehaviorRootUpdate() {
 	Vector3 diff = scene->GetPlayer()->GetWorldPosition() - owner_.GetWorldPosition();
 	float distance = std::sqrtf(diff.x * diff.x + diff.y * diff.y);
 
-	if (distance <= kMeleeEngageRange) {
+	if (distance <= GetMeleeEngageRange()) {
 		RequestBehavior(Behavior::kMelee);
 	}
 }

@@ -96,12 +96,10 @@ public:
 		uint32_t firearmLong = 0;
 		uint32_t firearmBayonet = 0;
 		uint32_t bayonetLunge = 0;
-
-		// uint32_t firearmBlunderbuss = 0;
-		// uint32_t firearmDualPistols = 0;
-	
-		// uint32_t meleeSpontoon = 0;
-		// uint32_t meleeAxe = 0;
+		uint32_t meleeAxe = 0;
+		uint32_t meleeSpear = 0;
+		 uint32_t firearmBlunderbuss = 0;
+		 uint32_t firearmDualPistols = 0;
 	};
 	struct State {
 		bool isFirearmMode = false;
@@ -120,7 +118,7 @@ public:
 	void Draw();
 
 private:
-	static inline float kIconSize = 40.0f;
+	static inline float kIconSize = 64.0f;
 	static inline float kIconSpacing = 12.0f;
 	static inline float kTopOffsetFromHealthBar = 14.0f;
 	static inline float kDarkFactor = 0.25f;
@@ -150,8 +148,14 @@ private:
 
 	CooldownIcon meleeLight_;
 	CooldownIcon meleeHeavy_;
+	CooldownIcon meleeAxe_;
+	CooldownIcon meleeSpear_;
+
 	CooldownIcon firearmLong_;
 	CooldownIcon firearmBayonet_;
+	CooldownIcon firearmShotgun_;
+	CooldownIcon firearmPistols_;
+	
 	CooldownIcon bayonetLunge_;
 	DropWeaponKind shownMelee_ = DropWeaponKind::kSabreLight;
 	DropWeaponKind shownFirearm_ = DropWeaponKind::kMusketLong;

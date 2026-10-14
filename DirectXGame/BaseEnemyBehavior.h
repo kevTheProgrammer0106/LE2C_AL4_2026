@@ -175,13 +175,13 @@ public:
 			return;
 		knockbackDirection_ = direction;
 		knockbackPower_ = power;
-		pendingStunAfterKnockback_ = kHitStunDuration + GetStunDurationBonus();
+		pendingStunAfterKnockback_ = GetHitStunDuration();
 		behaviorRequest_ = Behavior::kKnockback;
 	}
 	void RequestStun(float duration) {
 		if (behavior_ == Behavior::kDeath || behaviorRequest_ == Behavior::kDeath)
 			return;
-		stunDuration_ = duration + GetStunDurationBonus();
+		stunDuration_ = duration;
 		behaviorRequest_ = Behavior::kStunned;
 	}
 	void ClearDebuffs() {
@@ -243,8 +243,9 @@ public:
 	float GetBlockCooldownRemaining() const { return blockCooldownTimer_; }
 	// Rolls GetBlockChanceWhenHit(); on success queues kBlock. Called by BaseEnemy::TryBlockAttack.
 	bool TryStartBlockOnHit();
-	// 外部要因のスタンに足す秒数(通常は0。Sapperだけ+6秒)
-	virtual float GetStunDurationBonus() const { return 0.0f; }
+
+	// ノックバック後に続くスタン時間。0ならノックバックだけで終わる(Sapperはガードされてもスタンしない)
+	virtual float GetHitStunDuration() const { return kHitStunDuration; }
 
 	static inline float kBlockDuration = 1.5f;
 	static inline float kBlockCooldown = 10.0f; // counted from the END of the block

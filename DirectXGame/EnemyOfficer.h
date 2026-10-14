@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EnemyFighter.h"
+#include "WeaponSpear.h"
 #include "OfficerBehavior.h"
 
 /// Buffs every enemy when alerted by the player; the buff ends when this officer dies.
@@ -23,8 +24,14 @@ public:
 
 protected:
 	std::unique_ptr<BaseEnemyBehavior> CreateBehaviorModule() override { return std::make_unique<OfficerBehavior>(*this); }
-
-	// When WeaponSpear exists: override SetMeleeModel (see EnemyCuirassier::SetMeleeModel) to create it instead of WeaponSabre.
+	// 槍(スポントン)を持つ
+	std::unique_ptr<BaseMelee> CreateMeleeWeapon() override { return std::make_unique<WeaponSpear>(); }
+	// 倒すと槍を落とす(プレイヤーも使える)
+	bool GetDropInfo(DropItemCategory& outCategory, DropWeaponKind& outKind) const override {
+		outCategory = DropItemCategory::kMelee;
+		outKind = DropWeaponKind::kSpear;
+		return true;
+	}
 
 private:
 	float buffPoseTimer_ = 999.0f;

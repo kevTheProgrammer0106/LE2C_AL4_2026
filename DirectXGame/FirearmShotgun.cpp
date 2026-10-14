@@ -34,6 +34,7 @@ void FirearmShotgun::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "ReloadDurationEnemy", kReloadDurationEnemy);
 	gv->AddItem(kGroupName, "ReloadHitBonusEnemy", kReloadHitBonusEnemy);
 	gv->AddItem(kGroupName, "ReloadDurationMinEnemy", kReloadDurationMinEnemy);
+	gv->AddItem(kGroupName, "FireKnockbackPower", kFireKnockbackPower);
 }
 
 void FirearmShotgun::ApplyGlobalVariables() {
@@ -61,4 +62,5 @@ void FirearmShotgun::ApplyGlobalVariables() {
 	kReloadDurationEnemy = gv->GetFloatValue(kGroupName, "ReloadDurationEnemy");
 	kReloadHitBonusEnemy = gv->GetFloatValue(kGroupName, "ReloadHitBonusEnemy");
 	kReloadDurationMinEnemy = gv->GetFloatValue(kGroupName, "ReloadDurationMinEnemy");
+	kFireKnockbackPower = gv->GetFloatValue(kGroupName, "FireKnockbackPower");
 }

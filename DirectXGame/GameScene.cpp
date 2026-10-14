@@ -27,6 +27,14 @@ bool ResolveWeaponVisual(const GameAssets& a, DropWeaponKind kind, Model*& outMo
 		outModel = a.modelSabreHeavy.get();
 		outTex = a.texSabreHeavy;
 		return true;
+	case DropWeaponKind::kLongAxe:
+		outModel = a.modelSabreHeavy.get(); // 仮: 斧のモデルができるまでヘビーサーベルを流用
+		outTex = a.texSabreHeavy;
+		return true;
+	case DropWeaponKind::kSpear:
+		outModel = a.modelSpear.get();
+		outTex = a.texSpear;
+		return true;
 	case DropWeaponKind::kMusketLong:
 		outModel = a.modelMusketLong.get();
 		outTex = a.musketLongTex;
@@ -36,6 +44,10 @@ bool ResolveWeaponVisual(const GameAssets& a, DropWeaponKind kind, Model*& outMo
 		outTex = a.musketBayonetTex;
 		return true;
 	case DropWeaponKind::kShotgun:
+		outModel = a.modelMusketLong.get();
+		outTex = a.musketLongTex;
+		return true;
+	case DropWeaponKind::kDualPistols:
 		outModel = a.modelMusketLong.get();
 		outTex = a.musketLongTex;
 		return true;
@@ -200,7 +212,7 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	ScreenFlash::RegisterGlobalVariables();
 	EffectParticleBurst::RegisterGlobalVariables();     
 	Grenade::RegisterGlobalVariables();
-
+	FirearmPistols::RegisterGlobalVariables();
 
 	buffOfficer_ = nullptr;
 	OfficerBuff::gActive = false;
@@ -278,7 +290,11 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 		icons.meleeHeavy = assets_.meleeIconHeavyTex;
 		icons.firearmLong = assets_.firearmIconLongTex;
 		icons.firearmBayonet = assets_.firearmIconBayonetTex;
+		icons.firearmBlunderbuss = assets_.firearmIconShotgunTex;
+		icons.firearmDualPistols = assets_.firearmIconPistolTex;
 		icons.bayonetLunge = assets_.bayonetLungeIconTex;
+		icons.meleeAxe = assets_.meleeIconAxeTex;
+		icons.meleeSpear = assets_.meleeIconSpearTex;
 		weaponStatusUI_.Initialize(icons);
 	}
 	playerBlockUI_.Initialize(assets_.healthBarBackgroundTex, assets_.healthBarFillTex);
@@ -1131,6 +1147,7 @@ void GameScene::Update() {
 	ScreenFlash::ApplyGlobalVariables();
 	EffectParticleBurst::ApplyGlobalVariables();        
 	Grenade::ApplyGlobalVariables();
+	FirearmPistols::ApplyGlobalVariables();
 
 	debugMenu();
 
@@ -1246,13 +1263,22 @@ void GameScene::CheckAllCollisions() {
 	const bool swingActive = player_->IsMeleeSwingActive() && player_->GetAttackAnimState().phase == Player::AttackPhase::kAttack;
 	const bool lungeActive = player_->IsLungeHitActive();
 
+	// one hit per block per swing: a new combo step, a new lunge, or going idle starts a fresh set
+	const int hitKey = lungeActive ? 1000 : (swingActive ? player_->GetComboIndex() : -1);
+	if (hitKey != breakableHitKey_) {
+		breakableHitThisSwing_.clear();
+		breakableHitKey_ = hitKey;
+	}
+	if (swingActive) {
+		if (BaseMelee* m = player_->GetCurrentMelee())
+			HitDestructiblesInAABB(m->GetSwingAABB(*player_, player_->GetComboIndex()), HitSource::kMelee);
+	}
+	if (lungeActive)
+		HitDestructiblesInAABB(player_->GetLungeAABB(), HitSource::kMelee);
+
 	if (swingActive) {
 		BaseMelee* melee = player_->GetCurrentMelee();
 		AABB meleeAABB = melee->GetSwingAABB(*player_, player_->GetComboIndex());
-		if (!swingActive && !lungeActive)
-			breakableHitThisSwing_.clear(); // next swing/lunge may hit the same block again
-		if (melee)
-			HitDestructiblesInAABB(melee->GetSwingAABB(*player_, player_->GetComboIndex()), HitSource::kMelee);
 		float hitRotZ = 0.0f;
 		switch (player_->GetAttackDirection()) {
 		case Player::AttackDirection::kDown:
@@ -1303,7 +1329,6 @@ void GameScene::CheckAllCollisions() {
 	if (lungeActive) {
 		const AABB lungeAABB = player_->GetLungeAABB();
 		const LungeSpec spec = player_->GetLungeSpec(player_->GetCurrentLungeSource());
-		HitDestructiblesInAABB(player_->GetLungeAABB(), HitSource::kMelee);
 		for (const std::unique_ptr<BaseEnemy>& enemy : enemies_) {
 			if (!enemy || enemy->IsDead() || enemy->IsCollisionDisabled())
 				continue;
@@ -1433,7 +1458,7 @@ void GameScene::CheckAllCollisions() {
 		if (!enemyPtr || enemyPtr->IsDead() || enemyPtr->IsCollisionDisabled())
 			return;
 		if (EnemyFighter* fighter = dynamic_cast<EnemyFighter*>(enemyPtr)) {
-			WeaponSabre* melee = fighter->GetCurrentMelee();
+			BaseMelee* melee = fighter->GetCurrentMelee();
 			if (fighter->IsSwingActive() && melee && !melee->HasHit(player_.get())) {
 				int comboIdx = fighter->GetCurrentComboIndex();
 				if (resolveAttackOnPlayer(fighter->GetSwingAABB(), fighter->GetWorldPosition(), melee->GetDamage(comboIdx, Owner::kEnemy), melee->GetImpactPower(comboIdx, Owner::kEnemy), fighter))
@@ -1714,7 +1739,7 @@ BaseEnemy* GameScene::SpawnEnemyAt(const Vector3& position, uint8_t subID) {
 		newEnemy->SetMapChipField(mapChipField_.get());
 		newEnemy->SetGameScene(this);
 		newEnemy->Initialize(parts, &camera_, position);
-		newEnemy->SetMeleeModel(assets_.modelSabreLight.get(), assets_.texSabreLight); // spear later
+		newEnemy->SetMeleeModel(assets_.modelSpear.get(), assets_.texSpear);
 		newEnemy->SetAttackEffect(assets_.modelSlashEffect.get(), assets_.slashEffectTex);
 		newEnemy->SetHUDIconTexture(assets_.enemyIconFighterTex);
 		enemies_.push_back(std::move(newEnemy));
@@ -2753,6 +2778,7 @@ void GameScene::UpdateSpikes() {
 	if (player_ && !player_->IsDefeated()) {
 		if (CheckSpikeHit(playerSpike_, player_->GetAABB(), player_->IsOnGround(), Player::GetLimitFallSpeed())) {
 			player_->TakeDamage(kSpikeDamage, {0.0f, 1.0f, 0.0f}, kSpikeLaunchPower);
+			player_->SetKnockback({0.0f, 1.0f, 0.0f}, kSpikeLaunchPower); // always launch, even if the damage was ignored
 			if (assets_.sfxSpikeHit != 0)
 				AudioSettings::PlaySfx(assets_.sfxSpikeHit, false, 1.0f);
 		}
@@ -2838,6 +2864,12 @@ bool GameScene::ResolveWeaponSpawnerKind(MapChipType type, uint8_t subID, DropIt
 		case 1:
 			outKind = DropWeaponKind::kSabreHeavy;
 			return true;
+		case 2:
+			outKind = DropWeaponKind::kLongAxe;
+			return true;
+		case 3:
+			outKind = DropWeaponKind::kSpear;
+			return true;
 		}
 	} else if (type == MapChipType::kFirearmSpawner) {
 		outCategory = DropItemCategory::kFirearm;
@@ -2850,6 +2882,9 @@ bool GameScene::ResolveWeaponSpawnerKind(MapChipType type, uint8_t subID, DropIt
 			return true;
 		case 2:
 			outKind = DropWeaponKind::kShotgun;
+			return true;
+		case 3:
+			outKind = DropWeaponKind::kDualPistols;
 			return true;
 		}
 	}

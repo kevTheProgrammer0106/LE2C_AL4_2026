@@ -162,6 +162,10 @@ public:
 	virtual int GetPelletCount() const { return 1; }                   // 1回の発射で出る弾数
 	virtual float GetPelletAngle(int /*index*/) const { return 0.0f; } // 各弾の角度ずれ(rad)
 	virtual int32_t GetProjectileLifeFrames() const { return 0; }      // 0=弾の既定寿命
+	                                                                   // Recoil: the shooter is knocked back when this firearm fires (0 = none). Used by the blunderbuss/shotgun.
+	virtual float GetFireKnockbackPower() const { return 0.0f; }
+	// Muzzle of the barrel that just fired (dual pistols override this; everyone else = the single muzzle)
+	virtual KamataEngine::Vector3 GetFiredMuzzleWorldPosition() const { return GetMuzzleWorldPosition(); }
 
 		// ---- 銃口(銃モデルのローカル座標。バレルの向きはローカル+Z) ----
 	virtual const KamataEngine::Vector3& GetMuzzleLocalOffset() const { return kMuzzleOffset; }

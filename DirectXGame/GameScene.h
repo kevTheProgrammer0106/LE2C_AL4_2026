@@ -390,6 +390,7 @@ private:
 	};
 	std::unordered_map<uint64_t, BreakableState> breakables_;
 	std::set<uint64_t> breakableHitThisSwing_; // cells already hit by the current swing/lunge
+	int breakableHitKey_ = -1;                 // identifies the current swing/lunge; a change clears the hit set
 	static int BreakableStage(int32_t hp, int32_t maxHp) {
 		float ratio = static_cast<float>(hp) / static_cast<float>(maxHp);
 		return (ratio > 0.66f) ? 0 : (ratio > 0.33f) ? 1 : 2;

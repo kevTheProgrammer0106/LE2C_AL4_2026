@@ -52,7 +52,7 @@ void EnemyFighter::Draw() {
 }
 
 void EnemyFighter::SetMeleeModel(Model* model, uint32_t textureHandle) {
-	currentMelee_ = std::make_unique<WeaponSabre>();
+	currentMelee_ = CreateMeleeWeapon();
 	currentMelee_->Initialize(model, textureHandle, camera_, worldTransform_.translation_);
 	SnapWeaponEquipState(ignoreEquipStates_); // starts holstered unless arena-spawned
 }

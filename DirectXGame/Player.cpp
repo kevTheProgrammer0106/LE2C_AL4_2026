@@ -309,21 +309,52 @@ void Player::KillInstant() {
 }
 
 void Player::UseFirearm() {
-	if (!currentFirearm_ || weaponMode_ != WeaponMode::kFirearm)
+	if (!currentFirearm_ || weaponMode_ != WeaponMode::kFirearm) {
+		dualHoldArmed_ = false;
+		dualHoldTimer_ = 0.0f;
 		return;
-	if (!Input::GetInstance()->IsTriggerMouse(0))
-		return;
-	if (!currentFirearm_->TryFire()) {
-		// unloaded: with a bayonet musket the click becomes a lunge while it reloads
-		UseBayonetLungeIfReloading();
+	}
+	Input* input = Input::GetInstance();
+
+	if (input->IsTriggerMouse(0)) {
+		dualHoldArmed_ = false;
+		dualHoldTimer_ = 0.0f;
+		auto* dual = dynamic_cast<FirearmPistols*>(currentFirearm_.get());
+		const bool bothLoaded = dual && dual->IsFullyLoaded();
+
+		if (!currentFirearm_->TryFire()) {
+			// unloaded: with a bayonet musket the click becomes a lunge while it reloads
+			UseBayonetLungeIfReloading();
+			return;
+		}
+		FireCurrentFirearm();
+		dualHoldArmed_ = bothLoaded; // first shot of a full set: holding now fires the other pistol too
 		return;
 	}
 
+	// Dual pistols: still holding after the first shot -> fire the second pistol, then back to normal
+	if (dualHoldArmed_) {
+		if (input->IsPressMouse(0)) {
+			dualHoldTimer_ += 1.0f / 60.0f;
+			if (dualHoldTimer_ >= kDualHoldTime) {
+				dualHoldArmed_ = false;
+				dualHoldTimer_ = 0.0f;
+				if (currentFirearm_->TryFire())
+					FireCurrentFirearm();
+			}
+		} else {
+			dualHoldArmed_ = false; // released early = plain single shot
+			dualHoldTimer_ = 0.0f;
+		}
+	}
+}
+
+void Player::FireCurrentFirearm() {
 	Vector3 origin = GetModelWorldPosition();
 	Vector2 aimDir = GetEffectiveAimDir();
 
 	if (gameScene_) {
-		// 銃ごとの発射パターンに従ってペレットを撃つ(通常の銃は1発・角度0)
+		// pellet pattern per firearm (normal guns: 1 pellet, angle 0)
 		const int pelletCount = std::max(1, currentFirearm_->GetPelletCount());
 		for (int i = 0; i < pelletCount; ++i) {
 			const float angle = currentFirearm_->GetPelletAngle(i);
@@ -332,12 +363,24 @@ void Player::UseFirearm() {
 			Vector2 dir = {aimDir.x * c - aimDir.y * s, aimDir.x * s + aimDir.y * c};
 			gameScene_->CreateFirearmProjectile(Owner::kPlayer, origin, dir, currentFirearm_->GetBulletDamage(), currentFirearm_->GetProjectileLifeFrames());
 		}
-		Vector3 muzzlePos = origin;
-		// 銃口(バレル先端)から発砲エフェクトを出す。銃の動きに追従させる
-		gameScene_->CreateMuzzleFlash(currentFirearm_->GetMuzzleWorldPosition(), aimDir, true);
+		// from the barrel that fired (dual pistols: the right one); follows the gun
+		gameScene_->CreateMuzzleFlash(currentFirearm_->GetFiredMuzzleWorldPosition(), aimDir, true);
 	}
 	currentFirearm_->TriggerRecoil(lrDirection_ == LRDirection::kRight);
 	BaseFirearm::PlayFireSound();
+
+	// Recoil: shooter is knocked back opposite to the aim (blunderbuss / shotgun)
+	const float kbPower = currentFirearm_->GetFireKnockbackPower();
+	if (kbPower > 0.0f && !isDead_ && !behavior_.IsDeathBehavior()) {
+		float len = std::sqrt(aimDir.x * aimDir.x + aimDir.y * aimDir.y);
+		if (len > 0.0001f) {
+			aimDir.x /= len;
+			aimDir.y /= len;
+		} else {
+			aimDir = {isRight() ? 1.0f : -1.0f, 0.0f};
+		}
+		behavior_.RequestHitKnockback({-aimDir.x, -aimDir.y * 0.5f, 0.0f}, kbPower, false);
+	}
 }
 
 void Player::UseMeleeWeapon() {
@@ -928,6 +971,8 @@ void Player::SetMusketModel(Model* model, uint32_t textureHandle, DropWeaponKind
 		currentFirearm_ = std::make_unique<FirearmMusketBayonet>();
 	} else if (kind == DropWeaponKind::kShotgun) {
 		currentFirearm_ = std::make_unique<FirearmShotgun>();
+	} else if (kind == DropWeaponKind::kDualPistols) {
+		currentFirearm_ = std::make_unique<FirearmPistols>();
 	} else {
 		kind = DropWeaponKind::kMusketLong;
 		currentFirearm_ = std::make_unique<FirearmMusket>();
@@ -938,11 +983,17 @@ void Player::SetMusketModel(Model* model, uint32_t textureHandle, DropWeaponKind
 	currentFirearmKind_ = kind;
 	bayonetLungeCooldown_ = 0.0f;
 	bayonetLungeCooldownMax_ = 0.0f;
+	dualHoldArmed_ = false;
+	dualHoldTimer_ = 0.0f;
 }
 
 void Player::SetMeleeModel(Model* model, uint32_t textureHandle, DropWeaponKind kind) {
 	if (kind == DropWeaponKind::kSabreHeavy) {
 		currentMelee_ = std::make_unique<WeaponHeavySabre>();
+	} else if (kind == DropWeaponKind::kLongAxe) {
+		currentMelee_ = std::make_unique<WeaponAxe>();
+	} else if (kind == DropWeaponKind::kSpear) {
+		currentMelee_ = std::make_unique<WeaponSpear>();
 	} else {
 		kind = DropWeaponKind::kSabreLight;
 		currentMelee_ = std::make_unique<WeaponSabre>();

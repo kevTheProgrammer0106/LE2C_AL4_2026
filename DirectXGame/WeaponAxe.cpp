@@ -28,6 +28,11 @@ void WeaponAxe::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "SmashAbove", kSmashAbove);
 	gv->AddItem(kGroupName, "SmashDamage", kSmashDamage);
 	gv->AddItem(kGroupName, "SmashImpact", kSmashImpactPower);
+	gv->AddItem(kGroupName, "PlayerComboDamage0", kComboDamageAxePlayer[0]);
+	gv->AddItem(kGroupName, "PlayerComboDamage1", kComboDamageAxePlayer[1]);
+	gv->AddItem(kGroupName, "PlayerComboDamage2", kComboDamageAxePlayer[2]);
+	gv->AddItem(kGroupName, "PlayerBaseImpact", kBaseImpactAxePlayer);
+	gv->AddItem(kGroupName, "PlayerImpactStep", kImpactStepAxePlayer);
 }
 
 void WeaponAxe::ApplyGlobalVariables() {
@@ -48,6 +53,11 @@ void WeaponAxe::ApplyGlobalVariables() {
 	kSmashAbove = gv->GetFloatValue(kGroupName, "SmashAbove");
 	kSmashDamage = gv->GetIntValue(kGroupName, "SmashDamage");
 	kSmashImpactPower = gv->GetFloatValue(kGroupName, "SmashImpact");
+	kComboDamageAxePlayer[0] = gv->GetIntValue(kGroupName, "PlayerComboDamage0");
+	kComboDamageAxePlayer[1] = gv->GetIntValue(kGroupName, "PlayerComboDamage1");
+	kComboDamageAxePlayer[2] = gv->GetIntValue(kGroupName, "PlayerComboDamage2");
+	kBaseImpactAxePlayer = gv->GetFloatValue(kGroupName, "PlayerBaseImpact");
+	kImpactStepAxePlayer = gv->GetFloatValue(kGroupName, "PlayerImpactStep");
 }
 
 void WeaponAxe::SetSmashPositionGeneric(const Vector3& ownerPosition, const Vector3& ownerRotation, bool facingRight, AttackPhase smashPhase, float t) {

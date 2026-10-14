@@ -14,7 +14,7 @@ public:
 	void Update() override;
 	void Draw() override;
 
-	WeaponSabre* GetCurrentMelee() const { return currentMelee_.get(); }
+	BaseMelee* GetCurrentMelee() const { return currentMelee_.get(); }
 
 	void SetMeleeModel(KamataEngine::Model* model, uint32_t textureHandle);
 
@@ -45,8 +45,12 @@ protected:
 		if (currentMelee_)
 			currentMelee_->SnapWeaponState(equipped ? WeaponState::kEquipped : WeaponState::kHolstered);
 	}
+
+		// 持たせる近接武器。既定はサーベル。Officerなどが差し替える
+	virtual std::unique_ptr<BaseMelee> CreateMeleeWeapon() { return std::make_unique<WeaponSabre>(); }
+
 private:
-	std::unique_ptr<WeaponSabre> currentMelee_;
+	std::unique_ptr<BaseMelee> currentMelee_;
 
 	bool isSwingActive_ = false;
 	int currentComboIndex_ = 0;

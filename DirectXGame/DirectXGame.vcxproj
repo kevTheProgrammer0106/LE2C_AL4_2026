@@ -212,6 +212,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClCompile Include="FighterBehavior.cpp" />
     <ClCompile Include="FirearmMusket.cpp" />
     <ClCompile Include="FirearmMusketBayonet.cpp" />
+    <ClCompile Include="FirearmPistols.cpp" />
     <ClCompile Include="FirearmShotgun.cpp" />
     <ClCompile Include="GameAssets.cpp" />
     <ClCompile Include="GameScene.cpp" />
@@ -253,6 +254,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClCompile Include="WeaponAxe.cpp" />
     <ClCompile Include="WeaponHeavySabre.cpp" />
     <ClCompile Include="WeaponSabre.cpp" />
+    <ClCompile Include="WeaponSpear.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AnimationManager.h" />
@@ -289,6 +291,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClInclude Include="FighterBehavior.h" />
     <ClInclude Include="FirearmMusket.h" />
     <ClInclude Include="FirearmMusketBayonet.h" />
+    <ClInclude Include="FirearmPistols.h" />
     <ClInclude Include="FirearmShotgun.h" />
     <ClInclude Include="GameAssets.h" />
     <ClInclude Include="GameScene.h" />
@@ -329,6 +332,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClInclude Include="WeaponAxe.h" />
     <ClInclude Include="WeaponHeavySabre.h" />
     <ClInclude Include="WeaponSabre.h" />
+    <ClInclude Include="WeaponSpear.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

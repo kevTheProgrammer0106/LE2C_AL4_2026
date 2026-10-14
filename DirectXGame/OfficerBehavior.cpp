@@ -1,8 +1,23 @@
 #include "OfficerBehavior.h"
 #include "EnemyOfficer.h"
 #include "GameScene.h"
+#include "GlobalVariables.h"
 
 using namespace KamataEngine;
+
+namespace {
+constexpr const char* kGroupName = "OfficerBehavior";
+}
+
+void OfficerBehavior::RegisterGlobalVariables() {
+	GlobalVariables* gv = GlobalVariables::GetInstance();
+	gv->CreateGroup(kGroupName);
+	gv->AddItem(kGroupName, "SpearEngageRange", kSpearEngageRange);
+}
+void OfficerBehavior::ApplyGlobalVariables() {
+	GlobalVariables* gv = GlobalVariables::GetInstance();
+	kSpearEngageRange = gv->GetFloatValue(kGroupName, "SpearEngageRange");
+}
 
 OfficerBehavior::OfficerBehavior(EnemyOfficer& owner) : FighterBehavior(owner), officerOwner_(owner) {}
 

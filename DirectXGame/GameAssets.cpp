@@ -32,6 +32,8 @@ void GameAssets::LoadModelsAndTextures() {
 	musketBayonetTex = TextureManager::Load("./Resources/musketBayonet/musketBayonet.png");
 	modelProjectileBall.reset(Model::CreateFromOBJ("firearmBall", true));
 	firearmBallTex = TextureManager::Load("./Resources/firearmBall/firearmBall.png");
+	modelSpear.reset(Model::CreateFromOBJ("sabreHeavy"));
+	texSpear = TextureManager::Load("./Resources/sabreHeavy/sabre.png");
 
 	// --- Enemy: Rifleman ---
 	modelRiflemanBody.reset(Model::CreateFromOBJ("riflemanBody", true));
@@ -167,16 +169,28 @@ void GameAssets::LoadModelsAndTextures() {
 	enemyIconRiflemanTex = TextureManager::Load("./Resources/UserInterface/iconRifleman.png");
 	enemyIconCuirassierTex = TextureManager::Load("./Resources/UserInterface/iconCuirassier.png");
 	enemyIconFighterTex = TextureManager::Load("./Resources/UserInterface/iconFighter.png");
+	enemyIconCarabinierTex = TextureManager::Load("./Resources/UserInterface/iconCarabinier.png");
+	enemyIconGrenadierTex = TextureManager::Load("./Resources/UserInterface/iconGrenadier.png");
+	enemyIconOfficerTex = TextureManager::Load("./Resources/UserInterface/iconOfficer.png");
+	enemyIconSapperTex = TextureManager::Load("./Resources/UserInterface/iconSapper.png");
+
 	enemyIconArrowTex = TextureManager::Load("./Resources/UserInterface/enemyDirectionArrow.png");
 
 	// Placeholder icons: reuse the weapon textures until real icon art exists.
 	// Swap each line for TextureManager::Load("./Resources/UserInterface/iconXxx.png") when the files are ready.
-	meleeIconLightTex = texSabreLight;
-	meleeIconHeavyTex = texSabreHeavy;
-	firearmIconLongTex = musketLongTex;
-	firearmIconBayonetTex = musketBayonetTex;
-	bayonetLungeIconTex = musketBayonetTex;
+	meleeIconLightTex = TextureManager::Load("./Resources/UserInterface/weaponSabre.png");
+	meleeIconHeavyTex = TextureManager::Load("./Resources/UserInterface/weaponSabreHeavy.png");
+	meleeIconAxeTex = TextureManager::Load("./Resources/UserInterface/weaponAxe.png");
+	meleeIconSpearTex = TextureManager::Load("./Resources/UserInterface/weaponSpontoon.png");
 
+	firearmIconLongTex = TextureManager::Load("./Resources/UserInterface/weaponMusket.png");
+	firearmIconBayonetTex = TextureManager::Load("./Resources/UserInterface/weaponMusketBayonet.png");
+	firearmIconShotgunTex = TextureManager::Load("./Resources/UserInterface/weaponBlunderbuss.png");
+	firearmIconPistolTex = TextureManager::Load("./Resources/UserInterface/weaponPistols.png");
+	
+	
+	bayonetLungeIconTex = TextureManager::Load("./Resources/UserInterface/weaponBayonet.png");
+	
 	interactionPromptTex = TextureManager::Load("./Resources/UserInterface/InteractionPrompt.png");
 
 	// --- Menus / cursor ---

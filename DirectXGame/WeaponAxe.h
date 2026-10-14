@@ -17,20 +17,16 @@ public:
 	int GetSmashDamage() const { return kSmashDamage; }
 	float GetSmashImpactPower() const { return kSmashImpactPower; }
 
-	// 敵用のコンボダメージ/衝撃力は斧専用の値を使う(プレイヤー用はBaseMeleeのまま)
+	// 敵用 / プレイヤー用それぞれ斧専用の値を使う
 	using BaseMelee::GetDamage;
 	int GetDamage(int comboIndex, Owner owner) const override {
-		if (owner == Owner::kEnemy) {
-			return kComboDamageAxe[std::clamp(comboIndex, 0, 2)];
-		}
-		return BaseMelee::GetDamage(comboIndex, owner);
+		const int i = std::clamp(comboIndex, 0, 2);
+		return (owner == Owner::kPlayer) ? kComboDamageAxePlayer[i] : kComboDamageAxe[i];
 	}
 	using BaseMelee::GetImpactPower;
 	float GetImpactPower(int comboIndex, Owner owner) const override {
-		if (owner == Owner::kEnemy) {
-			return kBaseImpactAxe + static_cast<float>(std::clamp(comboIndex, 0, 2)) * kImpactStepAxe;
-		}
-		return BaseMelee::GetImpactPower(comboIndex, owner);
+		const float step = static_cast<float>(std::clamp(comboIndex, 0, 2));
+		return (owner == Owner::kPlayer) ? kBaseImpactAxePlayer + step * kImpactStepAxePlayer : kBaseImpactAxe + step * kImpactStepAxe;
 	}
 
 	const SRTOffset& GetHolsterOffset() const override { return holsterOffset_; }
@@ -111,6 +107,10 @@ private:
 	static inline std::array<int, 3> kComboDamageAxe = {20, 20, 35};
 	static inline float kBaseImpactAxe = 1.4f;
 	static inline float kImpactStepAxe = 0.4f;
+	// ---- プレイヤー用(ヘビーより重い一撃) ----
+	static inline std::array<int, 3> kComboDamageAxePlayer = {60, 60, 100};
+	static inline float kBaseImpactAxePlayer = 1.6f;
+	static inline float kImpactStepAxePlayer = 0.5f;
 
 	// ---- 地面叩きつけ ----
 	// 振り上げ(頭上)→叩きつけ(前下)。値は仮置き。GlobalVariablesのWeaponAxeグループでリアルタイム調整できる

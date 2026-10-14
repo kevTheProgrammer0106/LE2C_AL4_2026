@@ -24,7 +24,6 @@ void SapperBehavior::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "LeapRiseSpeed", kLeapRiseSpeed);
 	gv->AddItem(kGroupName, "LeapGravity", kLeapGravity);
 	gv->AddItem(kGroupName, "LeapMaxHorizontalSpeed", kLeapMaxHorizontalSpeed);
-	gv->AddItem(kGroupName, "LeapHangDuration", kLeapHangDuration);
 	gv->AddItem(kGroupName, "LeapDiveSpeed", kLeapDiveSpeed);
 	gv->AddItem(kGroupName, "LeapMinRange", kLeapMinRange);
 	gv->AddItem(kGroupName, "LeapMaxRange", kLeapMaxRange);
@@ -33,7 +32,7 @@ void SapperBehavior::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "LeapMaxDuration", kLeapMaxDuration);
 	gv->AddItem(kGroupName, "NearPlayerDistance", kNearPlayerDistance);
 	gv->AddItem(kGroupName, "LandStunDuration", kLandStunDuration);
-	gv->AddItem(kGroupName, "StunDurationBonus", kStunDurationBonus);
+	gv->AddItem(kGroupName, "LeapDiveEase", kLeapDiveEase);
 }
 
 void SapperBehavior::ApplyGlobalVariables() {
@@ -45,7 +44,6 @@ void SapperBehavior::ApplyGlobalVariables() {
 	kLeapRiseSpeed = gv->GetFloatValue(kGroupName, "LeapRiseSpeed");
 	kLeapGravity = std::max(gv->GetFloatValue(kGroupName, "LeapGravity"), 0.001f);
 	kLeapMaxHorizontalSpeed = gv->GetFloatValue(kGroupName, "LeapMaxHorizontalSpeed");
-	kLeapHangDuration = gv->GetFloatValue(kGroupName, "LeapHangDuration");
 	kLeapDiveSpeed = gv->GetFloatValue(kGroupName, "LeapDiveSpeed");
 	kLeapMinRange = gv->GetFloatValue(kGroupName, "LeapMinRange");
 	kLeapMaxRange = gv->GetFloatValue(kGroupName, "LeapMaxRange");
@@ -54,7 +52,7 @@ void SapperBehavior::ApplyGlobalVariables() {
 	kLeapMaxDuration = gv->GetFloatValue(kGroupName, "LeapMaxDuration");
 	kNearPlayerDistance = gv->GetFloatValue(kGroupName, "NearPlayerDistance");
 	kLandStunDuration = gv->GetFloatValue(kGroupName, "LandStunDuration");
-	kStunDurationBonus = gv->GetFloatValue(kGroupName, "StunDurationBonus");
+	kLeapDiveEase = std::clamp(gv->GetFloatValue(kGroupName, "LeapDiveEase"), 0.01f, 1.0f);
 }
 
 SapperBehavior::SapperBehavior(EnemySapper& owner) : BaseEnemyBehavior(owner), sapperOwner_(owner) {}
@@ -248,7 +246,7 @@ void SapperBehavior::BehaviorLeapInitialize() {
 	Player* player = scene ? scene->GetPlayer() : nullptr;
 	const Vector3 myPos = owner_.GetWorldPosition();
 
-	// 1. この瞬間のプレイヤーの位置を目標にする(以後は追従しない)
+	// 1. この瞬間のプレイヤーの位置から水平速度を決める
 	leapTarget_ = player ? player->GetWorldPosition() : myPos;
 	sapperOwner_.SetLeapTarget(leapTarget_);
 	const float distanceX = leapTarget_.x - myPos.x;
@@ -266,9 +264,8 @@ void SapperBehavior::BehaviorLeapInitialize() {
 
 	leapPhase_ = LeapPhase::kRise;
 	leapTime_ = 0.0f;
-	hangTimer_ = 0.0f;
 	diveStartDistance_ = 1.0f;
-	leapAnticipateTime_ = std::max((kLeapRiseSpeed / kLeapGravity) / 60.0f + kLeapHangDuration, 0.01f);
+	leapAnticipateTime_ = std::max((kLeapRiseSpeed / kLeapGravity) / 60.0f, 0.01f);
 
 	if (WeaponAxe* weapon = sapperOwner_.GetCurrentMelee()) {
 		weapon->ResetSwingHits();
@@ -299,21 +296,12 @@ void SapperBehavior::BehaviorLeapUpdate() {
 		velocity.y -= kLeapGravity;
 		FacePlayer();
 		if (velocity.y <= 0.0f) {
-			// 頂点: 速度を止めて少し滞空する
-			velocity = {0.0f, 0.0f, 0.0f};
-			leapPhase_ = LeapPhase::kHang;
-			hangTimer_ = 0.0f;
-		}
-		sapperOwner_.UpdateSmashVisual(BaseMelee::AttackPhase::kAnticipate, std::clamp(leapTime_ / leapAnticipateTime_, 0.0f, 1.0f));
-		break;
-	}
-	case LeapPhase::kHang: {
-		OwnerVelocity() = {0.0f, 0.0f, 0.0f};
-		FacePlayer();
-		hangTimer_ += kDt;
-		sapperOwner_.UpdateSmashVisual(BaseMelee::AttackPhase::kAnticipate, std::clamp(leapTime_ / leapAnticipateTime_, 0.0f, 1.0f));
-		if (hangTimer_ >= kLeapHangDuration) {
+			// 頂点: 止めずにそのまま急降下フェーズへ。速度は下のイージングで滑らかに目標方向へ向かう
 			leapPhase_ = LeapPhase::kDive;
+			if (player) {
+				leapTarget_ = player->GetWorldPosition();
+				sapperOwner_.SetLeapTarget(leapTarget_);
+			}
 			const float tx = leapTarget_.x - pos.x;
 			const float ty = leapTarget_.y - pos.y;
 			diveStartDistance_ = std::max(std::sqrt(tx * tx + ty * ty), 0.01f);
@@ -321,9 +309,15 @@ void SapperBehavior::BehaviorLeapUpdate() {
 				weapon->ResetSwingHits();
 			}
 		}
+		sapperOwner_.UpdateSmashVisual(BaseMelee::AttackPhase::kAnticipate, std::clamp(leapTime_ / leapAnticipateTime_, 0.0f, 1.0f));
 		break;
 	}
 	case LeapPhase::kDive: {
+		// 目標は常に現在のプレイヤー位置(降下しながらプレイヤーへ寄っていく)
+		if (player) {
+			leapTarget_ = player->GetWorldPosition();
+			sapperOwner_.SetLeapTarget(leapTarget_);
+		}
 		const float tx = leapTarget_.x - pos.x;
 		const float ty = leapTarget_.y - pos.y;
 		const float distance = std::sqrt(tx * tx + ty * ty);
@@ -351,11 +345,11 @@ void SapperBehavior::BehaviorLeapUpdate() {
 			return;
 		}
 
-		// 目標へ真っ直ぐ降下
+		// 現在の速度から、プレイヤーへ向かう降下速度へ滑らかに近づける(止まらない)
+		const float inv = (distance > 0.0001f) ? kLeapDiveSpeed / distance : 0.0f;
+		const Vector3 desired = {tx * inv, ty * inv, 0.0f};
 		Vector3& velocity = OwnerVelocity();
-		velocity.x = tx / distance * kLeapDiveSpeed;
-		velocity.y = ty / distance * kLeapDiveSpeed;
-		velocity.z = 0.0f;
+		velocity = Lerp(velocity, desired, kLeapDiveEase);
 		break;
 	}
 	}

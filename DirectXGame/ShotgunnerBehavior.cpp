@@ -236,6 +236,16 @@ void ShotgunnerBehavior::BehaviorAimingUpdate() {
 		shotgunnerOwner_.ShootFirearm();
 		shotgunnerOwner_.SetGunPose(EnemyShotgunner::GunPose::kFiring);
 		RequestBehavior(Behavior::kReloading);
+
+		// recoil: pushed away from the player. No extra hit-stun for a self-inflicted recoil.
+		if (FirearmShotgun* gun = shotgunnerOwner_.GetCurrentFirearm()) {
+			const float kb = gun->GetFireKnockbackPower();
+			if (kb > 0.0f) {
+				const float away = (player->GetWorldPosition().x < owner_.GetWorldPosition().x) ? 1.0f : -1.0f;
+				RequestKnockback({away, 0.1f, 0.0f}, kb);
+				pendingStunAfterKnockback_ = 0.0f;
+			}
+		}
 	}
 }
 

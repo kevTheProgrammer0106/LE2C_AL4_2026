@@ -29,6 +29,8 @@ public:
 	}
 	int32_t GetProjectileLifeFrames() const override { return kPelletLifeFrames; }
 
+	float GetFireKnockbackPower() const override { return kFireKnockbackPower; }
+
 protected:
 	int GetMaxAmmo() const override { return kMaxAmmo; }
 	// 持ち主ごとに値を切り替える
@@ -89,4 +91,5 @@ private:
         {0.0f,  -1.5707963f, 0.7f },
         {0.45f, 0.25f,       -0.1f}
     };
+	static inline float kFireKnockbackPower = 3.0f; // recoil on the shooter (player speed = power * 0.1)
 };

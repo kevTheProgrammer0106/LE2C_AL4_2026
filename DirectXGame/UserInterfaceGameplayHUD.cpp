@@ -209,7 +209,11 @@ void WeaponStatusUI::Initialize(const Textures& tex) {
 	meleeHeavy_.Initialize(tex.meleeHeavy, {meleeX, iconY});
 	firearmLong_.Initialize(tex.firearmLong, {firearmX, iconY});
 	firearmBayonet_.Initialize(tex.firearmBayonet, {firearmX, iconY});
+	firearmPistols_.Initialize(tex.firearmDualPistols, {firearmX, iconY});
+	firearmShotgun_.Initialize(tex.firearmBlunderbuss, {firearmX, iconY});
 	bayonetLunge_.Initialize(tex.bayonetLunge, {lungeX, iconY});
+	meleeAxe_.Initialize(tex.meleeAxe, {meleeX, iconY});
+	meleeSpear_.Initialize(tex.meleeSpear, {meleeX, iconY});
 }
 
 void WeaponStatusUI::Update(const State& s) {
@@ -224,19 +228,51 @@ void WeaponStatusUI::Update(const State& s) {
 	// only the held weapon's icon gets the live cooldown
 	meleeLight_.Update(meleeBase, false, 1.0f);
 	meleeHeavy_.Update(meleeBase, heavy && s.isMeleeCooling, s.meleeCooldownProgress01);
-	firearmLong_.Update(firearmBase, !bayonet && s.isReloading, s.reloadProgress01);
+
+	const bool dual = (s.firearmKind == DropWeaponKind::kDualPistols);
+	firearmLong_.Update(firearmBase, !bayonet && !dual && s.isReloading, s.reloadProgress01);
+	firearmPistols_.Update(firearmBase, dual && s.isReloading, s.reloadProgress01);
+
+
+
 	firearmBayonet_.Update(firearmBase, bayonet && s.isReloading, s.reloadProgress01);
 	bayonetLunge_.Update(firearmBase, bayonet && s.isLungeCooling, s.lungeCooldownProgress01);
+	meleeAxe_.Update(meleeBase, false, 1.0f);
+	meleeSpear_.Update(meleeBase, false, 1.0f);
+	firearmShotgun_.Update(firearmBase, !bayonet && s.isReloading, s.reloadProgress01);
 }
 
 void WeaponStatusUI::Draw() {
 	Sprite::PreDraw();
-	(shownMelee_ == DropWeaponKind::kSabreHeavy ? meleeHeavy_ : meleeLight_).Draw();
-	if (shownFirearm_ == DropWeaponKind::kMusketBayonet) {
+	switch (shownMelee_) {
+	case DropWeaponKind::kSabreHeavy:
+		meleeHeavy_.Draw();
+		break;
+	case DropWeaponKind::kLongAxe:
+		meleeAxe_.Draw();
+		break;
+	case DropWeaponKind::kSpear:
+		meleeSpear_.Draw();
+		break;
+	default:
+		meleeLight_.Draw();
+		break;
+	}
+
+	switch (shownFirearm_) {
+	case DropWeaponKind::kMusketBayonet:
 		firearmBayonet_.Draw();
 		bayonetLunge_.Draw();
-	} else {
+		break;
+	case DropWeaponKind::kShotgun:
+		firearmShotgun_.Draw();
+		break;
+	case DropWeaponKind::kDualPistols:
+		firearmPistols_.Draw();
+		break;
+	default:
 		firearmLong_.Draw();
+		break;
 	}
 	Sprite::PostDraw();
 }

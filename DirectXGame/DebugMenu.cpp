@@ -442,9 +442,12 @@ void DebugMenu::DrawSpawnTab(GameScene* gs) {
 	static const ItemEntry kItemTable[] = {
 	    {"Sabre (light)",    DropItemCategory::kMelee,   DropWeaponKind::kSabreLight   },
 	    {"Sabre (heavy)",    DropItemCategory::kMelee,   DropWeaponKind::kSabreHeavy   },
+	    {"Axe",              DropItemCategory::kMelee,   DropWeaponKind::kLongAxe      },
+	    {"Spontoon", DropItemCategory::kMelee,   DropWeaponKind::kSpear},
 	    {"Musket (long)",    DropItemCategory::kFirearm, DropWeaponKind::kMusketLong   },
 	    {"Musket (bayonet)", DropItemCategory::kFirearm, DropWeaponKind::kMusketBayonet},
 	    {"Shotgun",  DropItemCategory::kFirearm, DropWeaponKind::kShotgun},
+	    {"Dual Artillery Pistols", DropItemCategory::kFirearm, DropWeaponKind::kDualPistols  },
 	};
 	constexpr int kItemCount = static_cast<int>(sizeof(kItemTable) / sizeof(kItemTable[0]));
 

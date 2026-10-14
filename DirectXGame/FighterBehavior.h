@@ -31,7 +31,11 @@ public:
 
 	bool IsInMeleeRecovery() const override { return GetBehavior() == Behavior::kMelee && meleePhase_ == MeleePhase::kRecovery; }
 
+		// 接敵距離。武器の射程が長い敵(Officerの槍)はこれをoverrideして伸ばす
+	virtual float GetMeleeEngageRange() const { return kMeleeEngageRange; }
+
 protected:
+
 	// 接敵距離まで詰まったらkMeleeへ、クールダウン中は距離を保つ、といった
 	// 交戦判断をkRoot中に行う。
 	void BehaviorRootInitialize() override;

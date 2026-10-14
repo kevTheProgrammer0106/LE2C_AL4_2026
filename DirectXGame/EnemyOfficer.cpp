@@ -17,6 +17,8 @@ void EnemyOfficer::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "BuffDamageReduction", OfficerBuff::kDamageReduction);
 	gv->AddItem(kGroupName, "BuffMoveBonus", OfficerBuff::kMoveBonus);
 	gv->AddItem(kGroupName, "BuffChaseTimeBonus", OfficerBuff::kChaseTimeBonus);
+	WeaponSpear::RegisterGlobalVariables();
+	OfficerBehavior::RegisterGlobalVariables();
 }
 void EnemyOfficer::ApplyGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
@@ -26,6 +28,8 @@ void EnemyOfficer::ApplyGlobalVariables() {
 	OfficerBuff::kDamageReduction = gv->GetFloatValue(kGroupName, "BuffDamageReduction");
 	OfficerBuff::kMoveBonus = gv->GetFloatValue(kGroupName, "BuffMoveBonus");
 	OfficerBuff::kChaseTimeBonus = gv->GetFloatValue(kGroupName, "BuffChaseTimeBonus");
+	WeaponSpear::ApplyGlobalVariables();
+	OfficerBehavior::ApplyGlobalVariables();
 }
 
 void EnemyOfficer::Initialize(const std::array<PartResources, static_cast<size_t>(PartSlot::kCount)>& partResources, Camera* camera, const Vector3& position) {

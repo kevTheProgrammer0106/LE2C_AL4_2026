@@ -29,12 +29,23 @@ public:
 	uint32_t texSabreLight = 0;
 	std::unique_ptr<KamataEngine::Model> modelSabreHeavy;
 	uint32_t texSabreHeavy = 0;
+	std::unique_ptr<KamataEngine::Model> modelAxe;
+	uint32_t texAxe = 0;
+	std::unique_ptr<KamataEngine::Model> modelSpear;
+	uint32_t texSpear = 0;
 	std::unique_ptr<KamataEngine::Model> modelMusketLong;
 	uint32_t musketLongTex = 0;
 	std::unique_ptr<KamataEngine::Model> modelMusketBayonet;
 	uint32_t musketBayonetTex = 0;
+	std::unique_ptr<KamataEngine::Model> modelShotgun;
+	uint32_t shotgunTex = 0;
+	std::unique_ptr<KamataEngine::Model> modelPistol;
+	uint32_t pistolTex = 0;
+
 	std::unique_ptr<KamataEngine::Model> modelProjectileBall;
 	uint32_t firearmBallTex = 0;
+
+
 
 	// --- Enemy: Rifleman ---
 	std::unique_ptr<KamataEngine::Model> modelRiflemanBody;
@@ -139,14 +150,30 @@ public:
 	uint32_t enemyIconRiflemanTex = 0;
 	uint32_t enemyIconCuirassierTex = 0;
 	uint32_t enemyIconFighterTex = 0;
+	uint32_t enemyIconCarabinierTex = 0;
+	uint32_t enemyIconGrenadierTex = 0;
+	uint32_t enemyIconOfficerTex = 0;
+	uint32_t enemyIconSapperTex = 0;
+
+
 	uint32_t enemyIconArrowTex = 0;
 	uint32_t healthBarBackgroundTex = 0;
 	uint32_t healthBarFillTex = 0;
+
 	uint32_t meleeIconLightTex = 0;
 	uint32_t meleeIconHeavyTex = 0;
+	uint32_t meleeIconAxeTex = 0;
+	uint32_t meleeIconSpearTex = 0;
+
 	uint32_t firearmIconLongTex = 0;
 	uint32_t firearmIconBayonetTex = 0;
+	uint32_t firearmIconShotgunTex = 0;
+	uint32_t firearmIconPistolTex = 0;
+
 	uint32_t bayonetLungeIconTex = 0;
+	
+
+
 	uint32_t interactionPromptTex = 0;
 
 	// --- Menus / cursor ---
