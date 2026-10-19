@@ -115,7 +115,8 @@ void FirearmPistols::TickReload() {
 			++currentAmmo_;
 			reloadTimer_ = 0.0f;
 			reloadDurationCurrent_ = GetBaseReloadDuration();
-			PlaySfxHandle(sLoadedSoundHandle_);
+			PlaySfxHandle(sLoadedSoundHandle_); // the "loaded" jingle plays once per pistol
+			cycleTimer_[slot] = kCycleDuration; // ...together with the cycling kick
 			UpdateColors();
 		}
 	}
@@ -151,7 +152,24 @@ void FirearmPistols::UpdateFollow(const WorldTransform& parentTransform, float l
 	worldTransformSecond_.translation_ = worldTransform_.translation_ + delta;
 	worldTransformSecond_.rotation_ = worldTransform_.rotation_;
 	worldTransformSecond_.scale_ = worldTransform_.scale_;
-	WorldTransformUpdate(worldTransformSecond_);
+
+	// Cycling kick: when a pistol finishes loading its muzzle flicks up and eases back (like pumping a shotgun).
+	// Applied after the second pistol was derived, so each pistol kicks on its own.
+	constexpr float kDt = 1.0f / 60.0f;
+	const float sign = facingRight ? 1.0f : -1.0f;
+	WorldTransform* transforms[2] = {&worldTransform_, &worldTransformSecond_};
+	for (int i = 0; i < 2; ++i) {
+		if (cycleTimer_[i] > 0.0f) {
+			cycleTimer_[i] = std::max(0.0f, cycleTimer_[i] - kDt);
+		}
+		const float t = 1.0f - cycleTimer_[i] / std::max(kCycleDuration, 0.001f); // 0 -> 1
+		const float w = (cycleTimer_[i] > 0.0f) ? std::sin(std::numbers::pi_v<float> * t) * equipFactor_ : 0.0f;
+		if (w > 0.0f) {
+			transforms[i]->rotation_.z += sign * kCycleKickAngle * w;
+			transforms[i]->translation_.y += kCycleRise * w;
+		}
+		WorldTransformUpdate(*transforms[i]); // refreshes matWorld_ (the muzzle position reads it)
+	}
 }
 
 void FirearmPistols::Draw() {

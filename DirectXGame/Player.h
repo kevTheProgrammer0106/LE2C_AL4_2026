@@ -180,7 +180,7 @@ public:
 	AABB GetBlockAABB();
 	bool IsBlockingAttack(const AABB& attackBox, const KamataEngine::Vector3& attackerPos);
 	// Call instead of TakeDamage() when IsBlockingAttack() returned true. Latches the block direction until the button is released.
-	void OnBlocked(const KamataEngine::Vector3& hitDirection, float impactPower, BaseEnemy* attacker = nullptr);
+	void OnBlocked(const KamataEngine::Vector3& hitDirection, float impactPower, BaseEnemy* attacker = nullptr, bool special = false);
 	bool IsBlockLatched() const { return blockLatched_; }
 
 		// --- Block gauge ---
@@ -245,6 +245,9 @@ public:
 
 	void BeginGoalSequence(const KamataEngine::Vector3& goalPosition);
 	bool IsGoalSequenceActive() const { return goalSeqActive_; }
+
+	// 照準ライン用: 実際の射線(発射位置/正規化した狙い方向)と、カーソルまでのワールド距離
+	bool GetAimGuideInfo(KamataEngine::Vector3& outOrigin, KamataEngine::Vector2& outDir, float& outCursorDistance) const;
 
 private:
 	bool controlLocked_ = false;
@@ -452,4 +455,13 @@ private:
 	static inline float kGoalSpinSpeed = 0.35f;    // rad/frame around Y
 	static inline float kGoalLoopHopHeight = 0.8f; // hop height after arriving
 	static inline float kGoalLoopHopPeriod = 0.6f; // seconds per hop
+
+	// --- 攻撃中の敵との衝突 ---
+	// 攻撃の踏み込み(コンボ/ランジ)が敵の体を通り抜けないよう、横移動量を制限する
+	float LimitAttackMoveByEnemies(float moveX);
+	// 進行方向の少し先に、足元の高さに壁/段差(1ブロック以上の高さ)があるか
+	bool HasCornerAhead(bool right) const;
+	static inline int kAttackEnemyCollisionMode = 1; // 0=常に敵で止まる / 1=先に角があるときだけ止まる
+	static inline float kAttackEnemyGap = 0.02f;     // 敵の手前で止まる時の隙間
+	static inline float kCornerLookAhead = 4.0f;     // 角を探す距離(体の端から)
 };

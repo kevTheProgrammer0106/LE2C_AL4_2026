@@ -14,6 +14,7 @@ void EnemySapper::RegisterGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
 	gv->CreateGroup(kGroupName);
 	gv->AddItem(kGroupName, "MaxHP", kSapperHP);
+	gv->AddItem(kGroupName, "SmashActiveDuration", kSmashActiveDuration);
 	RegisterBodyComboPoseSet(kGroupName, "BodyCombo", kBodyCombo);
 	RegisterBodyLungePoseSet(kGroupName, "BodySmash", kBodySmash);
 	WeaponAxe::RegisterGlobalVariables();
@@ -23,6 +24,7 @@ void EnemySapper::RegisterGlobalVariables() {
 void EnemySapper::ApplyGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
 	kSapperHP = gv->GetIntValue(kGroupName, "MaxHP");
+	kSmashActiveDuration = gv->GetFloatValue(kGroupName, "SmashActiveDuration");
 	ApplyBodyComboPoseSet(kGroupName, "BodyCombo", kBodyCombo);
 	ApplyBodyLungePoseSet(kGroupName, "BodySmash", kBodySmash);
 	WeaponAxe::ApplyGlobalVariables();
@@ -38,7 +40,11 @@ void EnemySapper::Initialize(const std::array<PartResources, static_cast<size_t>
 void EnemySapper::Update() {
 	BaseEnemy::Update();
 
-	if (isDead_ || !currentMelee_)
+	if (isDead_)
+		return;
+	TickSmashImpact();
+
+	if (!currentMelee_)
 		return;
 	if (GetBehaviorModule().IsDeathBehavior())
 		return;
@@ -57,14 +63,8 @@ void EnemySapper::Draw() {
 	BaseEnemy::Draw();
 	if (!isDead_ && !GetBehaviorModule().IsDeathBehavior() && currentMelee_) {
 		currentMelee_->Draw();
-		DrawAttackEffect(isSwingActive_ || isSmashActive_, isSmashActive_ ? GetSmashAABB() : GetSwingAABB());
+		DrawAttackEffect(isSwingActive_ || IsSmashActive(), IsSmashActive() ? GetSmashAABB() : GetSwingAABB());
 	}
-}
-
-void EnemySapper::SetMeleeModel(Model* model, uint32_t textureHandle) {
-	currentMelee_ = std::make_unique<WeaponAxe>();
-	currentMelee_->Initialize(model, textureHandle, camera_, worldTransform_.translation_);
-	SnapWeaponEquipState(ignoreEquipStates_);
 }
 
 void EnemySapper::UpdateMeleeVisual(const BaseMelee::GenericAttackAnimState* attackState) {
@@ -75,7 +75,6 @@ void EnemySapper::UpdateMeleeVisual(const BaseMelee::GenericAttackAnimState* att
 	currentMelee_->SetReactionPose(GetReactionPose());
 	currentMelee_->SetMeleePositionGeneric(modelWorldTransform_.translation_, modelWorldTransform_.rotation_, isRight(), attackState);
 
-	isSmashActive_ = false;
 	isSwingActive_ = (attackState != nullptr && attackState->phase == BaseMelee::AttackPhase::kAttack);
 	if (attackState) {
 		currentComboIndex_ = attackState->comboIndex;
@@ -83,6 +82,12 @@ void EnemySapper::UpdateMeleeVisual(const BaseMelee::GenericAttackAnimState* att
 	} else {
 		attackBodyPose_ = SRTOffset{};
 	}
+}
+
+void EnemySapper::SetMeleeModel(Model* model, uint32_t textureHandle) {
+	currentMelee_ = std::make_unique<WeaponAxe>();
+	currentMelee_->Initialize(model, textureHandle, camera_, worldTransform_.translation_);
+	SnapWeaponEquipState(ignoreEquipStates_);
 }
 
 void EnemySapper::UpdateSmashVisual(BaseMelee::AttackPhase phase, float t) {
@@ -93,8 +98,7 @@ void EnemySapper::UpdateSmashVisual(BaseMelee::AttackPhase phase, float t) {
 	currentMelee_->SetReactionPose(GetReactionPose());
 	currentMelee_->SetSmashPositionGeneric(modelWorldTransform_.translation_, modelWorldTransform_.rotation_, isRight(), phase, t);
 
-	isSwingActive_ = false;
-	isSmashActive_ = (phase == BaseMelee::AttackPhase::kAttack); // 急降下中だけ当たり判定が出る
+	isSwingActive_ = false; // 急降下中は見た目だけ。当たり判定は着地の瞬間(TickSmashImpact)に出る
 	attackBodyPose_ = EvaluateBodyLungePose(kBodySmash, static_cast<BodyAttackPhase>(static_cast<int>(phase)), t);
 }
 
@@ -141,4 +145,30 @@ void EnemySapper::SnapTo(const Vector3& position) {
 	worldTransform_.translation_ = position;
 	velocity_ = {0.0f, 0.0f, 0.0f};
 	WorldTransformUpdate(worldTransform_);
+}
+
+void EnemySapper::TickSmashImpact() {
+	constexpr float kDt = 1.0f / 60.0f;
+	if (smashActiveTimer_ > 0.0f) {
+		smashActiveTimer_ = std::max(0.0f, smashActiveTimer_ - kDt);
+	}
+	if (!awaitingSmashLanding_ || ignoreMapCollision_) {
+		return; // 判定が戻るまでは待つ
+	}
+
+	smashLandingWait_ += kDt;
+	if (onGround_) {
+		awaitingSmashLanding_ = false;
+		smashActiveTimer_ = kSmashActiveDuration;
+		if (currentMelee_) {
+			currentMelee_->ResetSwingHits(); // この一撃だけ当たる
+		}
+		if (gameScene_) {
+			Vector3 feet = GetWorldPosition() + Vector3(0.0f, -kHeight * 0.5f, 0.0f);
+			gameScene_->CreateBurstEffect(BurstType::kLand, feet, {0.0f, 1.0f});
+			gameScene_->CreateBurstEffect(BurstType::kHit, feet, {0.0f, 1.0f});
+		}
+	} else if (smashLandingWait_ >= kSmashLandingTimeout) {
+		awaitingSmashLanding_ = false;
+	}
 }

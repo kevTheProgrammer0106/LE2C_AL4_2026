@@ -81,6 +81,9 @@ void Player::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "InvulnJumpLand", kInvulnJumpLand);
 	gv->AddItem(kGroupName, "InvulnDamage", kInvulnDamage);
 	gv->AddItem(kGroupName, "InvulnBlock", kInvulnBlock);
+	gv->AddItem(kGroupName, "AttackEnemyCollisionMode", kAttackEnemyCollisionMode);
+	gv->AddItem(kGroupName, "AttackEnemyGap", kAttackEnemyGap);
+	gv->AddItem(kGroupName, "CornerLookAhead", kCornerLookAhead);
 }
 void Player::ApplyGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
@@ -127,6 +130,9 @@ void Player::ApplyGlobalVariables() {
 	kInvulnJumpLand = gv->GetFloatValue(kGroupName, "InvulnJumpLand");
 	kInvulnDamage = gv->GetFloatValue(kGroupName, "InvulnDamage");
 	kInvulnBlock = gv->GetFloatValue(kGroupName, "InvulnBlock");
+	kAttackEnemyCollisionMode = gv->GetIntValue(kGroupName, "AttackEnemyCollisionMode");
+	kAttackEnemyGap = gv->GetFloatValue(kGroupName, "AttackEnemyGap");
+	kCornerLookAhead = gv->GetFloatValue(kGroupName, "CornerLookAhead");
 }
 #pragma endregion
 
@@ -369,7 +375,7 @@ void Player::FireCurrentFirearm() {
 	currentFirearm_->TriggerRecoil(lrDirection_ == LRDirection::kRight);
 	BaseFirearm::PlayFireSound();
 
-	// Recoil: shooter is knocked back opposite to the aim (blunderbuss / shotgun)
+	// Recoil: 狙った方向と逆へ、上下も含めて全方向に吹き飛ぶ(blunderbuss / shotgun)
 	const float kbPower = currentFirearm_->GetFireKnockbackPower();
 	if (kbPower > 0.0f && !isDead_ && !behavior_.IsDeathBehavior()) {
 		float len = std::sqrt(aimDir.x * aimDir.x + aimDir.y * aimDir.y);
@@ -379,7 +385,7 @@ void Player::FireCurrentFirearm() {
 		} else {
 			aimDir = {isRight() ? 1.0f : -1.0f, 0.0f};
 		}
-		behavior_.RequestHitKnockback({-aimDir.x, -aimDir.y * 0.5f, 0.0f}, kbPower, false);
+		behavior_.RequestHitKnockback({-aimDir.x, -aimDir.y, 0.0f}, kbPower, false);
 	}
 }
 
@@ -753,7 +759,7 @@ bool Player::IsBlockingAttack(const AABB& attackBox, const Vector3& attackerPos)
 	return IsCollisionAABB(GetBlockAABB(), attackBox);
 }
 
-void Player::OnBlocked(const Vector3& hitDirection, float impactPower, BaseEnemy* attacker) {
+void Player::OnBlocked(const KamataEngine::Vector3& hitDirection, float impactPower, BaseEnemy* attacker, bool special) {
 	if (isDead_ || behavior_.IsDeathBehavior())
 		return;
 
@@ -772,10 +778,11 @@ void Player::OnBlocked(const Vector3& hitDirection, float impactPower, BaseEnemy
 	}
 
 	GrantInvulnerability(kInvulnBlock); // ブロック成功で1秒
-	if (!wasInvulnerable)
-		behavior_.RequestHitKnockback(hitDirection, impactPower * 0.3f); // 無敵中はプレイヤー側の押し戻しなし
+	// 押し戻しは特殊攻撃(ランジ/急降下など)をガードした時だけ。通常攻撃は受け止めるだけ
+	if (special && !wasInvulnerable)
+		behavior_.RequestHitKnockback(hitDirection, impactPower * 0.3f, false);
 
-	if (attacker) {
+	if (special && attacker) {
 		// gameplay direction: root to root
 		Vector3 pushDir = attacker->GetWorldPosition() - GetWorldPosition();
 		float len = std::sqrtf(pushDir.x * pushDir.x + pushDir.y * pushDir.y);
@@ -1098,4 +1105,66 @@ void Player::UpdateMeleeVisual() {
 		}
 	}
 	currentMelee_->SetMeleePosition(*this);
+}
+bool Player::HasCornerAhead(bool right) const {
+	if (!mapChipField_)
+		return false;
+	const float sign = right ? 1.0f : -1.0f;
+	const float feetY = worldTransform_.translation_.y - kHeight * 0.5f;
+	// 足元の高さ(最下段のセル)に壁があれば、そこは自分より1ブロック以上高い角
+	for (float d = 0.25f; d <= kCornerLookAhead; d += 0.5f) {
+		const Vector3 p = {worldTransform_.translation_.x + sign * (kWidth * 0.5f + d), feetY + 0.5f, 0.0f};
+		if (mapChipField_->IsSolidAtPosition(p, true) && !mapChipField_->IsOneWayAtPosition(p))
+			return true;
+	}
+	return false;
+}
+
+float Player::LimitAttackMoveByEnemies(float moveX) {
+	if (!gameScene_ || std::abs(moveX) < 0.0001f)
+		return moveX;
+	const bool right = moveX > 0.0f;
+	if (kAttackEnemyCollisionMode == 1 && !HasCornerAhead(right))
+		return moveX;
+
+	const AABB me = GetAABB();
+	float allowed = moveX;
+	for (const std::unique_ptr<BaseEnemy>& enemy : gameScene_->GetEnemies()) {
+		if (!enemy || enemy->IsDead() || enemy->IsCollisionDisabled())
+			continue;
+		const AABB e = enemy->GetAABB();
+		if (me.max.y <= e.min.y || me.min.y >= e.max.y)
+			continue; // 縦に重なっていない敵は無視
+		if (right) {
+			if (me.max.x > e.min.x)
+				continue; // すでに重なっている/通り過ぎている: 抜けられるように止めない
+			allowed = std::min(allowed, std::max(0.0f, (e.min.x - me.max.x) - kAttackEnemyGap));
+		} else {
+			if (me.min.x < e.max.x)
+				continue;
+			allowed = std::max(allowed, -std::max(0.0f, (me.min.x - e.max.x) - kAttackEnemyGap));
+		}
+	}
+	return allowed;
+}
+bool Player::GetAimGuideInfo(Vector3& outOrigin, Vector2& outDir, float& outCursorDistance) const {
+	if (!camera_)
+		return false;
+	outOrigin = GetModelWorldPosition(); // 弾の発射位置と同じ(FireCurrentFirearm)
+	const Vector2 raw = GetEffectiveAimDir();
+	const float len = std::sqrt(raw.x * raw.x + raw.y * raw.y);
+	if (len < 0.0001f)
+		return false;
+	outDir = {raw.x / len, raw.y / len};
+
+	// カーソルまでの距離: 画面上の距離を「1ワールド単位あたりのピクセル数」で割る
+	auto mouse = Input::GetInstance()->GetMousePosition();
+	Matrix4x4 matViewport = MakeViewportMatrix(0.0f, 0.0f, static_cast<float>(WinApp::kWindowWidth), static_cast<float>(WinApp::kWindowHeight), 0.0f, 1.0f);
+	Matrix4x4 matVPV = Multiply(camera_->matView, Multiply(camera_->matProjection, matViewport));
+	const Vector3 o = TransformCoordinate(outOrigin, matVPV);
+	const Vector3 p = TransformCoordinate(outOrigin + Vector3(outDir.x, outDir.y, 0.0f), matVPV);
+	const float pixelsPerUnit = std::sqrt((p.x - o.x) * (p.x - o.x) + (p.y - o.y) * (p.y - o.y));
+	const float screenDistance = std::sqrt((static_cast<float>(mouse.x) - o.x) * (static_cast<float>(mouse.x) - o.x) + (static_cast<float>(mouse.y) - o.y) * (static_cast<float>(mouse.y) - o.y));
+	outCursorDistance = (pixelsPerUnit > 0.0001f) ? screenDistance / pixelsPerUnit : 0.0f;
+	return true;
 }

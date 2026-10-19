@@ -117,6 +117,8 @@ public:
 	virtual void RequestKnockback(const KamataEngine::Vector3& direction, float power) { behavior_->RequestKnockback(direction, power); }
 	// ガード成功による押し戻し。RequestKnockbackを無効化している敵(Sapper)もこちらは受ける
 	void RequestBlockKnockback(const KamataEngine::Vector3& direction, float power) { behavior_->RequestKnockback(direction, power); }
+	// ガードした側が特殊攻撃を受けた時の反動(ノックバックのみ、スタンは付かない)
+	void RequestGuardRecoil(const KamataEngine::Vector3& direction, float power) { behavior_->RequestKnockback(direction, power, false); }
 	virtual void RequestStun(float duration) { behavior_->RequestStun(duration); }
 	void ClearDebuffs() { behavior_->ClearDebuffs(); }
 

@@ -178,6 +178,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="AimGuide.cpp" />
     <ClCompile Include="AnimationManager.cpp" />
     <ClCompile Include="AnimationUI.cpp" />
     <ClCompile Include="ArenaManager.cpp" />
@@ -216,6 +217,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClCompile Include="FirearmShotgun.cpp" />
     <ClCompile Include="GameAssets.cpp" />
     <ClCompile Include="GameScene.cpp" />
+    <ClCompile Include="GhostBlink.cpp" />
     <ClCompile Include="Global.cpp" />
     <ClCompile Include="GlobalVariables.cpp" />
     <ClCompile Include="Goal.cpp" />
@@ -257,6 +259,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClCompile Include="WeaponSpear.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AimGuide.h" />
     <ClInclude Include="AnimationManager.h" />
     <ClInclude Include="AnimationUI.h" />
     <ClInclude Include="ArenaManager.h" />
@@ -295,6 +298,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClInclude Include="FirearmShotgun.h" />
     <ClInclude Include="GameAssets.h" />
     <ClInclude Include="GameScene.h" />
+    <ClInclude Include="GhostBlink.h" />
     <ClInclude Include="Global.h" />
     <ClInclude Include="GlobalVariables.h" />
     <ClInclude Include="Goal.h" />

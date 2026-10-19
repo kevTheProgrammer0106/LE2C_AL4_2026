@@ -140,6 +140,12 @@ private:
 	static inline float kKnockBackSpeedY = 0.35f;
 	static inline uint32_t kKnockBackDuration = 25;
 
+	static inline float kKnockbackAirDrag = 0.97f;
+	static inline float kKnockbackGroundFriction = 0.88f;
+	static inline float kKnockbackRestitution = 0.45f;
+	static inline float kKnockbackBounceMinSpeed = 0.08f;
+	static inline uint32_t kKnockBackMaxDuration = 60;
+
 static inline BodyComboPoseSet kBodyCombo = {
 	    {MakeBodyPose(-0.1f, -0.7f, 0.0f), MakeBodyPose(-0.1f, 1.0f, 0.0f), MakeBodyPose(-0.4f, -0.7f, 0.0f)},
 	    {MakeBodyPose(0.2f, 0.2f, 0.0f), MakeBodyPose(0.3f, 0.0f, 0.0f, {1.1f, 1.0f, 1.0f}), MakeBodyPose(0.4f, -0.1f, 0.0f)},

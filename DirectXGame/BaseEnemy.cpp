@@ -419,6 +419,7 @@ void BaseEnemy::PhysicsAndCollisionUpdate() {
 	UpdateModelCollision();
 }
 void BaseEnemy::MapChipCollisionUpdate() {
+	const Vector3 velocityBefore = velocity_; // ノックバックの跳ね返り用
 	blockDetector_.SetWorldTransform(worldTransform_);
 	blockDetector_.SetVelocity(velocity_);
 	blockDetector_.SetOnGround(onGround_);
@@ -447,6 +448,10 @@ void BaseEnemy::MapChipCollisionUpdate() {
 	blockDetector_.GroundSwitch(verticalInfo);
 	onGround_ = blockDetector_.IsOnGround();
 	velocity_ = blockDetector_.GetVelocity();
+
+	if (behavior_ && behavior_->IsKnockedBack()) {
+		behavior_->ApplyKnockbackBounce(velocityBefore, horizontalInfo, verticalInfo);
+	}
 
 	JumpMovement(horizontalInfo);
 }

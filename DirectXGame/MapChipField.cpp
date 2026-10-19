@@ -309,6 +309,14 @@ void MapChipField::ClearMapChipByIndex(uint32_t xIndex, uint32_t yIndex) {
 	unit.subID = 0;
 	unit.linkID = 0;
 }
+void MapChipField::SetMapChipByIndex(uint32_t xIndex, uint32_t yIndex, MapChipType type, uint8_t subID, uint8_t linkID) {
+	if (xIndex >= totalBlockHorizontal_ || yIndex >= totalBlockVertical_)
+		return;
+	MapChipDataUnit& unit = mapChipData_.data[yIndex][xIndex];
+	unit.type = type;
+	unit.subID = subID;
+	unit.linkID = linkID;
+}
 
 std::vector<MapChipField::IndexSet> MapChipField::CollectConnectedByType(uint32_t xIndex, uint32_t yIndex, MapChipType type) {
 	std::vector<IndexSet> result;

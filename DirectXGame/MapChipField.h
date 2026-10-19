@@ -88,6 +88,7 @@ public:
 	MapChipType GetMapChipTypeByIndex(uint32_t xIndex, uint32_t yIndex);
 	uint8_t GetMapChipSubIDByIndex(uint32_t xIndex, uint32_t yIndex);
 	uint8_t GetMapChipLinkIDByIndex(uint32_t xIndex, uint32_t yIndex);
+	void SetMapChipByIndex(uint32_t xIndex, uint32_t yIndex, MapChipType type, uint8_t subID, uint8_t linkID);
 
 	KamataEngine::Vector3 GetMapChipPositionByIndex(uint32_t xIndex, uint32_t yIndex);
 

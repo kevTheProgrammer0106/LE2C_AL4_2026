@@ -50,6 +50,7 @@
 
 #include "DroppableItem.h"
 #include "UserInterfaceGameplayHUD.h"
+#include "AimGuide.h"
 
 #include "ArenaManager.h"
 #include "DebugMenu.h"
@@ -98,8 +99,9 @@ public:
 	void CreateEnemyDeathParticles(const KamataEngine::Vector3& position);
 
 	void CreateMuzzleFlash(const KamataEngine::Vector3& muzzlePos, const KamataEngine::Vector2& aimDir, bool followPlayer);
-	// 爆発(煙 + 火の玉 + 火花)を position に出す
-	void CreateExplosion(const KamataEngine::Vector3& position);
+	// 爆発(煙 + 火の玉 + 火花)を position に出す。smokeLoopDuration >= 0 なら煙のループ継続秒数を上書きする(負=プリセットのまま)
+	void CreateExplosion(const KamataEngine::Vector3& position, float smokeLoopDuration = -1.0f);
+	
 
 	void CreateFirearmProjectile(Owner owner, const KamataEngine::Vector3& position, const KamataEngine::Vector2& aimDirection, int damage = -1, int32_t lifeFrames = 0);
 	void CreateGrenade(const KamataEngine::Vector3& position, const KamataEngine::Vector3& velocity, Owner owner);
@@ -190,10 +192,13 @@ public:
 	void BindAssets();
 
 	void TriggerScreenFlash(ScreenFlash::Type type) { screenFlash_.Trigger(type); }
-	void CreateBurstEffect(BurstType type, const KamataEngine::Vector3& position, const KamataEngine::Vector2& dir);
+	void CreateBurstEffect(BurstType type, const KamataEngine::Vector3& position, const KamataEngine::Vector2& dir, float loopDuration = -1.0f);
 
 	bool IsOfficerBuffActive() const { return buffOfficer_ != nullptr; }
 	void ApplyOfficerBuff(BaseEnemy* officer);
+
+	// True if pos is within any live grenade's blast radius + margin. Outputs the nearest grenade's position.
+	bool FindGrenadeThreat(const KamataEngine::Vector3& pos, float margin, KamataEngine::Vector3& outGrenadePos) const;
 
 private:
 	friend class DebugMenu;
@@ -413,9 +418,11 @@ private:
 		float normalRadius;
 		int32_t normalDamage;
 		float impact;
-		bool harmEnemies; // barrels kill enemies; enemy-thrown grenades don't
+		bool harmEnemies;       // enemies take damage from this blast
+		bool killAllInRadius;   // true: enemies die anywhere in normalRadius (barrel). false: die in fatalRadius, take normalDamage outside
 	};
 	static ExplosionParams BarrelExplosionParams();
+	static ExplosionParams GrenadeExplosionParams();
 	void ExplodeAt(const KamataEngine::Vector3& center, const ExplosionParams& params);
 	std::unordered_map<uint64_t, int32_t> explosives_; // cell -> remaining melee hits
 	struct PendingExplosion {
@@ -463,6 +470,29 @@ private:
 	static inline float kFragileBreakDelay = 3.0f;
 	static inline float kFragileShakeAmplitude = 0.08f;
 
+	// -- Renerative Block calls -- //
+	struct RegenCell {
+		uint32_t x = 0, y = 0;
+		MapChipType type = MapChipType::kBlank;
+		uint8_t subID = 0;
+		uint8_t linkID = 0;
+		float timer = 0.0f; // seconds until it comes back
+		KamataEngine::Model* model = nullptr;
+		uint32_t tex = 0;
+		std::unique_ptr<KamataEngine::WorldTransform> transform; // ghost
+		std::unique_ptr<KamataEngine::ObjectColor> color;
+	};
+	std::vector<RegenCell> regenCells_;
+	static bool IsRegenerative(MapChipType type, uint8_t subID) { return (type == MapChipType::kExplosive || type == MapChipType::kFragile) && subID == 1; }
+	void QueueRegen(uint32_t x, uint32_t y, MapChipType type, uint8_t subID, uint8_t linkID);
+	void UpdateRegenCells();
+	void DrawRegenGhosts();
+	static inline int32_t kExplosiveHits = 3;
+	static inline float kExplosiveRegenDelay = 15.0f;
+	static inline float kFragileRegenDelay = 10.0f;
+	static inline float kRegenBlinkWarning = 3.0f;
+	static inline float kRegenBlinkFrequency = 6.0f;
+
 	// ---- weapon spawners ----
 	struct WeaponSpawnerPoint {
 		KamataEngine::Vector3 position = {};
@@ -493,4 +523,14 @@ private:
 
 	BaseEnemy* buffOfficer_ = nullptr; // the officer whose life the buff depends on
 	void UpdateOfficerBuff();
+
+	static inline float kGuardRecoilScale = 0.3f;
+
+	// ---- 弾と地形/ゲートの判定 ----
+	bool IsBulletBlockedAt(const KamataEngine::Vector3& position);
+	bool BulletHitsSolid(const ProjectileBall& bullet);
+	void CreateBulletImpact(const ProjectileBall& bullet, BurstType type);
+
+	AimGuide aimGuide_;
+	void UpdateAimGuide();
 };

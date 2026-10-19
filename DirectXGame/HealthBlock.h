@@ -29,6 +29,11 @@ public:
 	// GameSceneがプレイヤーとの接触を検知した時に呼ぶ。HP全回復後、
 	// kLimitedなら恒久的に非アクティブ化、kTimerなら再出現タイマーを開始する。
 	void Consume();
+	bool ConsumeJustRespawned() {
+		bool r = justRespawned_;
+		justRespawned_ = false;
+		return r;
+	}
 	static void SetConsumeSoundHandle(uint32_t handle) { sConsumeSoundHandle_ = handle; }
 	static void SetSfxVolume(float volume) { sSfxVolume_ = volume; }
 
@@ -54,10 +59,17 @@ private:
 	static inline float kBobSpeed = 2.0f;
 	static inline float kSpinSpeed = 1.5f;
 
-	// [NEW] 再出現直前の点滅警告(DroppableItemの消滅前点滅と同じ演出)
 	static inline float kBlinkWarningDuration = 3.0f;
 	static inline float kBlinkFrequency = 6.0f;
 
-		static inline uint32_t sConsumeSoundHandle_ = 0;
+	static constexpr float kBaseScale = 0.6f;
+	static inline float kMaterializeDuration = 0.5f;
+	bool justRespawned_ = false;
+
+
+	static inline uint32_t sConsumeSoundHandle_ = 0;
 	static inline float sSfxVolume_ = 1.0f;
+
+	KamataEngine::ObjectColor objectColor_;
+	float ghostAlpha_ = 0.0f; // > 0 while the pre-respawn ghost is visible
 };

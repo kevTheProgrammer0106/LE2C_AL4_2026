@@ -30,6 +30,11 @@ void PlayerBehavior::RegisterGlobalVariables() {
 	RegisterBodyComboPoseSet(kGroupName, "BodyCombo", kBodyCombo);
 	RegisterBodyLungePoseSet(kGroupName, "BodyLungeHeavy", kBodyLungeHeavy);
 	RegisterBodyLungePoseSet(kGroupName, "BodyLungeBayonet", kBodyLungeBayonet);
+	gv->AddItem(kGroupName, "KnockbackAirDrag", kKnockbackAirDrag);
+	gv->AddItem(kGroupName, "KnockbackGroundFriction", kKnockbackGroundFriction);
+	gv->AddItem(kGroupName, "KnockbackRestitution", kKnockbackRestitution);
+	gv->AddItem(kGroupName, "KnockbackBounceMinSpeed", kKnockbackBounceMinSpeed);
+	gv->AddItem(kGroupName, "KnockBackMaxDuration", static_cast<int32_t>(kKnockBackMaxDuration));
 }
 void PlayerBehavior::ApplyGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
@@ -48,9 +53,13 @@ void PlayerBehavior::ApplyGlobalVariables() {
 	kHitKnockbackHopSpeed = gv->GetFloatValue(kGroupName, "HitKnockbackHopSpeed"); 
 	kStunHopSpeed = gv->GetFloatValue(kGroupName, "StunHopSpeed"); 
 	ApplyBodyComboPoseSet(kGroupName, "BodyCombo", kBodyCombo);
-	// Apply:
 	ApplyBodyLungePoseSet(kGroupName, "BodyLungeHeavy", kBodyLungeHeavy);
 	ApplyBodyLungePoseSet(kGroupName, "BodyLungeBayonet", kBodyLungeBayonet);
+	kKnockbackAirDrag = gv->GetFloatValue(kGroupName, "KnockbackAirDrag");
+	kKnockbackGroundFriction = gv->GetFloatValue(kGroupName, "KnockbackGroundFriction");
+	kKnockbackRestitution = gv->GetFloatValue(kGroupName, "KnockbackRestitution");
+	kKnockbackBounceMinSpeed = gv->GetFloatValue(kGroupName, "KnockbackBounceMinSpeed");
+	kKnockBackMaxDuration = static_cast<uint32_t>(gv->GetIntValue(kGroupName, "KnockBackMaxDuration"));
 }
 
 void PlayerBehavior::ResolveBehaviorRequest() {
@@ -417,6 +426,9 @@ void PlayerBehavior::BehaviorAttackUpdate() {
 		}
 		finalMove = {attackVelocity_.x, owner_.velocity_.y, 0.0f};
 	}
+	if (attackDirection_ == AttackDirection::kSide) {
+		finalMove.x = owner_.LimitAttackMoveByEnemies(finalMove.x); // 敵の体を通り抜けない
+	}
 
 	CollisionInfo collisionMapInfo;
 	collisionMapInfo.move = finalMove;
@@ -478,7 +490,7 @@ void PlayerBehavior::BehaviorLungeUpdate() {
 		owner_.velocity_.y = std::max(owner_.velocity_.y, -Player::kLimitFallSpeed);
 	}
 	CollisionInfo collisionMapInfo;
-	collisionMapInfo.move = {attackVelocity_.x, owner_.velocity_.y, 0.0f};
+	collisionMapInfo.move = {owner_.LimitAttackMoveByEnemies(attackVelocity_.x), owner_.velocity_.y, 0.0f};
 	owner_.MapChipCollisionUpdate(collisionMapInfo);
 	WorldTransformUpdate(owner_.worldTransform_);
 }
@@ -487,7 +499,7 @@ void PlayerBehavior::BehaviorKnockbackInitialize() {
 	knockBackParameter_ = 0;
 	owner_.onGround_ = false;
 
-	// [FIX] 攻撃を中断されたコンボ状態を残さない
+	// 攻撃を中断されたコンボ状態を残さない
 	isAttacking_ = false;
 	comboIndex_ = 0;
 	comboInputBuffered_ = false;
@@ -496,13 +508,27 @@ void PlayerBehavior::BehaviorKnockbackUpdate() {
 	++knockBackParameter_;
 	owner_.velocity_ += Vector3(0, -Player::kGravityAcceleration, 0);
 	owner_.velocity_.y = std::max(owner_.velocity_.y, -Player::kLimitFallSpeed);
+	owner_.velocity_.x *= owner_.onGround_ ? kKnockbackGroundFriction : kKnockbackAirDrag;
 
+	const Vector3 before = owner_.velocity_;
 	CollisionInfo collisionMapInfo;
-	collisionMapInfo.move = owner_.velocity_;
-	owner_.MapChipCollisionUpdate(collisionMapInfo, true); 
+	collisionMapInfo.move = before;
+	owner_.MapChipCollisionUpdate(collisionMapInfo, true);
 
+	// 壁/床/天井で跳ね返る(グレネードと同じ考え方)
+	if (collisionMapInfo.isHitWall && std::abs(before.x) > kKnockbackBounceMinSpeed) {
+		owner_.velocity_.x = -before.x * kKnockbackRestitution;
+	}
+	if (collisionMapInfo.isHitGround && before.y < -kKnockbackBounceMinSpeed) {
+		owner_.velocity_.y = -before.y * kKnockbackRestitution;
+		owner_.onGround_ = false;
+	} else if (collisionMapInfo.isHitTop && before.y > kKnockbackBounceMinSpeed) {
+		owner_.velocity_.y = -before.y * kKnockbackRestitution;
+	}
 
-	if (knockBackParameter_ >= kKnockBackDuration)
+	// 固定時間で打ち切らず、空中で跳ねている間は続ける(着地するか最大時間で終了)
+	const bool settled = owner_.onGround_ || knockBackParameter_ >= kKnockBackMaxDuration;
+	if (knockBackParameter_ >= kKnockBackDuration && settled)
 		behaviorRequest_ = Behavior::kRoot;
 }
 #pragma endregion

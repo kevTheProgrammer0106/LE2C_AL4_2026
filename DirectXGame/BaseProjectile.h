@@ -5,7 +5,7 @@
 class BaseProjectile {
 public:
 	virtual ~BaseProjectile() = default;
-
+	KamataEngine::Vector3 GetVelocity() const { return velocity_; }
 	virtual void
 	    Initialize(KamataEngine::Model* model, uint32_t textureHandle, KamataEngine::Camera* camera, const KamataEngine::Vector3& position, const KamataEngine::Vector3& velocity, Owner owner);
 	virtual void Update();

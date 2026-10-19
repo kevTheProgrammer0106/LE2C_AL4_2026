@@ -68,7 +68,10 @@ void SapperBehavior::InitializeBehaviorState(Behavior behavior) {
 	if (behavior != Behavior::kLeap) {
 		sapperOwner_.SetPhasing(false);
 	}
-
+	// 着地待ちの叩きつけは、自己スタン以外の状態へ移ったら取り消す
+	if (behavior != Behavior::kStunned) {
+		sapperOwner_.CancelSmashLanding();
+	}
 	switch (behavior) {
 	case Behavior::kMelee:
 		BehaviorMeleeInitialize();
@@ -313,11 +316,11 @@ void SapperBehavior::BehaviorLeapUpdate() {
 		break;
 	}
 	case LeapPhase::kDive: {
-		// 目標は常に現在のプレイヤー位置(降下しながらプレイヤーへ寄っていく)
-		if (player) {
-			leapTarget_ = player->GetWorldPosition();
-			sapperOwner_.SetLeapTarget(leapTarget_);
-		}
+		//// 目標は常に現在のプレイヤー位置(降下しながらプレイヤーへ寄っていく)
+		//if (player) {
+		//	leapTarget_ = player->GetWorldPosition();
+		//	sapperOwner_.SetLeapTarget(leapTarget_);
+		//}
 		const float tx = leapTarget_.x - pos.x;
 		const float ty = leapTarget_.y - pos.y;
 		const float distance = std::sqrt(tx * tx + ty * ty);
@@ -360,14 +363,10 @@ void SapperBehavior::FinishLeap() {
 	OwnerVelocity() = {0.0f, 0.0f, 0.0f};
 	leapCooldownTimer_ = kLeapCooldown;
 
-	// 叩きつけの着弾演出
-	if (GameScene* scene = OwnerGameScene()) {
-		Vector3 feet = owner_.GetWorldPosition() + Vector3(0.0f, -BaseEnemy::GetBodyHeight() * 0.5f, 0.0f);
-		scene->CreateBurstEffect(BurstType::kLand, feet, {0.0f, 1.0f});
-		scene->CreateBurstEffect(BurstType::kHit, feet, {0.0f, 1.0f});
-	}
+	// 床に着いた瞬間に叩きつけの当たり判定と演出が出る(EnemySapper::TickSmashImpact)
+	sapperOwner_.BeginSmashLanding();
 
-	// 自分でスタン(+6秒のボーナスは外部要因のスタンだけなので、ここは直接指定する)
+	// 自分でスタン(これが唯一のスタン)
 	stunDuration_ = kLandStunDuration;
 	behaviorRequest_ = Behavior::kStunned;
 }

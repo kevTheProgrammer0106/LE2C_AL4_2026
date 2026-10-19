@@ -170,12 +170,12 @@ public:
 
 	void ApplySeparationFromOtherEnemies();
 
-	void RequestKnockback(const KamataEngine::Vector3& direction, float power) {
+	void RequestKnockback(const KamataEngine::Vector3& direction, float power, bool allowFollowUpStun = true) {
 		if (behavior_ == Behavior::kDeath || behaviorRequest_ == Behavior::kDeath)
 			return;
 		knockbackDirection_ = direction;
 		knockbackPower_ = power;
-		pendingStunAfterKnockback_ = GetHitStunDuration();
+		pendingStunAfterKnockback_ = allowFollowUpStun ? GetHitStunDuration() : 0.0f;
 		behaviorRequest_ = Behavior::kKnockback;
 	}
 	void RequestStun(float duration) {
@@ -274,6 +274,15 @@ public:
 
 		// True when a chasing officer is nearby and this enemy has run ahead of it: it waits so the group moves together.
 	bool ShouldHoldForEscort() const;
+
+	// A live grenade whose blast radius (+ kGrenadeSafeMargin) covers this enemy. Outputs the nearest one's position.
+	bool IsInGrenadeDanger(KamataEngine::Vector3& outGrenadePos) const;
+	// Dodge step: continues a committed hop, otherwise retreats from the grenade. False if it cannot move away.
+	bool RetreatFromGrenade(const KamataEngine::Vector3& grenadePos, float speed);
+
+	// ノックバック中に壁/床/天井で跳ね返る(グレネードと同じ考え方)。BaseEnemy::MapChipCollisionUpdateから呼ぶ
+	void ApplyKnockbackBounce(const KamataEngine::Vector3& before, const CollisionInfo& horizontal, const CollisionInfo& vertical);
+
 protected:
 	PostMode postMode_ = PostMode::kWander;
 
@@ -442,6 +451,12 @@ protected:
 	static inline uint32_t kKnockbackDuration = 15;
 	static inline float kKnockbackSpeedScale = 0.12f;
 
+	static inline float kKnockbackAirDrag = 0.97f;        // 空中での毎フレームの水平速度の残り割合
+	static inline float kKnockbackGroundFriction = 0.88f; // 地上
+	static inline float kKnockbackRestitution = 0.45f;    // 跳ね返りで残る速度の割合
+	static inline float kKnockbackBounceMinSpeed = 0.08f; // これ以下の速度では跳ねない
+	static inline uint32_t kKnockbackMaxDuration = 60;    // 空中で跳ね続けた時の打ち切り(フレーム)
+
 	float stunTimer_ = 0.0f;
 	float stunDuration_ = 0.0f;
 
@@ -457,4 +472,6 @@ protected:
 
 	// During kMelee (outside recovery), the ledge guard only applies once |velocity.x| is at or below this.
 	static inline float kLungeLedgeGuardSpeed = 0.1f;
+
+	static inline float kGrenadeSafeMargin = 1.5f; // extra distance kept outside the blast radius
 };

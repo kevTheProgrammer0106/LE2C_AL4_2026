@@ -20,6 +20,7 @@ void GrenadierBehavior::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "ThrowRangeMax", kThrowRangeMax);
 	gv->AddItem(kGroupName, "ThrowHeightTolerance", kThrowHeightTolerance);
 	gv->AddItem(kGroupName, "RetreatSpeed", kRetreatSpeed);
+	gv->AddItem(kGroupName, "GrenadeRetreatSpeed", kGrenadeRetreatSpeed);
 }
 void GrenadierBehavior::ApplyGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
@@ -28,6 +29,7 @@ void GrenadierBehavior::ApplyGlobalVariables() {
 	kThrowRangeMax = gv->GetFloatValue(kGroupName, "ThrowRangeMax");
 	kThrowHeightTolerance = gv->GetFloatValue(kGroupName, "ThrowHeightTolerance");
 	kRetreatSpeed = gv->GetFloatValue(kGroupName, "RetreatSpeed");
+	kGrenadeRetreatSpeed = gv->GetFloatValue(kGroupName, "GrenadeRetreatSpeed");
 }
 
 GrenadierBehavior::GrenadierBehavior(EnemyGrenadier& owner) : FighterBehavior(owner), grenadierOwner_(owner) {}
@@ -47,6 +49,11 @@ void GrenadierBehavior::BehaviorRootUpdate() {
 		throwTimer_ -= kDt;
 	}
 
+	// Never stand in a grenade's blast: always run, no cooldown (also covers its own throw).
+	Vector3 grenadePos{};
+	if (IsInGrenadeDanger(grenadePos) && RetreatFromGrenade(grenadePos, kGrenadeRetreatSpeed)) {
+		return;
+	}
 	GameScene* scene = OwnerGameScene();
 	Player* player = scene ? scene->GetPlayer() : nullptr;
 

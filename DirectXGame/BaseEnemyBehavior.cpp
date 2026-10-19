@@ -47,6 +47,12 @@ void BaseEnemyBehavior::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "xEscortJoinRadius", kEscortJoinRadius);
 	gv->AddItem(kGroupName, "xEscortLeash", kEscortLeash);
 	gv->AddItem(kGroupName, "xEscortFreeRange", kEscortFreeRange);
+	gv->AddItem(kGroupName, "xGrenadeSafeMargin", kGrenadeSafeMargin);
+	gv->AddItem(kGroupName, "xKnockbackAirDrag", kKnockbackAirDrag);
+	gv->AddItem(kGroupName, "xKnockbackGroundFriction", kKnockbackGroundFriction);
+	gv->AddItem(kGroupName, "xKnockbackRestitution", kKnockbackRestitution);
+	gv->AddItem(kGroupName, "xKnockbackBounceMinSpeed", kKnockbackBounceMinSpeed);
+	gv->AddItem(kGroupName, "xKnockbackMaxDuration", static_cast<int32_t>(kKnockbackMaxDuration));
 }
 
 void BaseEnemyBehavior::ApplyGlobalVariables() {
@@ -76,6 +82,12 @@ void BaseEnemyBehavior::ApplyGlobalVariables() {
 	kEscortJoinRadius = gv->GetFloatValue(kGroupName, "xEscortJoinRadius");
 	kEscortLeash = gv->GetFloatValue(kGroupName, "xEscortLeash");
 	kEscortFreeRange = gv->GetFloatValue(kGroupName, "xEscortFreeRange");
+	kGrenadeSafeMargin = gv->GetFloatValue(kGroupName, "xGrenadeSafeMargin");
+	kKnockbackAirDrag = gv->GetFloatValue(kGroupName, "xKnockbackAirDrag");
+	kKnockbackGroundFriction = gv->GetFloatValue(kGroupName, "xKnockbackGroundFriction");
+	kKnockbackRestitution = gv->GetFloatValue(kGroupName, "xKnockbackRestitution");
+	kKnockbackBounceMinSpeed = gv->GetFloatValue(kGroupName, "xKnockbackBounceMinSpeed");
+	kKnockbackMaxDuration = static_cast<uint32_t>(gv->GetIntValue(kGroupName, "xKnockbackMaxDuration"));
 }
 
 void BaseEnemyBehavior::Initialize() {
@@ -724,7 +736,11 @@ void BaseEnemyBehavior::BehaviorKnockbackUpdate() {
 	++knockbackParameter_;
 	owner_.velocity_ += Vector3(0, -BaseEnemy::kGravityAcceleration, 0);
 	owner_.velocity_.y = std::max(owner_.velocity_.y, -BaseEnemy::kLimitFallSpeed);
-	if (knockbackParameter_ >= kKnockbackDuration) {
+	owner_.velocity_.x *= owner_.onGround_ ? kKnockbackGroundFriction : kKnockbackAirDrag;
+
+	// 固定時間で打ち切らず、空中で跳ねている間は続ける(着地するか最大時間で終了)
+	const bool settled = owner_.onGround_ || knockbackParameter_ >= kKnockbackMaxDuration;
+	if (knockbackParameter_ >= kKnockbackDuration && settled) {
 		if (pendingStunAfterKnockback_ > 0.0f) {
 			stunDuration_ = pendingStunAfterKnockback_;
 			pendingStunAfterKnockback_ = 0.0f;
@@ -732,6 +748,18 @@ void BaseEnemyBehavior::BehaviorKnockbackUpdate() {
 		} else {
 			behaviorRequest_ = Behavior::kRoot;
 		}
+	}
+}
+
+void BaseEnemyBehavior::ApplyKnockbackBounce(const Vector3& before, const CollisionInfo& horizontal, const CollisionInfo& vertical) {
+	if (horizontal.isHitWall && std::abs(before.x) > kKnockbackBounceMinSpeed) {
+		owner_.velocity_.x = -before.x * kKnockbackRestitution;
+	}
+	if (vertical.isHitGround && before.y < -kKnockbackBounceMinSpeed) {
+		owner_.velocity_.y = -before.y * kKnockbackRestitution;
+		owner_.onGround_ = false; // 跳ねて再び空中へ
+	} else if (vertical.isHitTop && before.y > kKnockbackBounceMinSpeed) {
+		owner_.velocity_.y = -before.y * kKnockbackRestitution;
 	}
 }
 void BaseEnemyBehavior::BehaviorStunnedInitialize() {
@@ -947,4 +975,16 @@ BaseEnemyBehavior::LedgeGuardRequest BaseEnemyBehavior::GetLedgeGuardRequest() c
 		return {true, kLungeLedgeGuardSpeed}; // otherwise only once slow enough
 	}
 	return {};
+}
+bool BaseEnemyBehavior::IsInGrenadeDanger(Vector3& outGrenadePos) const {
+	GameScene* scene = OwnerGameScene();
+	return scene && scene->FindGrenadeThreat(owner_.GetWorldPosition(), kGrenadeSafeMargin, outGrenadePos);
+}
+
+bool BaseEnemyBehavior::RetreatFromGrenade(const Vector3& grenadePos, float speed) {
+	if (!CanMakeDecision()) {
+		ContinueCommittedMove(); // mid-hop
+		return true;
+	}
+	return RetreatAwayFrom(grenadePos, speed);
 }

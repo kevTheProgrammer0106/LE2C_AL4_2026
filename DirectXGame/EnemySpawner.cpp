@@ -57,21 +57,15 @@ void EnemySpawner::Update(GameScene* gameScene, const Vector3& playerPosition) {
 	}
 	timer_ = 0.0f;
 
-	// -- SpawnEnemyAt's switch has no case for anything above 2, so any
-	// spawner using a slot value outside 0-2 silently spawned nothing.
-	gameScene->SpawnEnemyAt(position_, ResolveEnemyType());
+	BaseEnemy* justSpawned = gameScene->SpawnEnemyAt(position_, ResolveEnemyType());
 	++spawnedCount_;
 
-	if (!gameScene->GetEnemies().empty()) {
-		BaseEnemy* justSpawned = gameScene->SpawnEnemyAt(position_, ResolveEnemyType());
-		++spawnedCount_;
-		if (justSpawned) {
-			justSpawned->SetArenaID(arenaID_);
-			if (spawnedEnemiesOmniscient_) {
-				justSpawned->SetIgnoreEquipStates(true);
-				justSpawned->ReceiveAlert(playerPosition);
-				justSpawned->SetPersistentAwareness(true);
-			}
+	if (justSpawned) {
+		justSpawned->SetArenaID(arenaID_);
+		if (spawnedEnemiesOmniscient_) {
+			justSpawned->SetIgnoreEquipStates(true);
+			justSpawned->ReceiveAlert(playerPosition);
+			justSpawned->SetPersistentAwareness(true);
 		}
 	}
 

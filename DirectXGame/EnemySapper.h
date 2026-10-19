@@ -32,7 +32,6 @@ public:
 	void UpdateSmashVisual(BaseMelee::AttackPhase phase, float t);
 
 	bool IsSwingActive() const { return isSwingActive_; }
-	bool IsSmashActive() const { return isSmashActive_; }
 	AABB GetSwingAABB() const;
 	AABB GetSmashAABB() const;
 	int GetCurrentComboIndex() const { return currentComboIndex_; }
@@ -51,6 +50,17 @@ public:
 
 	// 攻撃中も止まらないので、装備/解除で動きを止めない
 	EquipStyle GetEquipStyle() const override { return EquipStyle::kLight; }
+
+	bool IsSmashActive() const { return smashActiveTimer_ > 0.0f; }
+	// 判定を戻した後、床に着いた瞬間に叩きつけの判定を出す
+	void BeginSmashLanding() {
+		awaitingSmashLanding_ = true;
+		smashLandingWait_ = 0.0f;
+	}
+	void CancelSmashLanding() {
+		awaitingSmashLanding_ = false;
+		smashActiveTimer_ = 0.0f;
+	}
 
 protected:
 	void RefreshWeaponVisual() override { UpdateMeleeVisual(nullptr); }
@@ -75,7 +85,6 @@ private:
 	std::unique_ptr<WeaponAxe> currentMelee_;
 
 	bool isSwingActive_ = false;
-	bool isSmashActive_ = false;
 	int currentComboIndex_ = 0;
 	KamataEngine::Vector3 leapTarget_{};
 
@@ -95,4 +104,12 @@ private:
 	    MakeBodyPose(-0.5f, 0.0f, 0.0f, {0.97f, 1.05f, 1.0f}, {0.0f, 0.05f, 0.0f}),
 	    MakeBodyPose(0.9f, 0.0f, 0.0f, {1.08f, 0.9f, 1.0f}, {0.0f, -0.1f, 0.0f}),
 	};
+
+	void TickSmashImpact();
+
+	bool awaitingSmashLanding_ = false;
+	float smashLandingWait_ = 0.0f;
+	float smashActiveTimer_ = 0.0f;
+	static inline float kSmashActiveDuration = 0.12f; // 着地後に叩きつけ判定が出ている時間(秒)
+	static inline float kSmashLandingTimeout = 3.0f;  // 着地しないまま待ち続けた時の安全弁
 };

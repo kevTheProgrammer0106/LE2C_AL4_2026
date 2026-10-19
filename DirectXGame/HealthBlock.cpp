@@ -1,5 +1,6 @@
 #include "HealthBlock.h"
 #include "GlobalVariables.h"
+#include "GhostBlink.h"
 
 using namespace KamataEngine;
 
@@ -53,46 +54,55 @@ void HealthBlock::Initialize(Model* model, uint32_t textureHandle, Camera* camer
 	bobTimer_ = 0.0f;
 	respawnTimer_ = 0.0f;
 	isActive_ = true;
+	objectColor_.Initialize();
+	objectColor_.SetColor({1.0f, 1.0f, 1.0f, 1.0f});
+	ghostAlpha_ = 0.0f;
 }
 
 void HealthBlock::Update() {
+	constexpr float kDt = 1.0f / 60.0f;
+	ghostAlpha_ = 0.0f;
+
 	if (!isActive_) {
-		// kLimited: 恒久的に非アクティブのまま(respawnTimer_は進めない)
-		// kTimer: 再出現までカウントする
-		if (mode_ == Mode::kTimer) {
-			respawnTimer_ += 1.0f / 60.0f;
-			if (respawnTimer_ >= kRespawnInterval) {
-				isActive_ = true;
-				respawnTimer_ = 0.0f;
-				bobTimer_ = 0.0f;
-			}
+		if (mode_ != Mode::kTimer) {
+			return; // kLimited: gone for good
 		}
-		return;
+		respawnTimer_ += kDt;
+		if (respawnTimer_ >= kRespawnInterval) {
+			isActive_ = true;
+			respawnTimer_ = 0.0f;
+			bobTimer_ = 0.0f;
+			objectColor_.SetColor({1.0f, 1.0f, 1.0f, 1.0f});
+		} else {
+			ghostAlpha_ = GhostBlink::Alpha(kRespawnInterval - respawnTimer_, kBlinkWarningDuration, kBlinkFrequency);
+			if (ghostAlpha_ <= 0.0f) {
+				return;
+			}
+			objectColor_.SetColor({1.0f, 1.0f, 1.0f, ghostAlpha_});
+		}
 	}
 
-	bobTimer_ += 1.0f / 60.0f;
+	// active, or a visible ghost: same float + spin
+	bobTimer_ += kDt;
 	float bob = std::sin(bobTimer_ * kBobSpeed) * kBobAmplitude;
 	worldTransform_.translation_ = basePosition_ + Vector3(0.0f, bob, 0.0f);
-	worldTransform_.rotation_.y += kSpinSpeed * (1.0f / 60.0f);
+	worldTransform_.rotation_.y += kSpinSpeed * kDt;
 	WorldTransformUpdate(worldTransform_);
 }
 
 void HealthBlock::Draw() {
-	if (!isActive_ || !model_) {
+	if (!model_) {
 		return;
 	}
-
-	Model::PreDraw();
-	model_->Draw(worldTransform_, *camera_, textureHandle_);
+	if (isActive_) {
+		Model::PreDraw();
+	} else if (ghostAlpha_ > 0.0f) {
+		Model::PreDraw(Model::CullingMode::kBack, Model::BlendMode::kNormal, Model::DepthTestMode::kReadOnly);
+	} else {
+		return;
+	}
+	model_->Draw(worldTransform_, *camera_, textureHandle_, &objectColor_);
 	Model::PostDraw();
-}
-
-AABB HealthBlock::GetAABB() const {
-	Vector3 pos = worldTransform_.translation_;
-	AABB aabb;
-	aabb.min = {pos.x - kHalfWidth, pos.y - kHalfHeight, pos.z - kHalfDepth};
-	aabb.max = {pos.x + kHalfWidth, pos.y + kHalfHeight, pos.z + kHalfDepth};
-	return aabb;
 }
 
 void HealthBlock::Consume() {
@@ -101,7 +111,16 @@ void HealthBlock::Consume() {
 	}
 	isActive_ = false;
 	respawnTimer_ = 0.0f;
+	ghostAlpha_ = 0.0f;
 	if (sConsumeSoundHandle_ != 0) {
 		AudioSettings::PlaySfx(sConsumeSoundHandle_, false, sSfxVolume_);
 	}
+}
+
+AABB HealthBlock::GetAABB() const {
+	Vector3 pos = worldTransform_.translation_;
+	AABB aabb;
+	aabb.min = {pos.x - kHalfWidth, pos.y - kHalfHeight, pos.z - kHalfDepth};
+	aabb.max = {pos.x + kHalfWidth, pos.y + kHalfHeight, pos.z + kHalfDepth};
+	return aabb;
 }

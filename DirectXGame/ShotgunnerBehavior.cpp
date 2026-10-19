@@ -233,16 +233,17 @@ void ShotgunnerBehavior::BehaviorAimingUpdate() {
 
 	aimTimer_ += kDeltaTime;
 	if (aimTimer_ >= currentAimDuration_) {
+		// 反動の向きは発砲前の狙い方向(発砲後に照準状態が変わるため先に取る)
+		const Vector2 aimDir = shotgunnerOwner_.ComputeTargetAimPosition();
 		shotgunnerOwner_.ShootFirearm();
 		shotgunnerOwner_.SetGunPose(EnemyShotgunner::GunPose::kFiring);
 		RequestBehavior(Behavior::kReloading);
 
-		// recoil: pushed away from the player. No extra hit-stun for a self-inflicted recoil.
+		// recoil: 狙った方向と逆へ、上下も含めて飛ぶ。自分の反動なので追加のスタンは付けない
 		if (FirearmShotgun* gun = shotgunnerOwner_.GetCurrentFirearm()) {
 			const float kb = gun->GetFireKnockbackPower();
 			if (kb > 0.0f) {
-				const float away = (player->GetWorldPosition().x < owner_.GetWorldPosition().x) ? 1.0f : -1.0f;
-				RequestKnockback({away, 0.1f, 0.0f}, kb);
+				RequestKnockback({-aimDir.x, -aimDir.y, 0.0f}, kb);
 				pendingStunAfterKnockback_ = 0.0f;
 			}
 		}

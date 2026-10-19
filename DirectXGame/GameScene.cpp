@@ -5,6 +5,7 @@
 #include "GlobalVariables.h"
 #include "InputManager.h"
 #include "StageManager.h"
+#include "GhostBlink.h"
 #include <fstream>
 
 
@@ -28,8 +29,8 @@ bool ResolveWeaponVisual(const GameAssets& a, DropWeaponKind kind, Model*& outMo
 		outTex = a.texSabreHeavy;
 		return true;
 	case DropWeaponKind::kLongAxe:
-		outModel = a.modelSabreHeavy.get(); // 仮: 斧のモデルができるまでヘビーサーベルを流用
-		outTex = a.texSabreHeavy;
+		outModel = a.modelAxe.get(); // 仮: 斧のモデルができるまでヘビーサーベルを流用
+		outTex = a.texAxe;
 		return true;
 	case DropWeaponKind::kSpear:
 		outModel = a.modelSpear.get();
@@ -44,12 +45,12 @@ bool ResolveWeaponVisual(const GameAssets& a, DropWeaponKind kind, Model*& outMo
 		outTex = a.musketBayonetTex;
 		return true;
 	case DropWeaponKind::kShotgun:
-		outModel = a.modelMusketLong.get();
-		outTex = a.musketLongTex;
+		outModel = a.modelShotgun.get();
+		outTex = a.shotgunTex;
 		return true;
 	case DropWeaponKind::kDualPistols:
-		outModel = a.modelMusketLong.get();
-		outTex = a.musketLongTex;
+		outModel = a.modelPistol.get();
+		outTex = a.pistolTex;
 		return true;
 	default:
 		return false;
@@ -79,6 +80,11 @@ void GameScene::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "SpikeMinFallRatio", kSpikeMinFallRatio);
 	gv->AddItem(kGroupName, "FragileBreakDelay", kFragileBreakDelay);
 	gv->AddItem(kGroupName, "FragileShakeAmplitude", kFragileShakeAmplitude);
+	gv->AddItem(kGroupName, "GuardRecoilScale", kGuardRecoilScale);
+	gv->AddItem(kGroupName, "ExplosiveRegenDelay", kExplosiveRegenDelay);
+	gv->AddItem(kGroupName, "FragileRegenDelay", kFragileRegenDelay);
+	gv->AddItem(kGroupName, "RegenBlinkWarning", kRegenBlinkWarning);
+	gv->AddItem(kGroupName, "RegenBlinkFrequency", kRegenBlinkFrequency);
 }
 
 void GameScene::ApplyGlobalVariables() {
@@ -102,6 +108,11 @@ void GameScene::ApplyGlobalVariables() {
 	kSpikeMinFallRatio = gv->GetFloatValue(kGroupName, "SpikeMinFallRatio");
 	kFragileBreakDelay = gv->GetFloatValue(kGroupName, "FragileBreakDelay");
 	kFragileShakeAmplitude = gv->GetFloatValue(kGroupName, "FragileShakeAmplitude");
+	kGuardRecoilScale = gv->GetFloatValue(kGroupName, "GuardRecoilScale");
+	kExplosiveRegenDelay = gv->GetFloatValue(kGroupName, "ExplosiveRegenDelay");
+	kFragileRegenDelay = gv->GetFloatValue(kGroupName, "FragileRegenDelay");
+	kRegenBlinkWarning = gv->GetFloatValue(kGroupName, "RegenBlinkWarning");
+	kRegenBlinkFrequency = gv->GetFloatValue(kGroupName, "RegenBlinkFrequency");
 }
 void GameScene::debugMenu() {
 #ifdef _DEBUG
@@ -213,6 +224,7 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	EffectParticleBurst::RegisterGlobalVariables();     
 	Grenade::RegisterGlobalVariables();
 	FirearmPistols::RegisterGlobalVariables();
+	AimGuide::RegisterGlobalVariables(); 
 
 	buffOfficer_ = nullptr;
 	OfficerBuff::gActive = false;
@@ -272,6 +284,7 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	GuardEffect::SetCamera(&camera_);
 	EffectParticleBurst::SetModel(assets_.hitEffectModel.get());
 	EffectParticleBurst::SetCamera(&camera_);
+	aimGuide_.Initialize(assets_.hitEffectModel.get(), assets_.hitEffectTex, &camera_);
 
 	interactionPrompt_.Initialize(assets_.interactionPromptTex);
 
@@ -501,19 +514,26 @@ void GameScene::CreateMuzzleFlash(const Vector3& muzzlePos, const Vector2& aimDi
 	EffectMuzzleFlash* flash = EffectMuzzleFlash::Create(assets_.hitEffectTex, muzzlePos, aimDir, followPlayer);
 	visualEffects_.push_back(std::unique_ptr<BaseEffect>(flash));
 }
-void GameScene::CreateExplosion(const Vector3& position) {
+void GameScene::CreateExplosion(const Vector3& position, float smokeLoopDuration) {
 	// 描画順は生成順。煙(奥) -> 火の玉 -> 火花(手前)
-	CreateBurstEffect(BurstType::kSmoke, position, {0.0f, 1.0f});
+	// 煙だけループさせて、爆発後もしばらく漂わせる
+	CreateBurstEffect(BurstType::kSmoke, position, {0.0f, 1.0f}, smokeLoopDuration);
 	CreateBurstEffect(BurstType::kExplosion, position, {0.0f, 1.0f});
 	CreateBurstEffect(BurstType::kHit, position, {0.0f, 1.0f}); // 既存の被弾火花を爆発の火花として流用
+}
+// 弾の現在位置にバーストを出す。ブロックには跳ね返る向き、体には進行方向へ散らす
+void GameScene::CreateBulletImpact(const ProjectileBall& bullet, BurstType type) {
+	const Vector3 v = bullet.GetVelocity();
+	const Vector2 dir = (type == BurstType::kBulletBlock) ? Vector2{-v.x, -v.y} : Vector2{v.x, v.y};
+	CreateBurstEffect(type, bullet.GetWorldPosition(), dir);
 }
 
 void GameScene::CreateBlockSparkEffect(Vector3& spawnLocation) {
 	HitEffect* spark = HitEffect::Create(assets_.hitEffectTex, spawnLocation);
 	visualEffects_.push_back(std::unique_ptr<BaseEffect>(spark));
 }
-void GameScene::CreateBurstEffect(BurstType type, const Vector3& position, const Vector2& dir) {
-	EffectParticleBurst* burst = EffectParticleBurst::Create(assets_.hitEffectTex, type, position, dir);
+void GameScene::CreateBurstEffect(BurstType type, const Vector3& position, const Vector2& dir, float loopDuration) {
+	EffectParticleBurst* burst = EffectParticleBurst::Create(assets_.hitEffectTex, type, position, dir, loopDuration);
 	visualEffects_.push_back(std::unique_ptr<BaseEffect>(burst));
 }
 void GameScene::CreateEnemyDeathParticles(const Vector3& position) {
@@ -548,22 +568,20 @@ void GameScene::UpdateGrenades() {
 		Vector3 pos;
 		Owner owner;
 	};
-	std::vector<Blast> blasts;
+	std::vector<Vector3> blasts;
 	for (auto& g : grenades_) {
 		if (!g)
 			continue;
 		g->Update();
 		if (g->IsReadyToExplode()) {
-			blasts.push_back({g->GetWorldPosition(), g->GetOwner()});
+			blasts.push_back(g->GetWorldPosition());
 			g->MarkDead();
 		}
 	}
 	grenades_.erase(std::remove_if(grenades_.begin(), grenades_.end(), [](const std::unique_ptr<Grenade>& g) { return !g || g->IsDead(); }), grenades_.end());
 
-	for (const Blast& b : blasts) {
-		ExplodeAt(b.pos, {Grenade::GetFatalRadius(), Grenade::GetNormalRadius(), Grenade::GetNormalDamage(), Grenade::GetImpact(), b.owner == Owner::kPlayer});
-		ExplodeAt(b.pos, {Grenade::GetFatalRadius(), Grenade::GetNormalRadius(), Grenade::GetNormalDamage(), Grenade::GetImpact(), b.owner == Owner::kEnemy});
-	}
+	for (const Vector3& pos : blasts)
+		ExplodeAt(pos, GrenadeExplosionParams()); // friendly fire: every grenade hurts enemies and the player
 }
 
 void GameScene::ChangePhase() {
@@ -1006,13 +1024,12 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 			} break;
 
 			case MapChipType::kExplosive: {
-				uint8_t subID = mapChipField_->GetMapChipSubIDByIndex(j, i);
-				int32_t hits = (subID == 0) ? 3 : static_cast<int32_t>(subID);
+				int32_t hits = kExplosiveHits;
 				if (stageManager_->HasCheckpoint()) {
 					const auto& saved = stageManager_->GetCheckpoint().world.explosiveHits;
 					auto it = saved.find(CellKey(j, i));
 					if (it != saved.end())
-						hits = std::clamp(it->second, 1, hits);
+						hits = std::clamp(it->second, 1, kExplosiveHits);
 				}
 				explosives_[CellKey(j, i)] = hits;
 				delete worldTransformBlocks_[i][j].transform;
@@ -1021,7 +1038,6 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 				worldTransform->translation_ = mapChipField_->GetMapChipPositionByIndex(j, i);
 				worldTransformBlocks_[i][j] = {worldTransform, assets_.blockModel.get(), assets_.explosiveTex};
 			} break;
-
 			case MapChipType::kSpike: {
 				delete worldTransformBlocks_[i][j].transform;
 				WorldTransform* worldTransform = new WorldTransform;
@@ -1148,6 +1164,7 @@ void GameScene::Update() {
 	EffectParticleBurst::ApplyGlobalVariables();        
 	Grenade::ApplyGlobalVariables();
 	FirearmPistols::ApplyGlobalVariables();
+	AimGuide::ApplyGlobalVariables(); 
 
 	debugMenu();
 
@@ -1207,8 +1224,10 @@ void GameScene::Update() {
 	UpdateWeaponSpawners();
 	UpdateExplosions();
 	UpdateGrenades();
+	UpdateAimGuide();
 	UpdateSpikes();
 	UpdateFragileBlocks();
+	UpdateRegenCells();
 	musicManager_.Update();
 #ifdef _DEBUG
 	if (isDebugCameraActive_) {
@@ -1338,9 +1357,17 @@ void GameScene::CheckAllCollisions() {
 				continue;
 			player_->MarkLungeHit(enemy.get()); // one hit per target per lunge
 
-			// guarded: no damage, the player recoils (same as a blocked sabre swing)
+			// guarded: no damage. 特殊攻撃なので、プレイヤーも防いだ敵も押し戻される
 			if (enemy->TryBlockAttack(player_->GetWorldPosition())) {
-				player_->OnCollision(enemy.get());
+				player_->OnCollision(enemy.get()); // プレイヤー側の反動(既存)
+				Vector3 recoil = enemy->GetWorldPosition() - player_->GetWorldPosition();
+				float rlen = std::sqrtf(recoil.x * recoil.x + recoil.y * recoil.y);
+				if (rlen > 0.0001f) {
+					recoil.x /= rlen;
+					recoil.y /= rlen;
+				}
+				recoil.y += 0.3f;
+				enemy->RequestGuardRecoil(recoil, spec.impactPower * kGuardRecoilScale);
 				continue;
 			}
 
@@ -1367,6 +1394,12 @@ void GameScene::CheckAllCollisions() {
 			continue;
 		AABB bulletAABB = bullet->GetAABB();
 		if (HitDestructiblesInAABB(bulletAABB, HitSource::kFirearm)) {
+			CreateBulletImpact(*bullet, BurstType::kBulletBlock);
+			bullet->OnCollision();
+			continue;
+		}
+		if (BulletHitsSolid(*bullet)) {
+			CreateBulletImpact(*bullet, BurstType::kBulletBlock);
 			bullet->OnCollision();
 			continue;
 		}
@@ -1375,8 +1408,9 @@ void GameScene::CheckAllCollisions() {
 				continue;
 			if (IsCollisionAABB(bulletAABB, enemy->GetAABB())) {
 				enemy->OnCollision(bullet.get());
+				CreateBulletImpact(*bullet, BurstType::kBulletEntity);
 				bullet->OnCollision();
-				break; 
+				break;
 			}
 		}
 	}
@@ -1442,10 +1476,10 @@ void GameScene::CheckAllCollisions() {
 		return dir;
 	};
 
-	auto resolveAttackOnPlayer = [&](const AABB& attackBox, const Vector3& attackerPos, int damage, float power, BaseEnemy* attacker) -> bool {
+	auto resolveAttackOnPlayer = [&](const AABB& attackBox, const Vector3& attackerPos, int damage, float power, BaseEnemy* attacker, bool special = false) -> bool {
 		Vector3 dir = hitDirTo(attackerPos);
 		if (player_->IsBlockingAttack(attackBox, attackerPos)) {
-			player_->OnBlocked(dir, power, attacker);
+			player_->OnBlocked(dir, power, attacker, special);
 			return true;
 		}
 		if (!IsCollisionAABB(attackBox, aabb1))
@@ -1473,7 +1507,7 @@ void GameScene::CheckAllCollisions() {
 				int comboIdx = cuirassier->GetCurrentComboIndex();
 				int damage = lunge ? melee->GetLungeDamage() : melee->GetDamage(comboIdx, Owner::kEnemy);
 				float power = lunge ? melee->GetLungeImpactPower() : melee->GetImpactPower(comboIdx, Owner::kEnemy);
-				if (resolveAttackOnPlayer(weaponAABB, cuirassier->GetWorldPosition(), damage, power, cuirassier))
+				if (resolveAttackOnPlayer(weaponAABB, cuirassier->GetWorldPosition(), damage, power, cuirassier, lunge))
 					melee->MarkHit(player_.get());
 			}
 		} else if (EnemyRifleman* rifleman = dynamic_cast<EnemyRifleman*>(enemyPtr)) {
@@ -1481,7 +1515,7 @@ void GameScene::CheckAllCollisions() {
 				FirearmMusketBayonet* firearm = rifleman->GetCurrentFirearm();
 				int damage = firearm ? firearm->GetLungeDamage() : 10;
 				float power = firearm ? firearm->GetLungeImpactPower() : 1.8f;
-				if (resolveAttackOnPlayer(rifleman->GetBayonetLungeAABB(), rifleman->GetWorldPosition(), damage, power, rifleman))
+				if (resolveAttackOnPlayer(rifleman->GetBayonetLungeAABB(), rifleman->GetWorldPosition(), damage, power, rifleman, true))
 					rifleman->MarkHitPlayerThisSwing();
 			}
 		} else if (EnemySapper* sapper = dynamic_cast<EnemySapper*>(enemyPtr)) {
@@ -1493,7 +1527,7 @@ void GameScene::CheckAllCollisions() {
 				int comboIdx = sapper->GetCurrentComboIndex();
 				int damage = smash ? melee->GetSmashDamage() : melee->GetDamage(comboIdx, Owner::kEnemy);
 				float power = smash ? melee->GetSmashImpactPower() : melee->GetImpactPower(comboIdx, Owner::kEnemy);
-				if (resolveAttackOnPlayer(weaponAABB, sapper->GetWorldPosition(), damage, power, sapper))
+				if (resolveAttackOnPlayer(weaponAABB, sapper->GetWorldPosition(), damage, power, sapper, smash))
 					melee->MarkHit(player_.get());
 			}
 		}
@@ -1509,11 +1543,22 @@ void GameScene::CheckAllCollisions() {
 		if (bullet->IsDead())
 			continue;
 		if (HitDestructiblesInAABB(bullet->GetAABB(), HitSource::kFirearm)) {
+			CreateBulletImpact(*bullet, BurstType::kBulletBlock);
 			bullet->OnCollision();
 			continue;
 		}
-		if (resolveAttackOnPlayer(bullet->GetAABB(), bullet->GetWorldPosition(), bullet->GetDamage(bullet->GetOwner()), bullet->GetImpactPower(), nullptr))
+		if (BulletHitsSolid(*bullet)) {
+			CreateBulletImpact(*bullet, BurstType::kBulletBlock);
 			bullet->OnCollision();
+			continue;
+		}
+		// ガードされた弾は火花(ブロック演出)が既に出るので、体に当たった時だけ赤い飛沫を出す
+		const bool blocked = player_->IsBlockingAttack(bullet->GetAABB(), bullet->GetWorldPosition());
+		if (resolveAttackOnPlayer(bullet->GetAABB(), bullet->GetWorldPosition(), bullet->GetDamage(bullet->GetOwner()), bullet->GetImpactPower(), nullptr)) {
+			if (!blocked)
+				CreateBulletImpact(*bullet, BurstType::kBulletEntity);
+			bullet->OnCollision();
+		}
 	}
 
 	if (goal_ && !player_->isDead() && phase_ == Phase::kPlay) {
@@ -1582,7 +1627,7 @@ void GameScene::Draw() {
 			continue;
 		item->Draw();
 	}
-
+	DrawRegenGhosts();
 	std::unordered_map<Model*, std::vector<BlockInstance*>> byModel;
 	for (auto& line : worldTransformBlocks_) {
 		for (auto& block : line) {
@@ -1598,10 +1643,10 @@ void GameScene::Draw() {
 		}
 		model->PostDraw();
 	}
-
 #ifdef _DEBUG
 	DrawCollisionDebug();
 #endif
+	aimGuide_.Draw();
 	screenFlash_.Draw();
 	enemyHUD_.Draw();
 	interactionPrompt_.Draw();
@@ -1753,7 +1798,7 @@ BaseEnemy* GameScene::SpawnEnemyAt(const Vector3& position, uint8_t subID) {
 		newEnemy->SetMapChipField(mapChipField_.get());
 		newEnemy->SetGameScene(this);
 		newEnemy->Initialize(parts, &camera_, position);
-		newEnemy->SetMeleeModel(assets_.modelSabreHeavy.get(), assets_.texSabreHeavy);
+		newEnemy->SetMeleeModel(assets_.modelAxe.get(), assets_.texAxe);
 		newEnemy->SetAttackEffect(assets_.modelSlashEffect.get(), assets_.slashEffectTex);
 		newEnemy->SetHUDIconTexture(assets_.enemyIconCuirassierTex);
 		enemies_.push_back(std::move(newEnemy));
@@ -2055,6 +2100,7 @@ void GameScene::UnloadChunkVisuals(uint32_t chunkIndex) {
 		uint32_t x = static_cast<uint32_t>(it->first >> 32);
 		it = (x >= xStart && x < xEnd) ? fragileTimers_.erase(it) : std::next(it);
 	}
+	regenCells_.erase(std::remove_if(regenCells_.begin(), regenCells_.end(), [&](const RegenCell& c) { return c.x >= xStart && c.x < xEnd; }), regenCells_.end());
 }
 
 void GameScene::TriggerLevelClear() {
@@ -2453,12 +2499,22 @@ void GameScene::DrawCollisionDebug() {
 #endif
 }
 void GameScene::RemoveBlockCell(uint32_t x, uint32_t y) {
+	// read the chip BEFORE clearing it so a regenerating block can be rebuilt exactly
+	const MapChipType type = mapChipField_->GetMapChipTypeByIndex(x, y);
+	const uint8_t subID = mapChipField_->GetMapChipSubIDByIndex(x, y);
+	const uint8_t linkID = mapChipField_->GetMapChipLinkIDByIndex(x, y);
+
 	if (y < worldTransformBlocks_.size() && x < worldTransformBlocks_[y].size()) {
 		delete worldTransformBlocks_[y][x].transform;
 		worldTransformBlocks_[y][x] = {};
 	}
 	mapChipField_->ClearMapChipByIndex(x, y);
-	brokenCells_.insert(CellKey(x, y));
+
+	if (IsRegenerative(type, subID)) {
+		QueueRegen(x, y, type, subID, linkID); // comes back: not recorded as permanently broken
+	} else {
+		brokenCells_.insert(CellKey(x, y));
+	}
 }
 
 void GameScene::ForEachMapCellInAABB(const AABB& box, const std::function<void(uint32_t, uint32_t)>& fn) {
@@ -2619,8 +2675,25 @@ bool GameScene::IsBlastExposed(const Vector3& from, const Vector3& to, int64_t s
 	return true;
 }
 
-GameScene::ExplosionParams GameScene::BarrelExplosionParams() { return {kExplosionFatalRadius, kExplosionNormalRadius, kExplosionNormalDamage, kExplosionImpact, true}; }
+GameScene::ExplosionParams GameScene::BarrelExplosionParams() { return {kExplosionFatalRadius, kExplosionNormalRadius, kExplosionNormalDamage, kExplosionImpact, true, true}; }
+GameScene::ExplosionParams GameScene::GrenadeExplosionParams() { return {Grenade::GetFatalRadius(), Grenade::GetNormalRadius(), Grenade::GetNormalDamage(), Grenade::GetImpact(), true, false}; }
 
+bool GameScene::FindGrenadeThreat(const Vector3& pos, float margin, Vector3& outGrenadePos) const {
+	float best = Grenade::GetNormalRadius() + margin;
+	bool found = false;
+	for (const auto& g : grenades_) {
+		if (!g || g->IsDead())
+			continue;
+		const Vector3 gp = g->GetWorldPosition();
+		const float d = std::hypot(gp.x - pos.x, gp.y - pos.y);
+		if (d <= best) {
+			best = d;
+			outGrenadePos = gp;
+			found = true;
+		}
+	}
+	return found;
+}
 void GameScene::Explode(uint32_t cx, uint32_t cy) {
 	if (mapChipField_->GetMapChipTypeByIndex(cx, cy) != MapChipType::kExplosive)
 		return;
@@ -2670,11 +2743,13 @@ void GameScene::ExplodeAt(const Vector3& center, const ExplosionParams& p) {
 			if (!enemy || enemy->IsDead())
 				continue;
 			Vector3 ep = enemy->GetWorldPosition();
-			if (std::hypot(ep.x - center.x, ep.y - center.y) > p.normalRadius)
+			const float dist = std::hypot(ep.x - center.x, ep.y - center.y);
+			if (dist > p.normalRadius || !exposedTo(enemy->GetAABB()))
 				continue;
-			if (!exposedTo(enemy->GetAABB()))
-				continue;
-			enemy->TakeDamage(enemy->GetHP() + 1, outward(ep), p.impact, true);
+			if (p.killAllInRadius || dist <= p.fatalRadius)
+				enemy->TakeDamage(enemy->GetHP() + 1, outward(ep), p.impact, true);
+			else
+				enemy->TakeDamage(p.normalDamage, outward(ep), p.impact);
 		}
 	}
 
@@ -2683,7 +2758,7 @@ void GameScene::ExplodeAt(const Vector3& center, const ExplosionParams& p) {
 		float dist = std::hypot(pp.x - center.x, pp.y - center.y);
 		if (dist <= p.normalRadius && exposedTo(player_->GetAABB())) {
 			if (dist <= p.fatalRadius)
-				player_->KillInstant();
+				player_->TakeDamage(player_->GetHP(), outward(pp), p.impact); // HPを0にして被弾フラッシュ+死亡
 			else
 				player_->TakeDamage(p.normalDamage, outward(pp), p.impact);
 		}
@@ -2854,6 +2929,100 @@ void GameScene::UpdateFragileBlocks() {
 		++it;
 	}
 }
+void GameScene::QueueRegen(uint32_t x, uint32_t y, MapChipType type, uint8_t subID, uint8_t linkID) {
+	for (const RegenCell& c : regenCells_)
+		if (c.x == x && c.y == y)
+			return;
+
+	RegenCell cell;
+	cell.x = x;
+	cell.y = y;
+	cell.type = type;
+	cell.subID = subID;
+	cell.linkID = linkID;
+	cell.timer = (type == MapChipType::kExplosive) ? kExplosiveRegenDelay : kFragileRegenDelay;
+	cell.model = assets_.blockModel.get();
+	cell.tex = (type == MapChipType::kExplosive) ? assets_.explosiveTex : assets_.fragileTex;
+
+	cell.transform = std::make_unique<WorldTransform>();
+	cell.transform->Initialize();
+	cell.transform->translation_ = mapChipField_->GetMapChipPositionByIndex(x, y);
+	WorldTransformUpdate(*cell.transform);
+
+	cell.color = std::make_unique<ObjectColor>();
+	cell.color->Initialize();
+	cell.color->SetColor({1.0f, 1.0f, 1.0f, 0.0f});
+
+	regenCells_.push_back(std::move(cell));
+}
+
+void GameScene::UpdateRegenCells() {
+	if (phase_ != Phase::kPlay)
+		return;
+
+	for (size_t i = 0; i < regenCells_.size();) {
+		RegenCell& c = regenCells_[i];
+		c.timer = std::max(0.0f, c.timer - 1.0f / 60.0f);
+
+		const float delay = (c.type == MapChipType::kExplosive) ? kExplosiveRegenDelay : kFragileRegenDelay;
+		const float alpha = GhostBlink::Alpha(c.timer, std::min(kRegenBlinkWarning, delay), kRegenBlinkFrequency);
+		c.color->SetColor({1.0f, 1.0f, 1.0f, alpha});
+
+		if (c.timer > 0.0f) {
+			++i;
+			continue;
+		}
+
+		// don't entomb anyone: wait (ghost keeps blinking) while the cell is occupied
+		const Vector3 pos = mapChipField_->GetMapChipPositionByIndex(c.x, c.y);
+		AABB cellBox;
+		cellBox.min = {pos.x - 0.5f, pos.y - 0.5f, -1.0f};
+		cellBox.max = {pos.x + 0.5f, pos.y + 0.5f, 1.0f};
+		bool occupied = player_ && !player_->IsDefeated() && IsCollisionAABB(cellBox, player_->GetAABB());
+		for (const std::unique_ptr<BaseEnemy>& e : enemies_) {
+			if (occupied)
+				break;
+			if (e && !e->IsDead() && IsCollisionAABB(cellBox, e->GetAABB()))
+				occupied = true;
+		}
+		if (occupied) {
+			++i;
+			continue;
+		}
+
+		// restore the chip + its visual
+		mapChipField_->SetMapChipByIndex(c.x, c.y, c.type, c.subID, c.linkID);
+		if (c.y < worldTransformBlocks_.size() && c.x < worldTransformBlocks_[c.y].size()) {
+			delete worldTransformBlocks_[c.y][c.x].transform;
+			WorldTransform* wt = new WorldTransform;
+			wt->Initialize();
+			wt->translation_ = pos;
+			WorldTransformUpdate(*wt);
+			worldTransformBlocks_[c.y][c.x] = {wt, c.model, c.tex};
+		}
+		if (c.type == MapChipType::kExplosive)
+			explosives_[CellKey(c.x, c.y)] = kExplosiveHits;
+		// fragile needs nothing extra: its timer starts again when someone stands on it
+
+		regenCells_.erase(regenCells_.begin() + static_cast<std::ptrdiff_t>(i));
+	}
+}
+
+void GameScene::DrawRegenGhosts() {
+	bool begun = false;
+	for (RegenCell& c : regenCells_) {
+		const float delay = (c.type == MapChipType::kExplosive) ? kExplosiveRegenDelay : kFragileRegenDelay;
+		if (GhostBlink::Alpha(c.timer, std::min(kRegenBlinkWarning, delay), kRegenBlinkFrequency) <= 0.0f)
+			continue;
+		if (!begun) {
+			Model::PreDraw(Model::CullingMode::kBack, Model::BlendMode::kNormal, Model::DepthTestMode::kReadOnly);
+			begun = true;
+		}
+		c.model->Draw(*c.transform, camera_, c.tex, c.color.get());
+	}
+	if (begun)
+		Model::PostDraw();
+}
 bool GameScene::ResolveWeaponSpawnerKind(MapChipType type, uint8_t subID, DropItemCategory& outCategory, DropWeaponKind& outKind) {
 	if (type == MapChipType::kMeleeSpawner) {
 		outCategory = DropItemCategory::kMelee;
@@ -2949,4 +3118,63 @@ void GameScene::UpdateOfficerBuff() {
 			buffOfficer_ = nullptr; // officer died: buff gone
 	}
 	OfficerBuff::gActive = (buffOfficer_ != nullptr);
+}
+
+// 弾が止まる場所か。ブロック/ガラス/壊せるブロック/閉じたゲート。一方通行の足場とバリアは通り抜ける
+bool GameScene::IsBulletBlockedAt(const Vector3& position) {
+	const Vector3 p = {std::max(0.0f, position.x), std::max(0.0f, position.y), 0.0f};
+	if (mapChipField_->IsSolidAtPosition(p, true) && !mapChipField_->IsOneWayAtPosition(p))
+		return true;
+	for (const auto& gate : gates_) {
+		if (!gate || !gate->IsBlocking())
+			continue;
+		const AABB g = gate->GetAABB();
+		if (p.x >= g.min.x && p.x <= g.max.x && p.y >= g.min.y && p.y <= g.max.y)
+			return true;
+	}
+	return false;
+}
+
+// 弾は1フレームで0.8進むので、前フレームの位置から今の位置までを細かく調べる(すり抜け防止)
+bool GameScene::BulletHitsSolid(const ProjectileBall& bullet) {
+	const Vector3 end = bullet.GetWorldPosition();
+	const Vector3 v = bullet.GetVelocity();
+	const Vector3 start = {end.x - v.x, end.y - v.y, 0.0f};
+	const float length = std::hypot(v.x, v.y);
+	const int steps = std::max(1, static_cast<int>(std::ceil(length / 0.2f)));
+	for (int i = 0; i <= steps; ++i) {
+		const float t = static_cast<float>(i) / static_cast<float>(steps);
+		const Vector3 p = {start.x + (end.x - start.x) * t, start.y + (end.y - start.y) * t, 0.0f};
+		if (IsBulletBlockedAt(p))
+			return true;
+	}
+	return false;
+}
+void GameScene::UpdateAimGuide() {
+	bool visible = false;
+	bool blocked = false;
+	bool ready = false;
+	Vector3 origin{};
+	Vector2 dir{};
+	float length = 0.0f;
+
+	if (player_ && phase_ == Phase::kPlay && !player_->IsDefeated() && !player_->IsControlLocked() && player_->GetWeaponMode() == Player::WeaponMode::kFirearm) {
+		float cursorDistance = 0.0f;
+		if (player_->GetAimGuideInfo(origin, dir, cursorDistance)) {
+			visible = true;
+			length = std::min(cursorDistance, AimGuide::GetMaxLength());
+			// 弾と同じ判定で、壁/閉じたゲートに当たるところまでにする
+			for (float d = 0.2f; d <= length; d += 0.2f) {
+				if (IsBulletBlockedAt(Vector3{origin.x + dir.x * d, origin.y + dir.y * d, 0.0f})) {
+					length = std::max(0.0f, d - 0.2f);
+					blocked = true;
+					break;
+				}
+			}
+			if (BaseFirearm* firearm = player_->GetCurrentFirearm()) {
+				ready = firearm->CanFire(); // リロード中は薄くして撃てないことを示す
+			}
+		}
+	}
+	aimGuide_.Update(visible, origin, dir, length, blocked, ready);
 }

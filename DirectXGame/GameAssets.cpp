@@ -21,19 +21,27 @@ void GameAssets::LoadModelsAndTextures() {
 	playerHatTex = TextureManager::Load("./Resources/playerHat/tex.png");
 
 	// --- Weapons ---
-	modelSabreLight.reset(Model::CreateFromOBJ("sabreLight"));
-	texSabreLight = TextureManager::Load("./Resources/sabreLight/sabre.png");
-	modelSabreHeavy.reset(Model::CreateFromOBJ("sabreHeavy"));
-	texSabreHeavy = TextureManager::Load("./Resources/sabreHeavy/sabre.png");
+	modelSabreLight.reset(Model::CreateFromOBJ("weaponSabre"));
+	texSabreLight = TextureManager::Load("./Resources/weaponSabre/weaponSabre.png");
+	modelSabreHeavy.reset(Model::CreateFromOBJ("weaponHeavySword"));
+	texSabreHeavy = TextureManager::Load("./Resources/weaponHeavySword/weaponHeavySword.png");
+	modelSpear.reset(Model::CreateFromOBJ("weaponSpontoon"));
+	texSpear = TextureManager::Load("./Resources/weaponSpontoon/weaponSpontoon.png");
+	modelAxe.reset(Model::CreateFromOBJ("weaponAxe"));
+	texAxe = TextureManager::Load("./Resources/weaponAxe/weaponAxe.png");
 
 	modelMusketLong.reset(Model::CreateFromOBJ("musketLong", true));
 	musketLongTex = TextureManager::Load("./Resources/musketLong/musketLong.png");
 	modelMusketBayonet.reset(Model::CreateFromOBJ("musketBayonet", true));
 	musketBayonetTex = TextureManager::Load("./Resources/musketBayonet/musketBayonet.png");
+	modelShotgun.reset(Model::CreateFromOBJ("musketBlunderbuss", true));
+	shotgunTex = TextureManager::Load("./Resources/musketBlunderbuss/musketSkin.png");
+	modelPistol.reset(Model::CreateFromOBJ("musketPistol", true));
+	pistolTex = TextureManager::Load("./Resources/musketBlunderbuss/musketSkin.png");
+
+
 	modelProjectileBall.reset(Model::CreateFromOBJ("firearmBall", true));
 	firearmBallTex = TextureManager::Load("./Resources/firearmBall/firearmBall.png");
-	modelSpear.reset(Model::CreateFromOBJ("sabreHeavy"));
-	texSpear = TextureManager::Load("./Resources/sabreHeavy/sabre.png");
 
 	// --- Enemy: Rifleman ---
 	modelRiflemanBody.reset(Model::CreateFromOBJ("riflemanBody", true));

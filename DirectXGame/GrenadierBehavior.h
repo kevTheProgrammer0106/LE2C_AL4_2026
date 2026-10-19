@@ -29,4 +29,5 @@ private:
 	static inline float kThrowRangeMax = 12.0f;
 	static inline float kThrowHeightTolerance = 3.0f; // the arc is flat, so a different floor means chase instead
 	static inline float kRetreatSpeed = 0.07f;
+	static inline float kGrenadeRetreatSpeed = 0.12f; // faster than the normal back-off
 };

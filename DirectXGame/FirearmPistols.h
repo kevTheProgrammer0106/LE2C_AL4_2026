@@ -29,6 +29,20 @@ public:
 	// Both pistols loaded (the "hold to fire both" condition)
 	bool IsFullyLoaded() const { return currentAmmo_ >= GetMaxAmmo(); }
 
+	// Per-pistol state for the HUD (slot 0 / 1)
+	bool IsSlotLoaded(int slot) const { return loaded_[slot]; }
+	// 1 = loaded, 0..1 = being reloaded, 0 = empty and still waiting for its turn in the sequential reload
+	float GetSlotReloadProgress01(int slot) const {
+		if (loaded_[slot]) {
+			return 1.0f;
+		}
+		if (reloadQueue_.empty() || reloadQueue_.front() != slot) {
+			return 0.0f;
+		}
+		const float total = reloadDurationCurrent_ * reloadTimeScale_;
+		return (total > 0.0f) ? std::clamp(reloadTimer_ / total, 0.0f, 1.0f) : 1.0f;
+	}
+
 	// Muzzle of the pistol that fired last (call right after TryFire)
 	KamataEngine::Vector3 GetFiredMuzzleWorldPosition() const override;
 
@@ -59,8 +73,12 @@ private:
 
 	// per-pistol state (index 0 / 1)
 	bool loaded_[2] = {true, true};
-	std::vector<int> reloadQueue_; // fired order = reload order
-	int nextSlot_ = 0;             // pistol preferred for the next shot (alternates)
+	std::vector<int> reloadQueue_;              // fired order = reload order
+	float cycleTimer_[2] = {0.0f, 0.0f};        // remaining time of each pistol's "loaded" kick
+	static inline float kCycleDuration = 0.3f;  // seconds
+	static inline float kCycleKickAngle = 0.5f; // rad, muzzle flick
+	static inline float kCycleRise = 0.1f;      // small lift
+	int nextSlot_ = 0;                          // pistol preferred for the next shot (alternates)
 	int lastFiredSlot_ = 0;
 
 	KamataEngine::WorldTransform worldTransformSecond_;
@@ -82,32 +100,32 @@ private:
 	static inline KamataEngine::Vector4 kUnloadedColor = {0.35f, 0.35f, 0.35f, 1.0f};
 
 	static inline SRTOffset pistolOffset_ = {
-	    {0.7f, 0.7f,        0.7f },
+	    {1.0f, 1.0f,        1.0f },
         {0.0f, -1.5707963f, 0.0f },
         {0.6f, 0.2f,        -0.1f}
     };
 	static inline SRTOffset pistolHolsterOffset_ = {
-	    {0.7f,    0.7f,  0.7f },
+	    {1.0f,    1.0f,  1.0f },
         {-1.371f, 0.0f,  0.0f },
         {-0.4f,   -0.3f, -0.3f}
     };
 	static inline SRTOffset pistolReloadOffset_ = {
-	    {0.7f,   0.7f,  0.7f },
+	    {1.0f,   1.0f,  1.0f },
         {-0.9f,  0.0f,  0.0f },
         {-0.25f, -0.1f, -0.2f}
     };
 	static inline SRTOffset pistolKnockbackOffset_ = {
-	    {0.7f, 0.7f,        0.7f },
+	    {1.0f, 1.0f,        1.0f },
         {0.3f, -1.5707963f, 0.9f },
         {0.4f, 0.35f,       -0.1f}
     };
 	static inline SRTOffset pistolStunOffset_ = {
-	    {0.7f,  0.7f,        0.7f },
+	    {1.0f,  1.0f,        1.0f },
         {0.0f,  -1.5707963f, -0.9f},
         {0.55f, -0.1f,       -0.1f}
     };
 	static inline SRTOffset pistolBlockOffset_ = {
-	    {0.7f,  0.7f,        0.7f },
+	    {1.0f,  1.0f,        1.0f },
         {0.0f,  -1.5707963f, 0.7f },
         {0.45f, 0.25f,       -0.1f}
     };
