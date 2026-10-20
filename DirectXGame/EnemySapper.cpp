@@ -56,6 +56,8 @@ void EnemySapper::Update() {
 	B current = GetBehaviorModule().GetBehavior();
 	if (current == B::kMelee || current == B::kLeap)
 		return;
+	if (TickObstacleSwing())
+		return;
 	UpdateMeleeVisual(nullptr);
 }
 

@@ -37,6 +37,8 @@ void EnemyCuirassier::Update() {
 
 	if (GetBehaviorModule().GetBehavior() == BaseEnemyBehavior::Behavior::kMelee)
 		return;
+	if (TickObstacleSwing())
+		return;
 	UpdateMeleeVisual(nullptr);
 }
 

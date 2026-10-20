@@ -98,6 +98,10 @@ private:
 	// trueの間は古い経路を使わず、プレイヤー位置の安定を待つ
 	bool isWaitingForPathRestart_ = false;
 
+	bool TryBreakObstacle(const MapChipField::IndexSet& cell, const KamataEngine::Vector3& cellPos, const KamataEngine::Vector3& currentPos);
+	bool isBreakingObstacle_ = false;
+	static inline float kObstacleReachX = 1.8f;
+	static inline float kObstacleReachY = 1.5f;
 
 	// 注: hasLastKnownPosition_ / lastKnownPlayerPos_ / chaseTimeoutTimer_ / unreachableTimer_ は
 	// ここでは複製しない。索敵の生死に関する状態はBaseEnemy側が単一の真実の情報源であり、

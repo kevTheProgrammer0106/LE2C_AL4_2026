@@ -7,10 +7,12 @@
 #include "BlockDetector.h"
 #include "Global.h"
 #include "PathFindingAI.h"
+#include "BaseMelee.h"
 
 class Player;
 class GameScene;
 class BaseProjectile;
+class BaseFirearm;
 
 class BaseEnemy {
 public:
@@ -176,6 +178,14 @@ public:
 
 	// Officers lead their escorts; see BaseEnemyBehavior::ShouldHoldForEscort.
 	virtual bool IsEscortLeader() const { return false; }
+
+	// The route runs through glass / a breakable block: break it (ranged enemies shoot, melee enemies swing).
+	// Returns true while the enemy is busy with it, so the AI keeps standing still in front of it.
+	virtual bool AttackObstacle(const KamataEngine::Vector3& cellPos);
+
+	// 銃弾に当たった時の小さなノックバック(スタンは付かない)。プレイヤーの攻撃でノックバックしない敵(Sapper)はoverrideして無効化する
+	virtual void RequestBulletKnockback(const KamataEngine::Vector3& direction, float power) { behavior_->RequestKnockback(direction, power, false); }
+
 protected:
 	friend class DebugMenu;
 
@@ -200,6 +210,8 @@ protected:
 	void UpdateBuffAura();
 	float auraTimer_ = 0.0f;
 	static inline float kAuraInterval = 0.3f;
+	// 銃弾に当たった時のノックバックの強さ(弾の衝撃力に掛ける倍率)。小さく押されるだけにする
+	static inline float kBulletKnockbackScale = 0.4f;
 
 	uint8_t arenaID_ = 0; 
 
@@ -210,6 +222,8 @@ protected:
 	bool hitWallThisFrame_ = false;
 
 	BlockDetector blockDetector_;
+	// 足元がslowBlockの時の水平移動倍率(それ以外は1.0)
+	float GetSlowTerrainScale() const;
 
 	float aabbMarkerSize_ = 0.1f;
 	bool wasBlocked_ = false;
@@ -382,6 +396,16 @@ protected:
 	uint32_t modelAttackTex_ = 0;
 	static inline float kAttackEffectScale = 1.0f;  // 斬撃モデルの大きさ(判定の中心に置いたまま拡縮)
 
-		// true の間は PhysicsAndCollisionUpdate がマップ判定・重力・分離を行わず、速度をそのまま位置へ反映する(Sapperのジャンプ用)
+	// true の間は PhysicsAndCollisionUpdate がマップ判定・重力・分離を行わず、速度をそのまま位置へ反映する(Sapperのジャンプ用)
 	bool ignoreMapCollision_ = false;
+
+	virtual BaseMelee* GetObstacleMelee() { return nullptr; }
+	virtual void ApplyObstacleSwingVisual(const BaseMelee::GenericAttackAnimState& /*state*/) {}
+	bool FireAtObstacle(BaseFirearm* firearm, const KamataEngine::Vector3& cellPos);
+	// Melee enemies call this in Update() before their idle weapon visual: `if (TickObstacleSwing()) return;`
+	bool TickObstacleSwing();
+
+	int obstacleSwingFrame_ = -1;
+	float obstacleCooldown_ = 0.0f;
+	static inline float kObstacleCooldown = 0.4f;
 };

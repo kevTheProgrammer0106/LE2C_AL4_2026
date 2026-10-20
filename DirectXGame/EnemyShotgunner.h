@@ -32,6 +32,8 @@ public:
 
 	SRTOffset GetActionAnimOffset() const override;
 
+	bool AttackObstacle(const KamataEngine::Vector3& cellPos) override { return FireAtObstacle(currentFirearm_.get(), cellPos); }
+
 private:
 	friend class DebugMenu;
 

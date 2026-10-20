@@ -88,7 +88,8 @@ void UIMenu::Draw() {
 			button.sprite->Draw();
 		}
 	}
-	cursorSprite_->Draw();
+	if (cursorVisible_)
+		cursorSprite_->Draw();
 	Sprite::PostDraw();
 }
 

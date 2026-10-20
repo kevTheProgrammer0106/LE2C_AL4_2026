@@ -42,6 +42,9 @@ public:
 	
 	EquipStyle GetEquipStyle() const override { return EquipStyle::kHeavy; }
 
+	BaseMelee* GetObstacleMelee() override { return currentMelee_.get(); }
+	void ApplyObstacleSwingVisual(const BaseMelee::GenericAttackAnimState& state) override { UpdateMeleeVisual(&state); }
+
 protected:
 	void RefreshWeaponVisual() override { UpdateMeleeVisual(nullptr); }
 

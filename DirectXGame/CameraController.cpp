@@ -1,8 +1,10 @@
+#define NOMINMAX
 #include "CameraController.h"
 
 #include "Global.h"
 #include "GlobalVariables.h"
 #include "Player.h"
+#include <cstdio>
 
 using namespace KamataEngine;
 
@@ -15,11 +17,45 @@ void CameraController::RegisterGlobalVariables() {
 	gv->CreateGroup(kGroupName);
 	gv->AddItem(kGroupName, "InterpolationRate", kInterpolationRate);
 	gv->AddItem(kGroupName, "VelocityBias", kVelocityBias);
+	gv->AddItem(kGroupName, "SmoothTimeX", kSmoothTimeX);
+	gv->AddItem(kGroupName, "SmoothTimeY", kSmoothTimeY);
+	gv->AddItem(kGroupName, "LeadSmoothing", kLeadSmoothing);
+	gv->AddItem(kGroupName, "LineTopOffset", kLineTopOffset);
+	gv->AddItem(kGroupName, "LineBottomOffset", kLineBottomOffset);
+	gv->AddItem(kGroupName, "ReturnMargin", kReturnMargin);
+	gv->AddItem(kGroupName, "PredictTime", kPredictTime);
+	gv->AddItem(kGroupName, "FastSmoothTimeY", kFastSmoothTimeY);
+	gv->AddItem(kGroupName, "FastFallSpeed", kFastFallSpeed);
+	gv->AddItem(kGroupName, "VerticalLeadScale", kVerticalLeadScale);
+	gv->AddItem(kGroupName, "MaxVerticalLead", kMaxVerticalLead);
+	gv->AddItem(kGroupName, "FallTrackDrop", kFallTrackDrop);
+	gv->AddItem(kGroupName, "FallMinSpeed", kFallMinSpeed);
+	gv->AddItem(kGroupName, "FastPredictTime", kFastPredictTime);
+	gv->AddItem(kGroupName, "CatchUpPx", kCatchUpPx);
+	gv->AddItem(kGroupName, "HardTopMargin", kHardTopMargin);
+	gv->AddItem(kGroupName, "HardBottomMargin", kHardBottomMargin);
 }
 void CameraController::ApplyGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
 	kInterpolationRate = gv->GetFloatValue(kGroupName, "InterpolationRate");
 	kVelocityBias = gv->GetFloatValue(kGroupName, "VelocityBias");
+	kSmoothTimeX = gv->GetFloatValue(kGroupName, "SmoothTimeX");
+	kSmoothTimeY = gv->GetFloatValue(kGroupName, "SmoothTimeY");
+	kLeadSmoothing = gv->GetFloatValue(kGroupName, "LeadSmoothing");
+	kLineTopOffset = gv->GetFloatValue(kGroupName, "LineTopOffset");
+	kLineBottomOffset = gv->GetFloatValue(kGroupName, "LineBottomOffset");
+	kReturnMargin = gv->GetFloatValue(kGroupName, "ReturnMargin");
+	kPredictTime = gv->GetFloatValue(kGroupName, "PredictTime");
+	kFastSmoothTimeY = gv->GetFloatValue(kGroupName, "FastSmoothTimeY");
+	kFastFallSpeed = gv->GetFloatValue(kGroupName, "FastFallSpeed");
+	kVerticalLeadScale = gv->GetFloatValue(kGroupName, "VerticalLeadScale");
+	kMaxVerticalLead = gv->GetFloatValue(kGroupName, "MaxVerticalLead");
+	kFallTrackDrop = gv->GetFloatValue(kGroupName, "FallTrackDrop");
+	kFallMinSpeed = gv->GetFloatValue(kGroupName, "FallMinSpeed");
+	kFastPredictTime = gv->GetFloatValue(kGroupName, "FastPredictTime");
+	kCatchUpPx = gv->GetFloatValue(kGroupName, "CatchUpPx");
+	kHardTopMargin = gv->GetFloatValue(kGroupName, "HardTopMargin");
+	kHardBottomMargin = gv->GetFloatValue(kGroupName, "HardBottomMargin");
 }
 
 void CameraController::Initialize(Camera* camera) {
@@ -46,15 +82,16 @@ float CameraController::ApplyEase(Ease ease, float t) {
 Vector3 CameraController::ComputeFollowTarget() const {
 	const WorldTransform& wt = target_->GetWorldTransform();
 	return {
-	    wt.translation_.x + targetOffset_.x + target_->GetVelocity().x * kVelocityBias,
-	    wt.translation_.y + targetOffset_.y + target_->GetVelocity().y * kVelocityBias,
-	    wt.translation_.z + targetOffset_.z + target_->GetVelocity().z * kVelocityBias + zoomDelta_,
+	    wt.translation_.x + targetOffset_.x + smoothedVelocity_.x * kVelocityBias,
+	    wt.translation_.y + targetOffset_.y + smoothedVelocity_.y * kVelocityBias,
+	    wt.translation_.z + targetOffset_.z + smoothedVelocity_.z * kVelocityBias + zoomDelta_,
 	};
 }
 
-void CameraController::Update() {
+void CameraController::UpdateCore() {
 	UpdateZoom();
-
+	if (target_)
+		UpdateMeasuredVelocity(target_->GetWorldTransform().translation_);
 	if (mode_ == Mode::kFocus) {
 		UpdateFocusCamera();
 		camera_->UpdateMatrix();
@@ -66,6 +103,7 @@ void CameraController::Update() {
 	}
 
 	const WorldTransform& targetWT = target_->GetWorldTransform();
+	smoothedVelocity_ = Lerp(smoothedVelocity_, measuredVelocity_, 1.0f - std::exp(-kLeadSmoothing * (1.0f / 60.0f)));
 	targetPos = ComputeFollowTarget();
 
 	switch (mode_) {
@@ -89,6 +127,96 @@ void CameraController::Update() {
 	}
 
 	camera_->UpdateMatrix();
+}
+
+void CameraController::Update() {
+	RemoveFx(); // follow logic must see the clean camera, not last frame's shaken one
+	UpdateCore();
+	UpdateFx();
+	ApplyFx();
+	camera_->UpdateMatrix();
+}
+
+// ---------------- Shake / zoom pulse ----------------
+void CameraController::Shake(float amplitude, float duration, float frequency) {
+	if (amplitude <= 0.0f || duration <= 0.0f)
+		return;
+	float current = 0.0f;
+	if (shakeTimer_ > 0.0f) {
+		const float f = shakeTimer_ / shakeDuration_;
+		current = shakeAmplitude_ * f * f;
+	}
+	if (amplitude < current)
+		return; // a stronger shake is still running
+	shakeAmplitude_ = amplitude;
+	shakeDuration_ = duration;
+	shakeTimer_ = duration;
+	shakeFrequency_ = frequency;
+}
+
+void CameraController::ZoomPulse(float zoomRatio, float inDuration, float outDuration) {
+	pulsePeak_ = zoomRatio; // fraction of the current camera distance
+	pulseIn_ = std::max(inDuration, 0.0001f);
+	pulseOut_ = std::max(outDuration, 0.0001f);
+	pulseTimer_ = 0.0f;
+	pulseActive_ = true;
+}
+
+void CameraController::UpdateFx() {
+	constexpr float kDt = 1.0f / 60.0f;
+	Vector3 offset{};
+	float roll = 0.0f;
+
+	// Camera distance: zone/arena cameras sit much farther back, so shake and zoom scale with it to look the same on screen
+	const float targetZ = target_ ? target_->GetWorldTransform().translation_.z : 0.0f;
+	const float distance = std::max(std::abs(camera_->translation_.z - targetZ), 1.0f);
+	const float distScale = distance / kShakeReferenceDistance;
+
+	if (shakeTimer_ > 0.0f) {
+		shakeTimer_ = std::max(0.0f, shakeTimer_ - kDt);
+		shakeTime_ += kDt;
+		const float f = shakeTimer_ / shakeDuration_;
+		const float amp = shakeAmplitude_ * f * f; // quadratic falloff: violent first, then settles
+		const float p = shakeTime_ * shakeFrequency_;
+		offset.x = amp * (std::sin(p) * 0.6f + std::sin(p * 2.3f + 1.7f) * 0.4f) * distScale;
+		offset.y = amp * (std::sin(p * 1.3f + 0.9f) * 0.6f + std::sin(p * 2.9f + 0.4f) * 0.4f) * 0.8f * distScale;
+		roll = amp * 0.03f * std::sin(p * 1.1f + 2.1f);
+	}
+
+	if (pulseActive_) {
+		pulseTimer_ += kDt;
+		float ratio = 0.0f;
+		if (pulseTimer_ >= pulseIn_ + pulseOut_) {
+			pulseActive_ = false;
+		} else if (pulseTimer_ < pulseIn_) {
+			ratio = pulsePeak_ * ApplyEase(Ease::kOut, pulseTimer_ / pulseIn_);
+		} else {
+			ratio = pulsePeak_ * (1.0f - ApplyEase(Ease::kInOut, (pulseTimer_ - pulseIn_) / pulseOut_));
+		}
+		pulseDelta_ = ratio * distance;
+	} else {
+		pulseDelta_ = 0.0f;
+	}
+	offset.z = pulseDelta_; // +z = toward the scene. Added after every camera mode (follow / zone focus / scroll), so it works inside arena cameras too
+
+	fxOffset_ = offset;
+	fxRoll_ = roll;
+}
+
+void CameraController::ApplyFx() {
+	camera_->translation_ += fxOffset_;
+	camera_->rotation_.z += fxRoll_;
+	appliedOffset_ = fxOffset_;
+	appliedRoll_ = fxRoll_;
+}
+
+void CameraController::RemoveFx() {
+	if (!camera_)
+		return;
+	camera_->translation_ -= appliedOffset_;
+	camera_->rotation_.z -= appliedRoll_;
+	appliedOffset_ = {};
+	appliedRoll_ = 0.0f;
 }
 
 // ---------------- Zoom ----------------
@@ -176,6 +304,7 @@ void CameraController::UpdateFocusCamera() {
 		camera_->translation_ = Lerp(focusStartPos_, ComputeClampedFollowPosition(), ApplyEase(shot_.returnEase, t));
 		if (t >= 1.0f) {
 			mode_ = modeBeforeFocus_;
+			camVelX_ = camVelY_ = 0.0f; // follow takes over from rest, no leftover spring velocity
 		}
 		break;
 	}
@@ -206,6 +335,8 @@ void CameraController::Reset() {
 	camera_->translation_.x = targetWT.translation_.x + targetOffset_.x;
 	camera_->translation_.y = targetWT.translation_.y + targetOffset_.y;
 	camera_->translation_.z = targetWT.translation_.z + targetOffset_.z;
+	ResetSmoothing();
+
 	camera_->UpdateMatrix();
 }
 
@@ -219,15 +350,14 @@ void CameraController::SetWorldBounds(float worldWidth, float worldHeight) {
 	movableArea_.top = worldHeight - kHalfScreenHeight;
 }
 
-#pragma region Additional Camera Perspectives
+
 
 void CameraController::DrawDebugControls() {
 #ifdef _DEBUG
+	{
+		ImGui::Text("Vertical: %s", verticalMode_ == VerticalMode::kTrack ? "TRACK" : "HOLD");
+	}
 	ImGui::Text("Press P to toggle the debug camera");
-	int currentType = static_cast<int>(perspectiveType);
-	ImGui::Value("Current Perspective", static_cast<int>(perspectiveType));
-	ImGui::Combo("Perspective Type", &currentType, "Sidescroll\0Fixed\0TopDown\0TopDownDiagonal\0Isometric\0ThirdPerson\0FirstPerson\0");
-	perspectiveType = static_cast<PerspectiveType>(currentType);
 	ImGui::DragFloat("Push Boundary Offset", &kPushBoundaryOffset, 0.1f, -20.0f, 0.0f);
 	ImGui::BulletText("Camera Parameters");
 	ImGui::DragFloat("FOV Angle Y", &camera_->fovAngleY, 0.01f, 0.01f, 3.14f);
@@ -276,37 +406,12 @@ void CameraController::DrawDebugControls() {
 void CameraController::UpdateCameraPerspectives(const KamataEngine::WorldTransform& targetWorldTransform) {
 	switch (perspectiveType) {
 	case PerspectiveType::Sidescroll:
-		camera_->rotation_.x = 0.0f;
-		camera_->rotation_.y = 0.0f;
-		camera_->translation_ = Lerp(camera_->translation_, targetPos, kInterpolationRate);
-		camera_->translation_.x = std::clamp(camera_->translation_.x, targetWorldTransform.translation_.x + margin.left, targetWorldTransform.translation_.x + margin.right);
-		camera_->translation_.y = std::clamp(camera_->translation_.y, targetWorldTransform.translation_.y + margin.bottom, targetWorldTransform.translation_.y + margin.top);
-		camera_->translation_.x = std::clamp(camera_->translation_.x, movableArea_.left, movableArea_.right);
-		camera_->translation_.y = std::clamp(camera_->translation_.y, movableArea_.bottom, movableArea_.top);
-		break;
-	case PerspectiveType::Fixed:
-		UpdateFixedCamera(targetWorldTransform);
-		break;
-	case PerspectiveType::TopDown:
-		UpdateTopDownCamera(targetWorldTransform);
-		break;
-	case PerspectiveType::TopDownDiagonal:
-		UpdateTopDownDiagonalCamera(targetWorldTransform);
-		break;
-	case PerspectiveType::Isometric:
-		UpdateIsometricCamera(targetWorldTransform);
-		break;
-	case PerspectiveType::ThirdPerson:
-		UpdateThirdPersonCamera(targetWorldTransform);
-		break;
-	case PerspectiveType::FirstPerson:
-		UpdateFirstPersonCamera(targetWorldTransform);
+		UpdateSidescroll(targetWorldTransform);
 		break;
 	default:
 		break;
 	}
 }
-
 void CameraController::ResetCameraPerspectives() {
 	switch (perspectiveType) {
 	case PerspectiveType::Sidescroll:
@@ -317,86 +422,16 @@ void CameraController::ResetCameraPerspectives() {
 		break;
 	}
 }
-void CameraController::UpdateFixedCamera(const WorldTransform& worldTransformTarget) {
-	if (worldTransformTarget.translation_.x >= 10.0f) {
-		camera_->rotation_.x = 0.0f;
-		camera_->rotation_.y = 0.0f;
-		camera_->translation_.x = 10.5f;
-		camera_->translation_.y = 6.5f;
-		camera_->translation_.z = -15.0f;
-	}
-	if (worldTransformTarget.translation_.x >= 22.0f) {
-		camera_->rotation_.x = 0.6f;
-		camera_->rotation_.y = 0.2f;
-		camera_->translation_.x = 36.0f;
-		camera_->translation_.y = 17.8f;
-		camera_->translation_.z = -15.0f;
-	}
-	if (worldTransformTarget.translation_.x >= 56.0f) {
-		camera_->rotation_.x = 0.1f;
-		camera_->rotation_.y = -3.14f;
-		camera_->translation_.x = 62.0f;
-		camera_->translation_.y = 3.8f;
-		camera_->translation_.z = 6.8f;
-	}
-	if (worldTransformTarget.translation_.x >= 67.0f) {
-		camera_->rotation_.x = -0.4f;
-		camera_->rotation_.y = 0.9f;
-		camera_->translation_.x = 69.0f;
-		camera_->translation_.y = -0.2f;
-		camera_->translation_.z = -10.2f;
-	}
-	if (worldTransformTarget.translation_.x >= 82.0f) {
-		camera_->rotation_.x = 0.0f;
-		camera_->rotation_.y = 0.0f;
-		camera_->translation_.x = 88.5f;
-		camera_->translation_.y = 6.5f;
-		camera_->translation_.z = -15.0f;
-	}
-}
-void CameraController::UpdateTopDownCamera(const WorldTransform& worldTransformTarget) {
-	camera_->rotation_.x = 1.57f;
-	Vector3 desiredPos = {worldTransformTarget.translation_.x, worldTransformTarget.translation_.y + 8.0f, worldTransformTarget.translation_.z};
-	camera_->translation_ = Lerp(camera_->translation_, desiredPos, kInterpolationRate);
-}
-void CameraController::UpdateTopDownDiagonalCamera(const WorldTransform& worldTransformTarget) {
-	camera_->rotation_.x = 0.785f;
-	camera_->rotation_.y = 0.0f;
-	Vector3 desiredPos = {worldTransformTarget.translation_.x, worldTransformTarget.translation_.y + 8.0f, worldTransformTarget.translation_.z - 8.0f};
-	camera_->translation_ = Lerp(camera_->translation_, desiredPos, kInterpolationRate);
-}
-void CameraController::UpdateIsometricCamera(const WorldTransform& worldTransformTarget) {
-	camera_->rotation_.x = 0.615f;
-	camera_->rotation_.y = 0.785f;
-	Vector3 desiredPos = {worldTransformTarget.translation_.x - 10.0f, worldTransformTarget.translation_.y + 10.0f, worldTransformTarget.translation_.z - 10.0f};
-	camera_->translation_ = Lerp(camera_->translation_, desiredPos, kInterpolationRate);
-}
-void CameraController::UpdateThirdPersonCamera(const WorldTransform& worldTransformTarget) {
-	camera_->rotation_.x = 0.3f;
-	camera_->rotation_.y = worldTransformTarget.rotation_.y;
-	float distance = 8.0f;
-	Vector3 desiredPos = {
-	    worldTransformTarget.translation_.x - std::sin(camera_->rotation_.y) * distance, worldTransformTarget.translation_.y + 3.0f,
-	    worldTransformTarget.translation_.z - std::cos(camera_->rotation_.y) * distance};
-	camera_->translation_ = Lerp(camera_->translation_, desiredPos, kInterpolationRate);
-}
-void CameraController::UpdateFirstPersonCamera(const WorldTransform& worldTransformTarget) {
-	camera_->rotation_.x = 0.0f;
-	camera_->rotation_.y = worldTransformTarget.rotation_.y;
-	camera_->translation_.x = worldTransformTarget.translation_.x;
-	camera_->translation_.y = worldTransformTarget.translation_.y + 1.5f;
-	camera_->translation_.z = worldTransformTarget.translation_.z;
-}
+
+#pragma region Camera damping & smoothing
 // Same clamps the follow camera applies, so returning from a focus shot lands exactly where follow mode will be.
 Vector3 CameraController::ComputeClampedFollowPosition() const {
 	Vector3 p = ComputeFollowTarget();
 	if (perspectiveType != PerspectiveType::Sidescroll)
 		return p;
 	const WorldTransform& wt = target_->GetWorldTransform();
-	p.x = std::clamp(p.x, wt.translation_.x + margin.left, wt.translation_.x + margin.right);
-	p.y = std::clamp(p.y, wt.translation_.y + margin.bottom, wt.translation_.y + margin.top);
-	p.x = std::clamp(p.x, movableArea_.left, movableArea_.right);
-	p.y = std::clamp(p.y, movableArea_.bottom, movableArea_.top);
+	p.x = ClampCameraX(p.x, wt.translation_.x);
+	p.y = ClampCameraY((verticalMode_ == VerticalMode::kTrack) ? wt.translation_.y + targetOffset_.y : holdY_);
 	return p;
 }
 
@@ -538,4 +573,189 @@ void CameraController::UpdateZones(const AABB& playerAABB, bool enabled) {
 		BeginZoneShot(zone, key);
 	}
 }
+
+
+// Critically damped spring (frame-rate independent, keeps velocity so direction changes stay smooth).
+float CameraController::SmoothDamp(float current, float target, float& velocity, float smoothTime, float dt) {
+	smoothTime = std::max(smoothTime, 0.0001f);
+	const float omega = 2.0f / smoothTime;
+	const float x = omega * dt;
+	const float expo = 1.0f / (1.0f + x + 0.48f * x * x + 0.235f * x * x * x);
+	const float change = current - target;
+	const float temp = (velocity + omega * change) * dt;
+	velocity = (velocity - omega * temp) * expo;
+	float output = target + (change + temp) * expo;
+	if ((target - current > 0.0f) == (output > target)) { // overshoot guard
+		output = target;
+		velocity = 0.0f;
+	}
+	return output;
+}
+
+float CameraController::GetPlayerScreenY(float cameraY, float playerY) const {
+	const float depth = std::abs(camera_->translation_.z - target_->GetWorldTransform().translation_.z);
+	const float halfH = std::max(std::tan(camera_->fovAngleY * 0.5f) * depth, 0.01f);
+	const float n = (playerY - cameraY) / halfH; // +1 = top edge, -1 = bottom edge
+	return (1.0f - n) * 0.5f * static_cast<float>(WinApp::kWindowHeight);
+}
+float CameraController::CameraYForPlayerScreenY(float playerY, float screenY) const {
+	const float depth = std::abs(camera_->translation_.z - target_->GetWorldTransform().translation_.z);
+	const float halfH = std::max(std::tan(camera_->fovAngleY * 0.5f) * depth, 0.01f);
+	const float n = 1.0f - 2.0f * screenY / static_cast<float>(WinApp::kWindowHeight); // +1 top edge, -1 bottom edge
+	return playerY - n * halfH;
+}
+
+float CameraController::ClampCameraX(float x, float playerX) const {
+	x = std::clamp(x, playerX + margin.left, playerX + margin.right);
+	return std::clamp(x, movableArea_.left, movableArea_.right);
+}
+float CameraController::ClampCameraY(float y) const { return std::clamp(y, movableArea_.bottom, movableArea_.top); }
+
+void CameraController::ResetSmoothing() {
+	camVelX_ = camVelY_ = 0.0f;
+	smoothedVelocity_ = {};
+	measuredVelocity_ = {};
+	hasPrevTarget_ = false;
+	verticalMode_ = VerticalMode::kHold;
+	holdY_ = camera_->translation_.y;
+	hasGroundY_ = false;
+	isFalling_ = false;
+}
+
+void CameraController::UpdateMeasuredVelocity(const Vector3& pos) {
+	if (!hasPrevTarget_) {
+		prevTargetPos_ = pos;
+		hasPrevTarget_ = true;
+		measuredVelocity_ = {};
+		return;
+	}
+	const Vector3 d = {pos.x - prevTargetPos_.x, pos.y - prevTargetPos_.y, 0.0f};
+	prevTargetPos_ = pos;
+	if (std::hypot(d.x, d.y) > kTeleportDistance) { // checkpoint / respawn
+		measuredVelocity_ = {};
+		return;
+	}
+	measuredVelocity_ = {std::clamp(d.x, -kMaxMeasuredSpeed, kMaxMeasuredSpeed), std::clamp(d.y, -kMaxMeasuredSpeed, kMaxMeasuredSpeed), 0.0f};
+}
+
+void CameraController::UpdateSidescroll(const WorldTransform& targetWT) {
+	constexpr float kDt = 1.0f / 60.0f;
+	camera_->rotation_.x = 0.0f;
+	camera_->rotation_.y = 0.0f;
+
+	const Vector3 playerPos = targetWT.translation_;
+	const bool onGround = target_->IsOnGround();
+	const float vy = measuredVelocity_.y;
+	const float speedT = std::clamp(std::abs(vy) / std::max(kFastFallSpeed, 0.001f), 0.0f, 1.0f); // 0 = slow, 1 = fast flier/faller
+
+	// ---- fall detection: a real drop below the last floor. Jumps land on the floor they left, so they never trigger it ----
+	if (!hasGroundY_ || onGround) {
+		lastGroundY_ = playerPos.y;
+		hasGroundY_ = true;
+	}
+	const bool falling = !onGround && vy < -kFallMinSpeed && (lastGroundY_ - playerPos.y) > kFallTrackDrop;
+	isFalling_ = falling;
+
+	// ---- the two lines ----
+	const float screenH = static_cast<float>(WinApp::kWindowHeight);
+	const float topLine = kLineTopOffset;
+	const float bottomLine = screenH - kLineBottomOffset;
+	const float syNow = GetPlayerScreenY(camera_->translation_.y, playerPos.y);
+
+	// "about to reach": the faster the player moves, the farther ahead we look
+	const float horizon = Lerp(kPredictTime, kFastPredictTime, speedT);
+	const float syAhead = GetPlayerScreenY(camera_->translation_.y, playerPos.y + vy * (horizon / kDt));
+
+	if (verticalMode_ == VerticalMode::kHold) {
+		const bool reached = syNow < topLine || syNow > bottomLine || syAhead < topLine || syAhead > bottomLine;
+		if (reached || falling) {
+			verticalMode_ = VerticalMode::kTrack;
+			camVelY_ = vy * 60.0f; // start already moving with the player (SmoothDamp velocity is units/second), not from rest
+		}
+	} else {
+		// keep following while airborne; once standing and back inside the band, hold again
+		const bool insideBand = syNow >= topLine + kReturnMargin && syNow <= bottomLine - kReturnMargin;
+		if (onGround && insideBand) {
+			verticalMode_ = VerticalMode::kHold;
+			holdY_ = ClampCameraY(playerPos.y + targetOffset_.y); // recentre on the floor we landed on (matches the spawn framing)
+		}
+	}
+
+	float smoothTimeY = kSmoothTimeY;
+	float desiredY = holdY_;
+
+	if (verticalMode_ == VerticalMode::kTrack) {
+		// 1) speed: tighter spring the faster we move, always tight for a real fall
+		smoothTimeY = Lerp(kSmoothTimeY, kFastSmoothTimeY, std::clamp(std::abs(smoothedVelocity_.y) / std::max(kFastFallSpeed, 0.001f), 0.0f, 1.0f));
+		if (falling)
+			smoothTimeY = std::min(smoothTimeY, kFastSmoothTimeY);
+
+		// 2) catch-up: the farther the player is beyond a line, the tighter the spring
+		const float outsidePx = std::max(0.0f, std::max(topLine - syNow, syNow - bottomLine));
+		smoothTimeY /= 1.0f + outsidePx / std::max(kCatchUpPx, 1.0f);
+		smoothTimeY = std::max(smoothTimeY, 0.04f);
+
+		// 3) lead: velocity * smoothTime cancels the spring's steady-state lag
+		const float lead = std::clamp(smoothedVelocity_.y * 60.0f * smoothTimeY * kVerticalLeadScale, -kMaxVerticalLead, kMaxVerticalLead);
+		desiredY = playerPos.y + targetOffset_.y + lead;
+	}
+	desiredY = ClampCameraY(desiredY);
+
+	// ---- damped follow ----
+	camera_->translation_.x = SmoothDamp(camera_->translation_.x, targetPos.x, camVelX_, kSmoothTimeX, kDt);
+	camera_->translation_.y = SmoothDamp(camera_->translation_.y, desiredY, camVelY_, smoothTimeY, kDt);
+	camera_->translation_.z = Lerp(camera_->translation_.z, targetPos.z, kInterpolationRate); // zoom keeps its existing feel
+
+	//// ---- hard limit while tracking: the player can never leave the screen, even at terminal speed ----
+	//if (verticalMode_ == VerticalMode::kTrack) {
+	//	const float camMaxY = CameraYForPlayerScreenY(playerPos.y, kHardTopMargin);              // camera high enough that the player stays below the top margin
+	//	const float camMinY = CameraYForPlayerScreenY(playerPos.y, screenH - kHardBottomMargin); // ...and above the bottom margin
+	//	if (camera_->translation_.y > camMaxY) {
+	//		camera_->translation_.y = camMaxY;
+	//		camVelY_ = std::max(camVelY_, vy * 60.0f);
+	//	} else if (camera_->translation_.y < camMinY) {
+	//		camera_->translation_.y = camMinY;
+	//		camVelY_ = std::min(camVelY_, vy * 60.0f);
+	//	}
+	//}
+
+	camera_->translation_.x = ClampCameraX(camera_->translation_.x, playerPos.x);
+	camera_->translation_.y = ClampCameraY(camera_->translation_.y);
+}
+
 #pragma endregion
+
+void CameraController::DrawDebugLines() const {
+#ifdef _DEBUG
+	if (!camera_)
+		return;
+	ImDrawList* dl = ImGui::GetForegroundDrawList();
+	const float w = static_cast<float>(WinApp::kWindowWidth);
+	const float h = static_cast<float>(WinApp::kWindowHeight);
+	const float top = kLineTopOffset;
+	const float bottom = h - kLineBottomOffset;
+	const bool tracking = (verticalMode_ == VerticalMode::kTrack);
+
+	const ImU32 lineCol = tracking ? IM_COL32(80, 255, 140, 230) : IM_COL32(255, 200, 0, 230);
+	const ImU32 returnCol = IM_COL32(255, 255, 255, 70);
+
+	dl->AddLine({0.0f, top}, {w, top}, lineCol, 2.0f);
+	dl->AddLine({0.0f, bottom}, {w, bottom}, lineCol, 2.0f);
+	// the player must get back inside these before the camera returns to HOLD
+	dl->AddLine({0.0f, top + kReturnMargin}, {w, top + kReturnMargin}, returnCol, 1.0f);
+	dl->AddLine({0.0f, bottom - kReturnMargin}, {w, bottom - kReturnMargin}, returnCol, 1.0f);
+
+	char buf[96];
+	std::snprintf(buf, sizeof(buf), "TOP LINE  %.0fpx   (%s)", top, tracking ? "TRACK" : "HOLD");
+	dl->AddText({8.0f, top + 4.0f}, lineCol, buf);
+	std::snprintf(buf, sizeof(buf), "BOTTOM LINE  %.0fpx from bottom (y=%.0f)", kLineBottomOffset, bottom);
+	dl->AddText({8.0f, bottom - 18.0f}, lineCol, buf);
+
+	if (target_) {
+		const float sy = GetPlayerScreenY(camera_->translation_.y, target_->GetWorldTransform().translation_.y);
+		dl->AddCircleFilled({w - 24.0f, sy}, 6.0f, IM_COL32(255, 80, 80, 255));
+		std::snprintf(buf, sizeof(buf), "player y=%.0f  vy=%.2f", sy, measuredVelocity_.y);
+		dl->AddText({w - 190.0f, sy - 8.0f}, IM_COL32(255, 120, 120, 255), buf);
+	}
+#endif
+}

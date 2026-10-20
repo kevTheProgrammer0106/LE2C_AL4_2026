@@ -50,6 +50,7 @@ public:
 	virtual float GetAttackTimeScale() const { return 1.0f; }
 	virtual float GetAimTimeScale() const { return 1.0f; }
 
+	bool AttackObstacle(const KamataEngine::Vector3& cellPos) override { return FireAtObstacle(currentFirearm_.get(), cellPos); }
 private:
 	friend class DebugMenu;
 

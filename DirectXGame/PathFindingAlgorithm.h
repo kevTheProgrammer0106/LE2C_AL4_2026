@@ -36,8 +36,10 @@ public:
 	struct PathCostProfile {
 		std::array<float, 10> pathNodeCosts = {0.8f, 1.0f, 1.2f, 1.4f, 1.6f, 1.8f, 2.0f, 2.2f, 2.4f, 2.6f};
 		std::array<float, 10> jumpNodeCosts = {2.0f, 1.0f, 1.2f, 1.2f, 1.2f, 1.2f, 1.2f, 1.2f, 1.2f, 1.2f};
+		bool allowDestructibles = false; // glass / breakable blocks count as passable (the enemy breaks them on the way)
+		float destructibleCost = 6.0f;
 	};
-
+	static bool IsDestructible(MapChipType type) { return type == MapChipType::kGlass || type == MapChipType::kBreakable; }
 	// デフォルトのコストプロファイル(subIDが小さいほど低コスト)を取得する
 	static const PathCostProfile& GetDefaultPathCostProfile();
 
@@ -53,8 +55,9 @@ public:
 
 private:
 	static bool IsInsideMap(MapChipField* mapChipField, uint32_t xIndex, uint32_t yIndex);
-	static bool IsWalkable(MapChipField* mapChipField, uint32_t xIndex, uint32_t yIndex);
-	static bool CanMoveBetween(MapChipField* mapChipField, const IndexSet& current, const IndexSet& next);
+	static bool IsWalkable(MapChipField* mapChipField, uint32_t xIndex, uint32_t yIndex, bool allowDestructibles = false);
+	static bool HasHeadroom(MapChipField* mapChipField, uint32_t xIndex, uint32_t yIndex, bool allowDestructibles = false);
+	static bool CanMoveBetween(MapChipField* mapChipField, const IndexSet& current, const IndexSet& next, bool allowDestructibles = false);
 
 	// [NEW] 敵の体が占める縦方向のセル数(1セル=現在のブロック高さ)。BaseEnemyの体高さとマップのブロック高さから算出する。
 	static uint32_t GetAgentHeightCells(MapChipField* mapChipField);

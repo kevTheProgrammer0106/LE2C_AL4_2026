@@ -23,7 +23,7 @@ public:
 	enum class Mode { kFollow, kForcedScroll, kFocus };
 	enum class Ease { kLinear, kIn, kOut, kInOut };
 
-	enum class PerspectiveType { Sidescroll, Fixed, TopDown, TopDownDiagonal, Isometric, ThirdPerson, FirstPerson, Count };
+	enum class PerspectiveType { Sidescroll, Count };
 	PerspectiveType perspectiveType = PerspectiveType::Sidescroll;
 
 	void Initialize(KamataEngine::Camera* camera);
@@ -37,13 +37,6 @@ public:
 
 	void Reset();
 	void DrawDebugControls(); // ImGui contents only; the caller owns the window
-
-	void UpdateFixedCamera(const KamataEngine::WorldTransform& worldTransformTarget);
-	void UpdateTopDownCamera(const KamataEngine::WorldTransform& worldTransformTarget);
-	void UpdateTopDownDiagonalCamera(const KamataEngine::WorldTransform& worldTransformTarget);
-	void UpdateIsometricCamera(const KamataEngine::WorldTransform& worldTransformTarget);
-	void UpdateThirdPersonCamera(const KamataEngine::WorldTransform& worldTransformTarget);
-	void UpdateFirstPersonCamera(const KamataEngine::WorldTransform& worldTransformTarget);
 
 	void SetMode(Mode mode) { mode_ = mode; }
 	Mode GetMode() const { return mode_; }
@@ -137,6 +130,20 @@ public:
 	const std::map<uint32_t, Zone>& GetZones() const { return zones_; }
 	int32_t GetActiveZoneID() const { return activeZoneID_; }
 
+		// ---- Shake (explosions / damage / death) ----
+	// amplitude = peak offset in world units, duration = seconds. A weaker shake never cuts a stronger one short.
+	void Shake(float amplitude, float duration, float frequency = 35.0f);
+	void StopShake() { shakeTimer_ = 0.0f; }
+	bool IsShaking() const { return shakeTimer_ > 0.0f; }
+
+	// ---- Zoom pulse (block): zooms in by zoomRatio of the CURRENT camera distance, then eases back. Independent of ZoomTo(). ----
+	void ZoomPulse(float zoomRatio, float inDuration, float outDuration);
+
+	// Debug overlay (ImGui foreground): vertical dead-zone lines, return margin, player screen Y, HOLD/TRACK. Call once per frame inside the ImGui frame.
+	void DrawDebugLines() const;
+
+	bool IsTrackingVertically() const { return verticalMode_ == VerticalMode::kTrack; }
+
 private:
 	std::map<uint32_t, Zone> zones_; // key = creation order, not a map ID
 	uint32_t nextZoneKey_ = 0;
@@ -178,4 +185,79 @@ private:
 	static inline const Rect margin = {-10, 10, 0, 0};
 
 	Mode mode_ = Mode::kFollow;
+
+		void UpdateCore(); // the old Update() body (follow / focus / forced scroll)
+	void UpdateFx();   // computes this frame's shake + pulse
+	void ApplyFx();    // adds them on top of the camera
+	void RemoveFx();   // takes last frame's back off
+
+	float shakeAmplitude_ = 0.0f;
+	float shakeDuration_ = 0.0f;
+	float shakeTimer_ = 0.0f;
+	float shakeFrequency_ = 35.0f;
+	float shakeTime_ = 0.0f;
+
+	float pulsePeak_ = 0.0f;
+	float pulseIn_ = 0.1f;
+	float pulseOut_ = 0.4f;
+	float pulseTimer_ = 0.0f;
+	bool pulseActive_ = false;
+	float pulseDelta_ = 0.0f;
+
+	KamataEngine::Vector3 fxOffset_{}; // wanted this frame
+	float fxRoll_ = 0.0f;
+	KamataEngine::Vector3 appliedOffset_{}; // actually added to the camera (so it can be removed)
+	float appliedRoll_ = 0.0f;
+
+		// ---- Sidescroll damping + vertical dead zone ----
+	enum class VerticalMode { kHold, kTrack };
+	VerticalMode verticalMode_ = VerticalMode::kHold;
+	float holdY_ = 0.0f; // camera Y while holding
+	float camVelX_ = 0.0f;
+	float camVelY_ = 0.0f;
+	KamataEngine::Vector3 smoothedVelocity_{}; // player velocity, low-passed, used for the look-ahead
+
+	void UpdateSidescroll(const KamataEngine::WorldTransform& targetWT);
+	void ResetSmoothing();
+	float GetPlayerScreenY(float cameraY, float playerY) const; // 0 = top of screen, WinApp::kWindowHeight = bottom
+	float CameraYForPlayerScreenY(float playerY, float screenY) const; // inverse of GetPlayerScreenY
+
+	float ClampCameraX(float x, float playerX) const;
+	float ClampCameraY(float y) const;
+
+	static float SmoothDamp(float current, float target, float& velocity, float smoothTime, float dt);
+
+	static inline float kSmoothTimeX = 0.30f;       // seconds to catch up horizontally (higher = softer)
+	static inline float kSmoothTimeY = 0.35f;       // seconds to catch up vertically
+	static inline float kLeadSmoothing = 6.0f;      // how quickly the look-ahead velocity follows the player
+	static inline float kLineTopOffset = 150.0f;    // px below screen y 0
+	static inline float kLineBottomOffset = 200.0f; // px above screen y 720
+	static inline float kReturnMargin = 40.0f;      // px inside the lines the player must be to go back to holding
+	static inline float kPredictTime = 0.10f;       // seconds ahead used to detect "about to reach a line"
+
+	// player movement measured from real position change (catches knockback / attack steps / pushes, not just velocity_)
+	KamataEngine::Vector3 prevTargetPos_{};
+	KamataEngine::Vector3 measuredVelocity_{}; // units per frame
+	bool hasPrevTarget_ = false;
+	void UpdateMeasuredVelocity(const KamataEngine::Vector3& targetPos);
+
+	static inline float kFastSmoothTimeY = 0.12f;        // vertical smooth time when moving at kFastFallSpeed or faster
+	static inline float kFastFallSpeed = 0.3f;           // units/frame at which the fast smooth time is fully used
+	static inline float kVerticalLeadScale = 1.0f;       // 1 = look-ahead exactly cancels the spring's lag at constant speed
+	static inline float kMaxVerticalLead = 6.0f;         // world units
+	static inline float kMaxMeasuredSpeed = 1.0f;        // clamp per axis (units/frame)
+	static inline float kTeleportDistance = 3.0f;        // a bigger one-frame jump is a respawn/checkpoint, not movement
+	static inline float kShakeReferenceDistance = 18.5f; // camera distance the shake amplitudes are authored for
+
+	// ---- fall detection ----
+	float lastGroundY_ = 0.0f; // Y the player last stood at
+	bool hasGroundY_ = false;
+	bool isFalling_ = false;                   // debug readout
+	static inline float kFallTrackDrop = 1.2f; // drop below the last floor that starts tracking
+	static inline float kFallMinSpeed = 0.08f; // units/frame downward, so hovering at the drop's start doesn't count
+
+	static inline float kFastPredictTime = 0.22f;  // "about to reach a line" horizon at full speed (kPredictTime applies when slow)
+	static inline float kCatchUpPx = 120.0f;       // px beyond a line at which the spring is about twice as tight
+	static inline float kHardTopMargin = 40.0f;    // the player never goes closer than this to the top of the screen while tracking
+	static inline float kHardBottomMargin = 70.0f; // ...or the bottom
 };

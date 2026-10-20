@@ -1,6 +1,7 @@
 #include "PlayerBehavior.h"
 #include "BaseMelee.h"
 #include "GlobalVariables.h"
+#include "GameScene.h"
 #include "Player.h"
 #include "ObjectBounce.h"
 
@@ -241,6 +242,8 @@ void PlayerBehavior::BehaviorBlockUpdate() {
 }
 
 void PlayerBehavior::BehaviorDeathInitialize() {
+	if (owner_.gameScene_)
+		owner_.gameScene_->TriggerCameraFx(GameScene::CameraFx::kDeath); // covers enemy hits, explosions, kill blocks, KillInstant
 	owner_.worldTransform_.scale_ = {1.0f, 1.0f, 1.0f};
 	deathParameter_ = 0;
 	deathBounceCount_ = 0;
@@ -370,6 +373,8 @@ void PlayerBehavior::BehaviorAttackUpdate() {
 		if (static_cast<float>(attackParameter_) >= anticipateDuration) {
 			attackPhase_ = AttackPhase::kAttack;
 			attackParameter_ = 0;
+			if (owner_.gameScene_)
+				owner_.gameScene_->TriggerCameraFx(GameScene::CameraFx::kSwing, 1.0f + 0.5f * static_cast<float>(comboIndex_));
 		}
 		break;
 	}
@@ -461,6 +466,8 @@ void PlayerBehavior::BehaviorLungeUpdate() {
 			attackPhase_ = AttackPhase::kAttack;
 			attackParameter_ = 0;
 			owner_.PlayLungeSound(lungeSource_);
+			if (owner_.gameScene_)
+				owner_.gameScene_->TriggerCameraFx(GameScene::CameraFx::kSpecial);
 		}
 		break;
 	case AttackPhase::kAttack:

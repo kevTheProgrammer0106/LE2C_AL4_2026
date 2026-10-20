@@ -68,6 +68,8 @@ public:
 			cursorSprite_->SetTextureHandle(textureHandle);
 		}
 	}
+	// 自前のカーソルを描くか(既定: 描く)。GameSceneのように専用カーソル(cursor_)が別にある場合は false にする
+	void SetCursorVisible(bool visible) { cursorVisible_ = visible; }
 
 private:
 	struct Button {
@@ -128,4 +130,6 @@ private:
 
 	uint32_t clickSoundDataHandle_ = 0;
 	float clickSoundVolume_ = 1.0f;
+
+	bool cursorVisible_ = true;
 };

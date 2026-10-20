@@ -53,14 +53,6 @@ bool PathFindingAlgorithm::IsInsideMap(MapChipField* mapChipField, uint32_t xInd
 	return true;
 }
 
-bool PathFindingAlgorithm::IsWalkable(MapChipField* mapChipField, uint32_t xIndex, uint32_t yIndex) {
-	if (!IsInsideMap(mapChipField, xIndex, yIndex)) {
-		return false;
-	}
-	MapChipType type = mapChipField->GetMapChipTypeByIndex(xIndex, yIndex);
-	return type != MapChipType::kBlock && type != MapChipType::kSlowBlock && type != MapChipType::kGlass && type != MapChipType::kBreakable && type != MapChipType::kFragile;
-}
-
 uint32_t PathFindingAlgorithm::GetAgentHeightCells(MapChipField* mapChipField) {
 	uint32_t numRows = mapChipField->GetNumBlockVertical();
 	if (numRows == 0) {
@@ -76,41 +68,45 @@ uint32_t PathFindingAlgorithm::GetAgentHeightCells(MapChipField* mapChipField) {
 	return static_cast<uint32_t>(std::max(cells, 1.0f));
 }
 
-bool PathFindingAlgorithm::HasHeadroom(MapChipField* mapChipField, uint32_t xIndex, uint32_t yIndex) {
+bool PathFindingAlgorithm::IsWalkable(MapChipField* mapChipField, uint32_t xIndex, uint32_t yIndex, bool allowDestructibles) {
+	if (!IsInsideMap(mapChipField, xIndex, yIndex)) {
+		return false;
+	}
+	MapChipType type = mapChipField->GetMapChipTypeByIndex(xIndex, yIndex);
+	if (allowDestructibles && IsDestructible(type)) {
+		return true;
+	}
+	return type != MapChipType::kBlock && type != MapChipType::kSlowBlock && type != MapChipType::kGlass && type != MapChipType::kBreakable && type != MapChipType::kFragile;
+}
+
+bool PathFindingAlgorithm::HasHeadroom(MapChipField* mapChipField, uint32_t xIndex, uint32_t yIndex, bool allowDestructibles) {
 	uint32_t cells = GetAgentHeightCells(mapChipField);
-	// yIndexは上が0。体の上側のセルはyIndex-1, yIndex-2, ...
 	for (uint32_t k = 1; k < cells; ++k) {
 		if (yIndex < k) {
-			return false; // マップ上端を突き抜ける
+			return false;
 		}
-		if (!IsWalkable(mapChipField, xIndex, yIndex - k)) {
+		if (!IsWalkable(mapChipField, xIndex, yIndex - k, allowDestructibles)) {
 			return false;
 		}
 	}
 	return true;
 }
 
-bool PathFindingAlgorithm::CanMoveBetween(MapChipField* mapChipField, const IndexSet& current, const IndexSet& next) {
+bool PathFindingAlgorithm::CanMoveBetween(MapChipField* mapChipField, const IndexSet& current, const IndexSet& next, bool allowDestructibles) {
 	if (!mapChipField) {
 		return false;
 	}
-	if (!IsWalkable(mapChipField, next.xIndex, next.yIndex)) {
+	if (!IsWalkable(mapChipField, next.xIndex, next.yIndex, allowDestructibles)) {
 		return false;
 	}
-
 	int deltaX = static_cast<int>(next.xIndex) - static_cast<int>(current.xIndex);
 	int deltaY = static_cast<int>(next.yIndex) - static_cast<int>(current.yIndex);
-
-	// 上下左右の隣接セル以外への移動は禁止
 	if (std::abs(deltaX) + std::abs(deltaY) != 1) {
 		return false;
 	}
-
-	// [FIX] 体が2セル分の高さを持つので、移動先の頭上にも空きが必要
-	if (!HasHeadroom(mapChipField, next.xIndex, next.yIndex)) {
+	if (!HasHeadroom(mapChipField, next.xIndex, next.yIndex, allowDestructibles)) {
 		return false;
 	}
-
 	return true;
 }
 
@@ -122,12 +118,12 @@ float PathFindingAlgorithm::GetTraversalCost(MapChipField* mapChipField, uint32_
 	MapChipType type = mapChipField->GetMapChipTypeByIndex(xIndex, yIndex);
 
 	switch (type) {
-	case MapChipType::kBlock:
-	case MapChipType::kSlowBlock:
 	case MapChipType::kGlass:
 	case MapChipType::kBreakable:
+		return profile.allowDestructibles ? profile.destructibleCost : std::numeric_limits<float>::infinity();
+	case MapChipType::kBlock:
+	case MapChipType::kSlowBlock:
 	case MapChipType::kFragile:
-		// IsWalkableで除外されるため通常ここには来ない
 		return std::numeric_limits<float>::infinity();
 	case MapChipType::kSpike:
 		return 4.0f;
@@ -159,17 +155,18 @@ std::vector<PathFindingAlgorithm::IndexSet>
     PathFindingAlgorithm::FindPath(MapChipField* mapChipField, const IndexSet& start, const IndexSet& goal, uint32_t maxSearchNodes, const PathCostProfile* costProfile) {
 	std::vector<IndexSet> path;
 
+	const PathCostProfile& profile = costProfile ? *costProfile : GetDefaultPathCostProfile();
+
 	if (!mapChipField || maxSearchNodes == 0) {
 		return path;
 	}
 	if (!IsInsideMap(mapChipField, start.xIndex, start.yIndex) || !IsInsideMap(mapChipField, goal.xIndex, goal.yIndex)) {
 		return path;
 	}
-	if (!IsWalkable(mapChipField, start.xIndex, start.yIndex) || !IsWalkable(mapChipField, goal.xIndex, goal.yIndex)) {
-		return path; // 開始/ゴールが壁の中なら探索不可
+	if (!IsWalkable(mapChipField, start.xIndex, start.yIndex, profile.allowDestructibles) || !IsWalkable(mapChipField, goal.xIndex, goal.yIndex, profile.allowDestructibles)) {
+		return path;
 	}
 
-	const PathCostProfile& profile = costProfile ? *costProfile : GetDefaultPathCostProfile();
 
 	uint64_t startKey = MakeKey(start.xIndex, start.yIndex);
 	uint64_t goalKey = MakeKey(goal.xIndex, goal.yIndex);
@@ -232,7 +229,7 @@ std::vector<PathFindingAlgorithm::IndexSet>
 			}
 
 			IndexSet nextIndex{nextXIndex, nextYIndex};
-			if (!CanMoveBetween(mapChipField, currentNode.index, nextIndex)) {
+			if (!CanMoveBetween(mapChipField, currentNode.index, nextIndex, profile.allowDestructibles)) {
 				continue;
 			}
 

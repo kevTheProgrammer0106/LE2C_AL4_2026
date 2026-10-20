@@ -85,6 +85,28 @@ void GameScene::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "FragileRegenDelay", kFragileRegenDelay);
 	gv->AddItem(kGroupName, "RegenBlinkWarning", kRegenBlinkWarning);
 	gv->AddItem(kGroupName, "RegenBlinkFrequency", kRegenBlinkFrequency);
+	gv->AddItem(kGroupName, "ShakeDamageAmp", kShakeDamageAmp);
+	gv->AddItem(kGroupName, "ShakeDamageDuration", kShakeDamageDuration);
+	gv->AddItem(kGroupName, "ShakeDeathAmp", kShakeDeathAmp);
+	gv->AddItem(kGroupName, "ShakeDeathDuration", kShakeDeathDuration);
+	gv->AddItem(kGroupName, "ShakeExplosionAmp", kShakeExplosionAmp);
+	gv->AddItem(kGroupName, "ShakeExplosionDuration", kShakeExplosionDuration);
+	gv->AddItem(kGroupName, "ShakeExplosionRange", kShakeExplosionRange);
+	gv->AddItem(kGroupName, "BlockZoomIn", kBlockZoomIn);
+	gv->AddItem(kGroupName, "BlockZoomOut", kBlockZoomOut);
+	gv->AddItem(kGroupName, "BlockZoomRatio", kBlockZoomRatio);
+	gv->AddItem(kGroupName, "ShakeSwingAmp", kShakeSwingAmp);
+	gv->AddItem(kGroupName, "ShakeSwingDuration", kShakeSwingDuration);
+	gv->AddItem(kGroupName, "ShakeSpecialAmp", kShakeSpecialAmp);
+	gv->AddItem(kGroupName, "ShakeSpecialDuration", kShakeSpecialDuration);
+	gv->AddItem(kGroupName, "ShakeHitAmp", kShakeHitAmp);
+	gv->AddItem(kGroupName, "ShakeHitDuration", kShakeHitDuration);
+	gv->AddItem(kGroupName, "ShakeShootAmp", kShakeShootAmp);
+	gv->AddItem(kGroupName, "ShakeShootDuration", kShakeShootDuration);
+	gv->AddItem(kGroupName, "ShakeHeavyShootAmp", kShakeHeavyShootAmp);
+	gv->AddItem(kGroupName, "ShakeHeavyShootDuration", kShakeHeavyShootDuration);
+	gv->AddItem(kGroupName, "MenuOverlayAlpha", kMenuOverlayAlpha);
+	gv->AddItem(kGroupName, "DeathOverlayFadeDuration", kDeathOverlayFadeDuration);
 }
 
 void GameScene::ApplyGlobalVariables() {
@@ -113,6 +135,28 @@ void GameScene::ApplyGlobalVariables() {
 	kFragileRegenDelay = gv->GetFloatValue(kGroupName, "FragileRegenDelay");
 	kRegenBlinkWarning = gv->GetFloatValue(kGroupName, "RegenBlinkWarning");
 	kRegenBlinkFrequency = gv->GetFloatValue(kGroupName, "RegenBlinkFrequency");
+	kShakeDamageAmp = gv->GetFloatValue(kGroupName, "ShakeDamageAmp");
+	kShakeDamageDuration = gv->GetFloatValue(kGroupName, "ShakeDamageDuration");
+	kShakeDeathAmp = gv->GetFloatValue(kGroupName, "ShakeDeathAmp");
+	kShakeDeathDuration = gv->GetFloatValue(kGroupName, "ShakeDeathDuration");
+	kShakeExplosionAmp = gv->GetFloatValue(kGroupName, "ShakeExplosionAmp");
+	kShakeExplosionDuration = gv->GetFloatValue(kGroupName, "ShakeExplosionDuration");
+	kShakeExplosionRange = gv->GetFloatValue(kGroupName, "ShakeExplosionRange");
+	kBlockZoomIn = gv->GetFloatValue(kGroupName, "BlockZoomIn");
+	kBlockZoomOut = gv->GetFloatValue(kGroupName, "BlockZoomOut");
+	kBlockZoomRatio = gv->GetFloatValue(kGroupName, "BlockZoomRatio");
+	kShakeSwingAmp = gv->GetFloatValue(kGroupName, "ShakeSwingAmp");
+	kShakeSwingDuration = gv->GetFloatValue(kGroupName, "ShakeSwingDuration");
+	kShakeSpecialAmp = gv->GetFloatValue(kGroupName, "ShakeSpecialAmp");
+	kShakeSpecialDuration = gv->GetFloatValue(kGroupName, "ShakeSpecialDuration");
+	kShakeHitAmp = gv->GetFloatValue(kGroupName, "ShakeHitAmp");
+	kShakeHitDuration = gv->GetFloatValue(kGroupName, "ShakeHitDuration");
+	kShakeShootAmp = gv->GetFloatValue(kGroupName, "ShakeShootAmp");
+	kShakeShootDuration = gv->GetFloatValue(kGroupName, "ShakeShootDuration");
+	kShakeHeavyShootAmp = gv->GetFloatValue(kGroupName, "ShakeHeavyShootAmp");
+	kShakeHeavyShootDuration = gv->GetFloatValue(kGroupName, "ShakeHeavyShootDuration");
+	kMenuOverlayAlpha = gv->GetFloatValue(kGroupName, "MenuOverlayAlpha");
+	kDeathOverlayFadeDuration = gv->GetFloatValue(kGroupName, "DeathOverlayFadeDuration");
 }
 void GameScene::debugMenu() {
 #ifdef _DEBUG
@@ -361,7 +405,9 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 		cameraController_->Reset();
 		cameraController_->SetWorldBounds(static_cast<float>(loadedChunkCount_) * kChunkWorldWidth, mapChipField_->GetWorldHeight());
 	}
+	InitializeMenuOverlay();
 	InitializePauseMenu();
+	InitializeSettingsPanel();
 	InitializeRetryMenu();
 	InitializeInGamePauseButton();
 	InitializeVictoryMenu();
@@ -371,28 +417,155 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 
 void GameScene::InitializePauseMenu() {
 	pauseMenuInput_.Initialize(assets_.pauseButtonTex, 3, &camera_);
+	pauseMenuInput_.SetCursorVisible(false); // カーソルは GameScene::cursor_ が描く
+
+	// 設定ボタンはタイトルと同じ画像を流用(専用画像ができたらGameAssetsへ移す)
+	settingsButtonTex_ = TextureManager::Load("./Resources/UserInterface/buttonLevel2.png");
 
 	constexpr float kButtonWidth = 220.0f;
 	constexpr float kButtonHeight = 160.0f;
 	constexpr float kSpacing = 100.0f;
 	float centerX = static_cast<float>(WinApp::kWindowWidth) / 2.0f - kButtonWidth / 2.0f;
-	float startY = static_cast<float>(WinApp::kWindowHeight) / 2.0f - kSpacing;
+	// 4つ並べるので全体が画面中央に来るようにずらす
+	float startY = static_cast<float>(WinApp::kWindowHeight) / 2.0f - kSpacing * 1.5f;
 
 	pauseResumeButton_ = pauseMenuInput_.AddButton(assets_.pauseButtonTex[0], centerX, startY, kButtonWidth, kButtonHeight, "Resume");
 	pauseMenuInput_.SetButtonOnClick(pauseResumeButton_, [this]() { phase_ = phaseBeforePause_; });
 
-	pauseRetryButton_ = pauseMenuInput_.AddButton(assets_.pauseButtonTex[1], centerX, startY + kSpacing, kButtonWidth, kButtonHeight, "Retry");
+	pauseSettingsButton_ = pauseMenuInput_.AddButton(settingsButtonTex_, centerX, startY + kSpacing, kButtonWidth, kButtonHeight, "Settings");
+	pauseMenuInput_.SetButtonOnClick(pauseSettingsButton_, [this]() { OpenSettingsPanel(); });
+
+	pauseRetryButton_ = pauseMenuInput_.AddButton(assets_.pauseButtonTex[1], centerX, startY + kSpacing * 2.0f, kButtonWidth, kButtonHeight, "Retry");
 	pauseMenuInput_.SetButtonOnClick(pauseRetryButton_, [this]() { reloadRequested_ = true; });
 
-	pauseMainMenuButton_ = pauseMenuInput_.AddButton(assets_.pauseButtonTex[2], centerX, startY + kSpacing * 2.0f, kButtonWidth, kButtonHeight, "Main Menu");
+	pauseMainMenuButton_ = pauseMenuInput_.AddButton(assets_.pauseButtonTex[2], centerX, startY + kSpacing * 3.0f, kButtonWidth, kButtonHeight, "Main Menu");
 	pauseMenuInput_.SetButtonOnClick(pauseMainMenuButton_, [this]() {
 		pendingReturnToMenu_ = true;
 		fade_->Start(Fade::Status::FadeOut, 1.0f);
 	});
 }
+// ============================================================
+// 暗転オーバーレイ
+// ============================================================
+void GameScene::InitializeMenuOverlay() {
+	menuOverlay_.reset(Sprite::Create(assets_.healthBarBackgroundTex, {0.0f, 0.0f}));
+	menuOverlay_->SetSize({static_cast<float>(WinApp::kWindowWidth), static_cast<float>(WinApp::kWindowHeight)});
+	menuOverlay_->SetColor({0.0f, 0.0f, 0.0f, 0.0f});
+}
 
+void GameScene::DrawMenuOverlay(float fadeAlpha) {
+	if (!menuOverlay_)
+		return;
+	menuOverlay_->SetColor({0.0f, 0.0f, 0.0f, std::clamp(fadeAlpha, 0.0f, 1.0f) * kMenuOverlayAlpha});
+	Sprite::PreDraw();
+	menuOverlay_->Draw();
+	Sprite::PostDraw();
+}
+
+// ============================================================
+// 設定パネル(TitleSceneのスライダーを移植)
+// ============================================================
+void GameScene::InitializeSettingsPanel() {
+	settingsMenuInput_.Initialize(assets_.pauseButtonTex[2], &camera_); // Back画像
+	settingsMenuInput_.SetButtonGroupAlpha(0.0f);
+
+	constexpr float kBackWidth = 200.0f;
+	constexpr float kBackHeight = 120.0f;
+	const float centerX = static_cast<float>(WinApp::kWindowWidth) / 2.0f;
+	settingsBackButton_ =
+	    settingsMenuInput_.AddButton(assets_.pauseButtonTex[2], centerX - kBackWidth / 2.0f, static_cast<float>(WinApp::kWindowHeight) - kBackHeight - 30.0f, kBackWidth, kBackHeight, "Back");
+	settingsMenuInput_.SetButtonOnClick(settingsBackButton_, [this]() { CloseSettingsPanel(); });
+
+	// Master / Music / SFX。値はAudioSettings経由で読み書きする
+	sliders_[0].get = &AudioSettings::GetMasterVolume;
+	sliders_[0].set = &AudioSettings::SetMasterVolume;
+	sliders_[1].get = &AudioSettings::GetMusicSetting;
+	sliders_[1].set = &AudioSettings::SetMusicVolume;
+	sliders_[2].get = &AudioSettings::GetSfxSetting;
+	sliders_[2].set = &AudioSettings::SetSfxVolume;
+
+	const float sliderX = centerX - kSliderWidth / 2.0f;
+	for (size_t i = 0; i < sliders_.size(); ++i) {
+		VolumeSlider& s = sliders_[i];
+		s.x = sliderX;
+		s.y = kSliderStartY + static_cast<float>(i) * kSliderSpacing;
+
+		s.track.reset(Sprite::Create(assets_.healthBarBackgroundTex, {s.x, s.y}));
+		s.track->SetSize({kSliderWidth, kSliderHeight});
+		s.fill.reset(Sprite::Create(assets_.healthBarBackgroundTex, {s.x, s.y}));
+		s.fill->SetSize({kSliderWidth, kSliderHeight});
+		s.knob.reset(Sprite::Create(assets_.healthBarBackgroundTex, {s.x, s.y}));
+		s.knob->SetSize({kKnobWidth, kKnobHeight});
+	}
+}
+
+void GameScene::OpenSettingsPanel() {
+	settingsOpen_ = true;
+	settingsMenuInput_.StartButtonFade(true, kButtonFadeDuration);
+}
+
+void GameScene::CloseSettingsPanel() {
+	// ドラッグ中に閉じた場合も保存しておく
+	for (VolumeSlider& s : sliders_) {
+		if (s.dragging) {
+			s.dragging = false;
+			AudioSettings::SaveToFile();
+		}
+	}
+	settingsOpen_ = false;
+	pauseMenuInput_.StartButtonFade(true, kButtonFadeDuration); // ポーズメニューをフェードインし直す
+}
+
+void GameScene::UpdateSettingsPanel() {
+	settingsMenuInput_.UpdateButtonFade();
+	settingsMenuInput_.Update();
+	if (!settingsOpen_)
+		return; // Backが押されて閉じた直後
+
+	InputManager* input = InputManager::GetInstance();
+	const float mouseX = static_cast<float>(input->GetMouseX());
+	const float mouseY = static_cast<float>(input->GetMouseY());
+	const float alpha = settingsMenuInput_.GetButtonFadeAlpha();
+
+	for (VolumeSlider& s : sliders_) {
+		float value = s.get();
+
+		const bool hover = mouseX >= s.x - kKnobWidth && mouseX <= s.x + kSliderWidth + kKnobWidth && mouseY >= s.y - kKnobHeight * 0.5f && mouseY <= s.y + kSliderHeight + kKnobHeight * 0.5f;
+		if (input->IsPrimaryTriggered() && hover)
+			s.dragging = true;
+
+		if (s.dragging) {
+			if (input->IsPrimaryHeld()) {
+				value = std::clamp((mouseX - s.x) / kSliderWidth, 0.0f, 1.0f);
+				s.set(value);
+			} else {
+				s.dragging = false;
+				AudioSettings::SaveToFile(); // 離した時に1回だけ保存
+			}
+		}
+
+		s.track->SetColor({0.15f, 0.15f, 0.15f, 0.9f * alpha});
+		s.fill->SetSize({kSliderWidth * value, kSliderHeight});
+		s.fill->SetColor({0.25f, 0.55f, 0.95f, alpha});
+		s.knob->SetPosition({s.x + kSliderWidth * value - kKnobWidth * 0.5f, s.y + kSliderHeight * 0.5f - kKnobHeight * 0.5f});
+		s.knob->SetColor({1.0f, 1.0f, 1.0f, alpha});
+	}
+}
+
+void GameScene::DrawSettingsPanel() {
+	DrawMenuOverlay(1.0f); // ポーズから切り替えてもちらつかないよう常に最大
+	Sprite::PreDraw();
+	for (VolumeSlider& s : sliders_) {
+		s.track->Draw();
+		s.fill->Draw();
+		s.knob->Draw();
+	}
+	Sprite::PostDraw();
+	settingsMenuInput_.Draw(); // Back + カーソル
+}
 void GameScene::InitializeRetryMenu() {
 	retryMenuInput_.Initialize(assets_.pauseButtonTex, 3, &camera_);
+	retryMenuInput_.SetCursorVisible(false); // カーソルは GameScene::cursor_ が描く
 
 	constexpr float kButtonWidth = 220.0f;
 	constexpr float kButtonHeight = 160.0f;
@@ -416,6 +589,7 @@ void GameScene::InitializeRetryMenu() {
 
 void GameScene::InitializeInGamePauseButton() {
 	gameplayHUDInput_.Initialize(assets_.inGamePauseButtonTex, &camera_);
+	gameplayHUDInput_.SetCursorVisible(false); // カーソルは GameScene::cursor_ が描く
 
 	constexpr float kButtonSize = 44.0f;
 	constexpr float kMargin = 16.0f;
@@ -434,6 +608,7 @@ void GameScene::InitializeInGamePauseButton() {
 
 void GameScene::InitializeVictoryMenu() {
 	victoryMenuInput_.Initialize(assets_.victoryButtonTex, 2, &camera_);
+	victoryMenuInput_.SetCursorVisible(false); // カーソルは GameScene::cursor_ が描く
 	victoryMenuInput_.SetButtonGroupAlpha(0.0f);
 
 	victoryOverlay_.reset(Sprite::Create(assets_.healthBarBackgroundTex, {0.0f, 0.0f}));
@@ -457,6 +632,10 @@ void GameScene::InitializeVictoryMenu() {
 }
 
 void GameScene::UpdatePauseMenu() {
+	if (settingsOpen_) {
+		UpdateSettingsPanel();
+		return;
+	}
 	pauseMenuInput_.UpdateButtonFade();
 	pauseMenuInput_.Update();
 }
@@ -464,25 +643,33 @@ void GameScene::UpdateRetryMenu() {
 	retryMenuInput_.UpdateButtonFade();
 	retryMenuInput_.Update();
 }
-void GameScene::DrawPauseMenu() { pauseMenuInput_.Draw(); }
-void GameScene::DrawRetryMenu() { retryMenuInput_.Draw(); }
+void GameScene::UpdateDeathOverlay() {
+	// 死亡演出(kDeath)からリトライ画面(kRetry)まで途切れず暗くしていく
+	if (phase_ == Phase::kDeath || phase_ == Phase::kRetry)
+		deathOverlayFade_ = std::min(1.0f, deathOverlayFade_ + (1.0f / 60.0f) / std::max(kDeathOverlayFadeDuration, 0.01f));
+	else
+		deathOverlayFade_ = 0.0f;
+}
+void GameScene::DrawPauseMenu() {
+	if (settingsOpen_) {
+		DrawSettingsPanel();
+		return;
+	}
+	DrawMenuOverlay(pauseMenuInput_.GetButtonFadeAlpha());
+	pauseMenuInput_.Draw();
+}
+void GameScene::DrawRetryMenu() {
+	DrawMenuOverlay(deathOverlayFade_);
+	retryMenuInput_.Draw();
+}
 void GameScene::UpdateInGamePauseButton() { gameplayHUDInput_.Update(); }
 void GameScene::DrawInGamePauseButton() { gameplayHUDInput_.Draw(); }
 void GameScene::UpdateVictoryMenu() {
 	victoryMenuInput_.UpdateButtonFade();
 	victoryMenuInput_.Update();
-	if (victoryOverlay_) {
-		float alpha = victoryMenuInput_.GetButtonFadeAlpha() * 0.6f;
-		victoryOverlay_->SetColor({0.0f, 0.0f, 0.0f, alpha});
-	}
 }
-
 void GameScene::DrawVictoryMenu() {
-	if (victoryOverlay_) {
-		Sprite::PreDraw();
-		victoryOverlay_->Draw();
-		Sprite::PostDraw();
-	}
+	DrawMenuOverlay(victoryMenuInput_.GetButtonFadeAlpha());
 	victoryMenuInput_.Draw();
 }
 
@@ -651,24 +838,11 @@ void GameScene::ChangePhase() {
 			bullet->Update();
 		playerBullets_.erase(std::remove_if(playerBullets_.begin(), playerBullets_.end(), [](const std::unique_ptr<ProjectileBall>& bullet) { return bullet->IsDead(); }), playerBullets_.end());
 
-		for (std::unique_ptr<BaseEffect>& effect : visualEffects_) {
-			if (!effect)
-				continue;
-			effect->Update();
-		}
-
-		for (auto& dp : enemyDeathParticles_) {
-			if (dp)
-				dp->Update();
-		}
-		enemyDeathParticles_.erase(
-		    std::remove_if(enemyDeathParticles_.begin(), enemyDeathParticles_.end(), [](const std::unique_ptr<DeathParticles>& dp) { return !dp || dp->IsFinished(); }), enemyDeathParticles_.end());
+		UpdateParticles();
 
 		for (auto& bullet : enemyBullets_)
 			bullet->Update();
 		enemyBullets_.erase(std::remove_if(enemyBullets_.begin(), enemyBullets_.end(), [](const std::unique_ptr<ProjectileBall>& bullet) { return bullet->IsDead(); }), enemyBullets_.end());
-
-		visualEffects_.erase(std::remove_if(visualEffects_.begin(), visualEffects_.end(), [](const std::unique_ptr<BaseEffect>& effect) { return effect->IsFinished(); }), visualEffects_.end());
 
 			for (const std::unique_ptr<BaseEnemy>& enemy : enemies_) {
 			if (!enemy || !enemy->IsDead())
@@ -738,6 +912,7 @@ void GameScene::ChangePhase() {
 		}
 		if (deathParticles_)
 			deathParticles_->Update();
+		UpdateParticles();
 		if (deathParticles_ && deathParticles_->IsFinished())
 			phase_ = Phase::kRetry;
 		retryMenuInput_.StartButtonFade(true, kButtonFadeDuration);
@@ -750,10 +925,6 @@ void GameScene::ChangePhase() {
 			}
 		}
 		break;
-	case Phase::kRetry:
-		break;
-	case Phase::kPause:
-		break;
 	case Phase::kGoalSequence: {
 		fade_->Update();
 		if (player_)
@@ -761,11 +932,7 @@ void GameScene::ChangePhase() {
 		if (goal_)
 			goal_->Update();
 
-		for (std::unique_ptr<BaseEffect>& effect : visualEffects_)
-			if (effect)
-				effect->Update();
-		visualEffects_.erase(std::remove_if(visualEffects_.begin(), visualEffects_.end(), [](const std::unique_ptr<BaseEffect>& e) { return e->IsFinished(); }), visualEffects_.end());
-
+			UpdateParticles();
 		for (std::vector<BlockInstance>& line : worldTransformBlocks_)
 			for (BlockInstance& block : line)
 				if (block.transform)
@@ -778,9 +945,45 @@ void GameScene::ChangePhase() {
 		}
 		break;
 	}
+	case Phase::kRetry:
+		break;
+	case Phase::kPause:
+		break;
 	case Phase::kVictory:
-		if (player_)
-			player_->Update(); // player keeps hopping/spinning behind the victory menu
+		break;
+	}
+}
+
+void GameScene::TriggerCameraFx(CameraFx fx, float intensity) {
+	if (!cameraController_)
+		return;
+	switch (fx) {
+	case CameraFx::kDamage:
+		cameraController_->Shake(kShakeDamageAmp * intensity, kShakeDamageDuration, 40.0f);
+		break;
+	case CameraFx::kDeath:
+		cameraController_->Shake(kShakeDeathAmp * intensity, kShakeDeathDuration, 45.0f);
+		break;
+	case CameraFx::kExplosion:
+		cameraController_->Shake(kShakeExplosionAmp * intensity, kShakeExplosionDuration, 40.0f);
+		break;
+	case CameraFx::kBlock:
+		cameraController_->ZoomPulse(kBlockZoomRatio * intensity, kBlockZoomIn, kBlockZoomOut);
+		break;
+	case CameraFx::kSwing:
+		cameraController_->Shake(kShakeSwingAmp * intensity, kShakeSwingDuration, 55.0f);
+		break;
+	case CameraFx::kSpecial:
+		cameraController_->Shake(kShakeSpecialAmp * intensity, kShakeSpecialDuration, 50.0f);
+		break;
+	case CameraFx::kHitEnemy:
+		cameraController_->Shake(kShakeHitAmp * intensity, kShakeHitDuration, 55.0f);
+		break;
+	case CameraFx::kShoot:
+		cameraController_->Shake(kShakeShootAmp * intensity, kShakeShootDuration, 60.0f);
+		break;
+	case CameraFx::kShootHeavy:
+		cameraController_->Shake(kShakeHeavyShootAmp * intensity, kShakeHeavyShootDuration, 38.0f); // lower frequency = a heavier thump
 		break;
 	}
 }
@@ -796,6 +999,22 @@ void GameScene::AlertNearbyEnemies(BaseEnemy* sourceEnemy, const Vector3& alertP
 		if (distanceSq <= radius * radius)
 			enemy->ReceiveAlert(alertPosition);
 	}
+}
+
+// Single place that advances particles, so no phase can forget them (this is what froze them after game over / clear).
+void GameScene::UpdateParticles() {
+	for (std::unique_ptr<BaseEffect>& effect : visualEffects_) {
+		if (effect)
+			effect->Update();
+	}
+	visualEffects_.erase(std::remove_if(visualEffects_.begin(), visualEffects_.end(), [](const std::unique_ptr<BaseEffect>& e) { return !e || e->IsFinished(); }), visualEffects_.end());
+
+	for (auto& dp : enemyDeathParticles_) {
+		if (dp)
+			dp->Update();
+	}
+	enemyDeathParticles_.erase(
+	    std::remove_if(enemyDeathParticles_.begin(), enemyDeathParticles_.end(), [](const std::unique_ptr<DeathParticles>& dp) { return !dp || dp->IsFinished(); }), enemyDeathParticles_.end());
 }
 
 ArenaManager* GameScene::GetOrCreateArena(uint8_t arenaID) {
@@ -1167,6 +1386,10 @@ void GameScene::Update() {
 	AimGuide::ApplyGlobalVariables(); 
 
 	debugMenu();
+#ifdef _DEBUG
+	if (showCollisionDebug_ && cameraController_ && !isDebugCameraActive_)
+		cameraController_->DrawDebugLines();
+#endif
 
 	cursor_.Update();
 	if (phase_ != Phase::kDeath) {
@@ -1178,7 +1401,10 @@ void GameScene::Update() {
 			phase_ = Phase::kPause;
 			pauseMenuInput_.StartButtonFade(true, kButtonFadeDuration);
 		} else if (phase_ == Phase::kPause) {
-			phase_ = phaseBeforePause_;
+			if (settingsOpen_)
+				CloseSettingsPanel(); // 設定を開いている時はポーズメニューへ戻る
+			else
+				phase_ = phaseBeforePause_;
 		}
 	}
 	if (phase_ == Phase::kPlay)
@@ -1194,6 +1420,7 @@ void GameScene::Update() {
 		cameraController_->Update();
 
 	ChangePhase();
+	UpdateDeathOverlay();
 	UpdateOfficerBuff();
 	// 出続ける色(スタン=黄 / 低HP=赤)。死亡演出中は低HPのまま赤、リトライ画面などでは消える
 	if (player_) {
@@ -1324,6 +1551,7 @@ void GameScene::CheckAllCollisions() {
 
 				Vector3 effectPos = (enemy->GetWorldPosition() + player_->GetWorldPosition()) / 2.0f;
 				CreateHitEffect(effectPos, hitRotZ);
+				TriggerCameraFx(CameraFx::kHitEnemy);
 
 				Vector3 dir = enemy->GetWorldPosition() - player_->GetWorldPosition();
 				float len = std::sqrtf(dir.x * dir.x + dir.y * dir.y);
@@ -1383,6 +1611,7 @@ void GameScene::CheckAllCollisions() {
 			hitDir.y += 0.4f;
 			enemy->TakeDamage(spec.damage, hitDir, spec.impactPower);
 			enemy->RequestKnockback(dir, spec.impactPower);
+			TriggerCameraFx(CameraFx::kHitEnemy, 1.6f);
 
 			if (player_->GetCurrentFirearm())
 				player_->GetCurrentFirearm()->NotifyDealtDamage();
@@ -1393,7 +1622,7 @@ void GameScene::CheckAllCollisions() {
 		if (bullet->IsDead())
 			continue;
 		AABB bulletAABB = bullet->GetAABB();
-		if (HitDestructiblesInAABB(bulletAABB, HitSource::kFirearm)) {
+		if (BulletHitsDestructible(*bullet)) {
 			CreateBulletImpact(*bullet, BurstType::kBulletBlock);
 			bullet->OnCollision();
 			continue;
@@ -1408,6 +1637,7 @@ void GameScene::CheckAllCollisions() {
 				continue;
 			if (IsCollisionAABB(bulletAABB, enemy->GetAABB())) {
 				enemy->OnCollision(bullet.get());
+				TriggerCameraFx(CameraFx::kHitEnemy, 0.7f);
 				CreateBulletImpact(*bullet, BurstType::kBulletEntity);
 				bullet->OnCollision();
 				break;
@@ -1542,7 +1772,7 @@ void GameScene::CheckAllCollisions() {
 	for (auto& bullet : enemyBullets_) {
 		if (bullet->IsDead())
 			continue;
-		if (HitDestructiblesInAABB(bullet->GetAABB(), HitSource::kFirearm)) {
+		if (BulletHitsDestructible(*bullet)) {
 			CreateBulletImpact(*bullet, BurstType::kBulletBlock);
 			bullet->OnCollision();
 			continue;
@@ -1654,7 +1884,9 @@ void GameScene::Draw() {
 	playerHealthUI_.Draw();
 	weaponStatusUI_.Draw();
 	playerBlockUI_.Draw();
-
+	// 死亡演出中: 世界とHUDだけ暗くする(死亡パーティクルはこの後に描くので暗くならない)
+	if (phase_ == Phase::kDeath)
+		DrawMenuOverlay(deathOverlayFade_);
 	if (deathParticles_) {
 		deathParticles_->Draw();
 	}
@@ -2709,6 +2941,11 @@ void GameScene::ExplodeAt(const Vector3& center, const ExplosionParams& p) {
 
 	CreateEnemyDeathParticles(center);
 	CreateExplosion(center);
+	if (player_) {
+		const Vector3 pp = player_->GetWorldPosition();
+		const float falloff = std::clamp(1.0f - std::hypot(pp.x - center.x, pp.y - center.y) / kShakeExplosionRange, 0.0f, 1.0f);
+		TriggerCameraFx(CameraFx::kExplosion, std::max(falloff, 0.15f)); // distant blasts still rumble a little
+	}
 	if (assets_.sfxExplosion != 0)
 		AudioSettings::PlaySfx(assets_.sfxExplosion, false, 1.0f);
 
@@ -3123,8 +3360,11 @@ void GameScene::UpdateOfficerBuff() {
 // 弾が止まる場所か。ブロック/ガラス/壊せるブロック/閉じたゲート。一方通行の足場とバリアは通り抜ける
 bool GameScene::IsBulletBlockedAt(const Vector3& position) {
 	const Vector3 p = {std::max(0.0f, position.x), std::max(0.0f, position.y), 0.0f};
-	if (mapChipField_->IsSolidAtPosition(p, true) && !mapChipField_->IsOneWayAtPosition(p))
-		return true;
+	if (mapChipField_->IsSolidAtPosition(p, true) && !mapChipField_->IsOneWayAtPosition(p)) {
+		const MapChipField::IndexSet idx = mapChipField_->GetMapChipIndexSetByPosition(p);
+		if (mapChipField_->GetMapChipTypeByIndex(idx.xIndex, idx.yIndex) != MapChipType::kGlass)
+			return true; // glass never stops a bullet
+	}
 	for (const auto& gate : gates_) {
 		if (!gate || !gate->IsBlocking())
 			continue;
@@ -3135,8 +3375,8 @@ bool GameScene::IsBulletBlockedAt(const Vector3& position) {
 	return false;
 }
 
-// 弾は1フレームで0.8進むので、前フレームの位置から今の位置までを細かく調べる(すり抜け防止)
-bool GameScene::BulletHitsSolid(const ProjectileBall& bullet) {
+// Samples the segment the bullet travelled this frame; stops and returns true as soon as test() does.
+bool GameScene::AnyAlongBulletPath(const ProjectileBall& bullet, const std::function<bool(const Vector3&)>& test) {
 	const Vector3 end = bullet.GetWorldPosition();
 	const Vector3 v = bullet.GetVelocity();
 	const Vector3 start = {end.x - v.x, end.y - v.y, 0.0f};
@@ -3144,12 +3384,30 @@ bool GameScene::BulletHitsSolid(const ProjectileBall& bullet) {
 	const int steps = std::max(1, static_cast<int>(std::ceil(length / 0.2f)));
 	for (int i = 0; i <= steps; ++i) {
 		const float t = static_cast<float>(i) / static_cast<float>(steps);
-		const Vector3 p = {start.x + (end.x - start.x) * t, start.y + (end.y - start.y) * t, 0.0f};
-		if (IsBulletBlockedAt(p))
+		if (test(Vector3{start.x + (end.x - start.x) * t, start.y + (end.y - start.y) * t, 0.0f}))
 			return true;
 	}
 	return false;
 }
+
+bool GameScene::BulletHitsSolid(const ProjectileBall& bullet) {
+	return AnyAlongBulletPath(bullet, [this](const Vector3& p) { return IsBulletBlockedAt(p); });
+}
+
+// Returns true if the bullet is consumed (breakable / explosive). Glass is shattered but the bullet flies on.
+bool GameScene::BulletHitsDestructible(const ProjectileBall& bullet) {
+	AnyAlongBulletPath(bullet, [this](const Vector3& p) {
+		const MapChipField::IndexSet idx = mapChipField_->GetMapChipIndexSetByPosition(Vector3{std::max(0.0f, p.x), std::max(0.0f, p.y), 0.0f});
+		if (mapChipField_->GetMapChipTypeByIndex(idx.xIndex, idx.yIndex) == MapChipType::kGlass)
+			BreakGlassConnected(idx.xIndex, idx.yIndex);
+		return false;
+	});
+	const AABB box = bullet.GetAABB();
+	const bool breakable = DamageBreakablesInAABB(box, HitSource::kFirearm);
+	const bool explosive = DamageExplosivesInAABB(box, HitSource::kFirearm);
+	return breakable || explosive;
+}
+
 void GameScene::UpdateAimGuide() {
 	bool visible = false;
 	bool blocked = false;
@@ -3177,4 +3435,25 @@ void GameScene::UpdateAimGuide() {
 		}
 	}
 	aimGuide_.Update(visible, origin, dir, length, blocked, ready);
+}
+bool GameScene::HitObstaclesInAABB(const AABB& box, BaseMelee* weapon) {
+	if (!weapon)
+		return false;
+	bool hit = false;
+	ForEachMapCellInAABB(box, [&](uint32_t x, uint32_t y) {
+		const MapChipType type = mapChipField_->GetMapChipTypeByIndex(x, y);
+		if (type != MapChipType::kGlass && type != MapChipType::kBreakable)
+			return;
+		// one hit per cell per swing, remembered on the weapon (ResetSwingHits clears it when the next swing starts)
+		const void* key = reinterpret_cast<const void*>(static_cast<uintptr_t>(CellKey(x, y)) + 1);
+		if (weapon->HasHit(key))
+			return;
+		weapon->MarkHit(key);
+		hit = true;
+		if (type == MapChipType::kGlass)
+			BreakGlassConnected(x, y);
+		else
+			DamageBreakableCell(x, y);
+	});
+	return hit;
 }

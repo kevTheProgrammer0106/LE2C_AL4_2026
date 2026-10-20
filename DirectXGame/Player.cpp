@@ -16,6 +16,11 @@ using namespace KamataEngine;
 
 namespace {
 constexpr const char* kGroupName = "Player";
+// ガード時のノックバック調整値(GlobalVariablesで調整できる)
+// 通常攻撃・銃弾をガードした時に、ガードした側(プレイヤー)が押される強さ。小さめ
+float kBlockerKnockbackScale = 0.3f;
+// 特殊攻撃をガードした時、ガードした側と攻撃した側の両方に同じ強さで掛ける倍率(衝撃力に掛ける)
+float kBlockSpecialKnockbackScale = 1.5f;
 }
 
 void Player::ApplyScrollPush() {
@@ -84,6 +89,8 @@ void Player::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "AttackEnemyCollisionMode", kAttackEnemyCollisionMode);
 	gv->AddItem(kGroupName, "AttackEnemyGap", kAttackEnemyGap);
 	gv->AddItem(kGroupName, "CornerLookAhead", kCornerLookAhead);
+	gv->AddItem(kGroupName, "BlockerKnockbackScale", kBlockerKnockbackScale);
+	gv->AddItem(kGroupName, "BlockSpecialKnockbackScale", kBlockSpecialKnockbackScale);
 }
 void Player::ApplyGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
@@ -133,6 +140,9 @@ void Player::ApplyGlobalVariables() {
 	kAttackEnemyCollisionMode = gv->GetIntValue(kGroupName, "AttackEnemyCollisionMode");
 	kAttackEnemyGap = gv->GetFloatValue(kGroupName, "AttackEnemyGap");
 	kCornerLookAhead = gv->GetFloatValue(kGroupName, "CornerLookAhead");
+
+		kBlockerKnockbackScale = gv->GetFloatValue(kGroupName, "BlockerKnockbackScale");
+	kBlockSpecialKnockbackScale = gv->GetFloatValue(kGroupName, "BlockSpecialKnockbackScale");
 }
 #pragma endregion
 
@@ -374,6 +384,8 @@ void Player::FireCurrentFirearm() {
 	}
 	currentFirearm_->TriggerRecoil(lrDirection_ == LRDirection::kRight);
 	BaseFirearm::PlayFireSound();
+	if (gameScene_)
+		gameScene_->TriggerCameraFx(currentFirearm_->GetFireKnockbackPower() > 0.0f ? GameScene::CameraFx::kShootHeavy : GameScene::CameraFx::kShoot);
 
 	// Recoil: 狙った方向と逆へ、上下も含めて全方向に吹き飛ぶ(blunderbuss / shotgun)
 	const float kbPower = currentFirearm_->GetFireKnockbackPower();
@@ -725,6 +737,8 @@ void Player::TakeDamage(int damage, const Vector3& hitDirection, float impactPow
 		// 被弾: モデル中心から火花が弾ける(向きは攻撃を受けた方向)
 		gameScene_->CreateBurstEffect(BurstType::kHit, GetModelWorldPosition(), {hitDirection.x, hitDirection.y});
 		gameScene_->TriggerScreenFlash(ScreenFlash::Type::kDamage); // 被弾: 赤
+		if (damage < hp_)
+			gameScene_->TriggerCameraFx(GameScene::CameraFx::kDamage, std::clamp(0.5f + static_cast<float>(damage) / 60.0f, 0.5f, 1.5f));
 	}
 	hp_ = std::max(0, hp_ - damage);
 	GrantInvulnerability(kInvulnDamage); // 被弾で3秒(残りがそれ以上ならそのまま)
@@ -759,6 +773,9 @@ bool Player::IsBlockingAttack(const AABB& attackBox, const Vector3& attackerPos)
 	return IsCollisionAABB(GetBlockAABB(), attackBox);
 }
 
+// ガード成功時の処理。
+//  - ガードした側(プレイヤー): 通常攻撃・銃弾は小さく、特殊攻撃は攻撃側と同じ強さで押される
+//  - 攻撃した側(attackerがいる時): 通常は普通にノックバック+スタン、特殊攻撃はプレイヤーと同じ強さでノックバック
 void Player::OnBlocked(const KamataEngine::Vector3& hitDirection, float impactPower, BaseEnemy* attacker, bool special) {
 	if (isDead_ || behavior_.IsDeathBehavior())
 		return;
@@ -778,11 +795,17 @@ void Player::OnBlocked(const KamataEngine::Vector3& hitDirection, float impactPo
 	}
 
 	GrantInvulnerability(kInvulnBlock); // ブロック成功で1秒
-	// 押し戻しは特殊攻撃(ランジ/急降下など)をガードした時だけ。通常攻撃は受け止めるだけ
-	if (special && !wasInvulnerable)
-		behavior_.RequestHitKnockback(hitDirection, impactPower * 0.3f, false);
 
-	if (special && attacker) {
+	// ---- ガードした側(プレイヤー)のノックバック ----
+	// 全てのガードで押される。通常攻撃・銃弾は小さく、特殊攻撃は攻撃側と同じ倍率。
+	// 無敵中は押されない(散弾の複数ペレットで重ね掛けされないように)。ガードなので跳ね上がりはしない
+	if (!wasInvulnerable) {
+		const float blockerScale = special ? kBlockSpecialKnockbackScale : kBlockerKnockbackScale;
+		behavior_.RequestHitKnockback(hitDirection, impactPower * blockerScale, false);
+	}
+
+	// ---- 攻撃した側のノックバック(銃弾はattackerがいないので対象外) ----
+	if (attacker) {
 		// gameplay direction: root to root
 		Vector3 pushDir = attacker->GetWorldPosition() - GetWorldPosition();
 		float len = std::sqrtf(pushDir.x * pushDir.x + pushDir.y * pushDir.y);
@@ -793,7 +816,9 @@ void Player::OnBlocked(const KamataEngine::Vector3& hitDirection, float impactPo
 			pushDir = {isRight() ? 1.0f : -1.0f, 0.0f, 0.0f};
 		}
 		pushDir.y += 0.3f;
-		attacker->RequestBlockKnockback(pushDir, impactPower * kBlockAttackerKnockbackScale);
+		// 通常攻撃: 普通のノックバック(続けてスタンも付く)。特殊攻撃: ガードした側と同じ強さ
+		const float attackerScale = special ? kBlockSpecialKnockbackScale : kBlockAttackerKnockbackScale;
+		attacker->RequestBlockKnockback(pushDir, impactPower * attackerScale);
 	}
 	PlayerBehavior::PlayBlockImpactSound();
 }

@@ -39,6 +39,8 @@ void EnemyFighter::Update() {
 	// kMelee drives the attack pose itself.
 	if (GetBehaviorModule().GetBehavior() == BaseEnemyBehavior::Behavior::kMelee)
 		return;
+	if (TickObstacleSwing())
+		return;
 	UpdateMeleeVisual(nullptr);
 }
 

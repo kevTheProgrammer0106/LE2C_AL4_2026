@@ -27,6 +27,9 @@ public:
 	AABB GetSwingAABB() const;
 	int GetCurrentComboIndex() const { return currentComboIndex_; }
 
+	BaseMelee* GetObstacleMelee() override { return currentMelee_.get(); }
+	void ApplyObstacleSwingVisual(const BaseMelee::GenericAttackAnimState& state) override { UpdateMeleeVisual(&state); }
+
 protected:
 	void RefreshWeaponVisual() override { UpdateMeleeVisual(nullptr); }
 

@@ -46,7 +46,7 @@ public:
 	void SnapTo(const KamataEngine::Vector3& position);
 
 	// プレイヤーの攻撃によるノックバックは受けない(ガードの押し戻しはRequestBlockKnockback経由で受ける)
-	void RequestKnockback(const KamataEngine::Vector3& /*direction*/, float /*power*/) override {}
+	void RequestBulletKnockback(const KamataEngine::Vector3& /*direction*/, float /*power*/) override {}
 
 	// 攻撃中も止まらないので、装備/解除で動きを止めない
 	EquipStyle GetEquipStyle() const override { return EquipStyle::kLight; }
@@ -61,6 +61,9 @@ public:
 		awaitingSmashLanding_ = false;
 		smashActiveTimer_ = 0.0f;
 	}
+
+	BaseMelee* GetObstacleMelee() override { return currentMelee_.get(); }
+	void ApplyObstacleSwingVisual(const BaseMelee::GenericAttackAnimState& state) override { UpdateMeleeVisual(&state); }
 
 protected:
 	void RefreshWeaponVisual() override { UpdateMeleeVisual(nullptr); }

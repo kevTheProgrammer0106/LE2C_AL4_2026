@@ -1,5 +1,6 @@
 #include "BaseEnemy.h"
 #include "BaseProjectile.h"
+#include "BaseFirearm.h"
 #include "GameScene.h"
 #include "GlobalVariables.h"
 #include "MapChipField.h"
@@ -40,6 +41,7 @@ void BaseEnemy::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "DropThroughVelocity", kDropThroughVelocity);
 	gv->AddItem(kGroupName, "AttackEffectScale", kAttackEffectScale);
 	gv->AddItem(kGroupName, "AuraInterval", kAuraInterval);
+	gv->AddItem(kGroupName, "BulletKnockbackScale", kBulletKnockbackScale);
 	BaseEnemyBehavior::RegisterGlobalVariables();
 }
 
@@ -70,6 +72,7 @@ void BaseEnemy::ApplyGlobalVariables() {
 	kDropThroughVelocity = gv->GetFloatValue(kGroupName, "DropThroughVelocity");
 	kAttackEffectScale = gv->GetFloatValue(kGroupName, "AttackEffectScale");
 	kAuraInterval = gv->GetFloatValue(kGroupName, "AuraInterval");
+	kBulletKnockbackScale = gv->GetFloatValue(kGroupName, "BulletKnockbackScale");
 	BaseEnemyBehavior::ApplyGlobalVariables();
 }
 
@@ -326,6 +329,14 @@ void BaseEnemy::OnCollision(const BaseProjectile* bullet) {
 	TakeDamage(bullet->GetDamage(bullet->GetOwner()), dir, bullet->GetImpactPower());
 	Vector3 effectPos = (GetWorldPosition() + bullet->GetWorldPosition()) / 2.0f;
 	gameScene_->CreateHitEffect(effectPos);
+	// 銃弾が当たった時の小さなノックバック(スタンなし)。倒した時は死亡の吹き飛びに任せるので付けない
+	if (hp_ > 0) {
+		// 弾の進行方向へ押す。速度が無い弾だけ上のdirにフォールバックする
+		const Vector3 v = bullet->GetVelocity();
+		const float vLen = std::sqrtf(v.x * v.x + v.y * v.y);
+		const Vector3 pushDir = (vLen > 0.0001f) ? Vector3{v.x / vLen, v.y / vLen, 0.0f} : dir;
+		RequestBulletKnockback(pushDir, bullet->GetImpactPower() * kBulletKnockbackScale);
+	}
 }
 
 void BaseEnemy::KillInstant() {
@@ -418,6 +429,13 @@ void BaseEnemy::PhysicsAndCollisionUpdate() {
 	// ターン後の回転を反映してからモデル層を更新する
 	UpdateModelCollision();
 }
+float BaseEnemy::GetSlowTerrainScale() const {
+	// 空中ではslowBlockの影響を受けない(プレイヤーと同じ扱い)
+	if (!mapChipField_ || !onGround_)
+		return 1.0f;
+	const Vector3 footPos = worldTransform_.translation_ + Vector3(0.0f, -(kHeight * 0.5f) - 0.05f, 0.0f);
+	return mapChipField_->IsSlowAtPosition(footPos) ? MapChipField::kSlowSpeedFactor : 1.0f;
+}
 void BaseEnemy::MapChipCollisionUpdate() {
 	const Vector3 velocityBefore = velocity_; // ノックバックの跳ね返り用
 	blockDetector_.SetWorldTransform(worldTransform_);
@@ -428,7 +446,10 @@ void BaseEnemy::MapChipCollisionUpdate() {
 	blockDetector_.SetIgnoreOneWay(IsDroppingThrough()); // ドロップスルー中は足場への着地だけ無視
 
 	CollisionInfo horizontalInfo{};
-	horizontalInfo.move.x = velocity_.x * OfficerBuff::MoveScale(behavior_ && behavior_->IsDebuffed());
+	// ノックバック/スタン中の吹き飛びはslowBlockで遅くしない(OfficerBuffのMoveScaleと同じ扱い)
+	const bool suppressed = behavior_ && behavior_->IsDebuffed();
+	const float slowScale = suppressed ? 1.0f : GetSlowTerrainScale();
+	horizontalInfo.move.x = velocity_.x * OfficerBuff::MoveScale(suppressed) * slowScale;
 	blockDetector_.MapChipCollision(horizontalInfo);
 	if (behavior_) {
 		BaseEnemyBehavior::LedgeGuardRequest guard = behavior_->GetLedgeGuardRequest();
@@ -602,4 +623,87 @@ void BaseEnemy::DrawAttackEffect(bool active, const AABB& swingBox) {
 	Model::PreDraw();
 	modelAttack_->Draw(worldTransformAttack_, *camera_, modelAttackTex_);
 	Model::PostDraw();
+}
+bool BaseEnemy::AttackObstacle(const Vector3& cellPos) {
+	if (!behavior_ || behavior_->IsDebuffed() || behavior_->IsDeathBehavior())
+		return false;
+	BaseMelee* melee = GetObstacleMelee();
+	if (!melee)
+		return false;
+	if (obstacleSwingFrame_ >= 0 || obstacleCooldown_ > 0.0f)
+		return true; // swinging / recovering: hold position
+	FaceDirection(cellPos.x < worldTransform_.translation_.x ? LRDirection::kLeft : LRDirection::kRight);
+	melee->ResetSwingHits();
+	melee->PlaySwingSound(0);
+	obstacleSwingFrame_ = 0;
+	return true;
+}
+
+bool BaseEnemy::TickObstacleSwing() {
+	if (obstacleCooldown_ > 0.0f)
+		obstacleCooldown_ = std::max(0.0f, obstacleCooldown_ - 1.0f / 60.0f);
+
+	BaseMelee* melee = GetObstacleMelee();
+	if (obstacleSwingFrame_ < 0)
+		return false;
+	if (!melee || !behavior_ || behavior_->IsDebuffed() || behavior_->IsDeathBehavior() || behavior_->GetBehavior() == Behavior::kMelee) {
+		obstacleSwingFrame_ = -1; // interrupted
+		return false;
+	}
+
+	++obstacleSwingFrame_;
+	const float anticipate = melee->GetComboAnticipateDuration(0);
+	const float attack = melee->GetComboAttackDuration(0);
+	const float recovery = melee->GetComboRecoveryDuration(0);
+	const float f = static_cast<float>(obstacleSwingFrame_);
+
+	BaseMelee::GenericAttackAnimState state;
+	state.comboIndex = 0;
+	if (f < anticipate) {
+		state.phase = BaseMelee::AttackPhase::kAnticipate;
+		state.t = f / anticipate;
+	} else if (f < anticipate + attack) {
+		state.phase = BaseMelee::AttackPhase::kAttack;
+		state.t = (f - anticipate) / attack;
+		if (gameScene_)
+			gameScene_->HitObstaclesInAABB(melee->GetSwingAABBGeneric(worldTransform_.translation_, isRight(), 0), melee);
+	} else if (f < anticipate + attack + recovery) {
+		state.phase = BaseMelee::AttackPhase::kRecovery;
+		state.t = (f - anticipate - attack) / recovery;
+	} else {
+		obstacleSwingFrame_ = -1;
+		obstacleCooldown_ = kObstacleCooldown;
+		return false;
+	}
+	ApplyObstacleSwingVisual(state);
+	return true;
+}
+
+bool BaseEnemy::FireAtObstacle(BaseFirearm* firearm, const Vector3& cellPos) {
+	if (!firearm || !gameScene_ || !behavior_ || behavior_->IsDebuffed() || behavior_->IsDeathBehavior())
+		return false;
+	Vector2 dir = {cellPos.x - worldTransform_.translation_.x, cellPos.y - worldTransform_.translation_.y};
+	const float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+	if (len < 0.0001f)
+		return false;
+	dir.x /= len;
+	dir.y /= len;
+	FaceDirection(dir.x < 0.0f ? LRDirection::kLeft : LRDirection::kRight);
+
+	if (!firearm->TryFire())
+		return true; // reloading: wait in front of it
+
+	const Vector3 origin = GetWorldPosition();
+	const int pelletCount = std::max(1, firearm->GetPelletCount());
+	for (int i = 0; i < pelletCount; ++i) {
+		const float angle = firearm->GetPelletAngle(i);
+		const float c = std::cos(angle);
+		const float s = std::sin(angle);
+		const Vector2 d = {dir.x * c - dir.y * s, dir.x * s + dir.y * c};
+		gameScene_->CreateFirearmProjectile(Owner::kEnemy, origin, d, firearm->GetBulletDamage(), firearm->GetProjectileLifeFrames());
+	}
+	gameScene_->CreateMuzzleFlash(origin + Vector3(dir.x * 0.8f, dir.y * 0.8f, 0.0f), dir, false);
+	firearm->TriggerRecoil(isRight());
+	BaseFirearm::PlayFireSound();
+	return true;
 }

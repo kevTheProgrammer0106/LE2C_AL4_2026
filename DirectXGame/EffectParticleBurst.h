@@ -7,7 +7,7 @@
 #include <array>
 
 // バーストの種類
-enum class BurstType { kHit = 0, kJump, kLand, kExplosion, kSmoke, kAura, kBulletBlock, kBulletEntity, kCount };
+enum class BurstType { kHit = 0, kJump, kLand, kExplosion, kSmoke, kAura, kBulletBlock, kBulletEntity, kSpawn, kCount };
 
 /// <summary>
 /// 一発のパーティクルバースト(被弾の火花 / ジャンプ・着地の土煙 / 爆発の煙)。使い捨て。
@@ -96,9 +96,11 @@ private:
 	        {16, {0.35f, 0.33f, 0.31f}, {0.15f, 0.15f, 0.15f}, 0.7f, 1.00f, 1.80f, 0.8f, 2.5f, 3.14f, -1.5f, 0.95f, 0.50f, 1.60f, 0.40f, 0, 4.0f},
          // kAura: officer buff. Gold motes drift up from the feet and shrink away (additive)
 	        {4, {1.0f, 0.85f, 0.3f}, {1.0f, 0.45f, 0.1f}, 0.9f, 0.50f, 0.90f, 0.4f, 1.2f, 0.7f, -1.5f, 0.97f, 0.22f, 0.0f, 0.45f, 1, 0.0f},
-         	        {8, {1.0f, 0.95f, 0.7f}, {0.55f, 0.4f, 0.25f}, 1.0f, 0.15f, 0.30f, 3.0f, 8.0f, 1.1f, 12.0f, 0.90f, 0.20f, 0.0f, 0.05f, 1},
-	                 // kBulletEntity: 敵/プレイヤーに当たった弾の赤い飛沫。進行方向へ散る(通常)
-	        	   {10, {1.0f, 0.25f, 0.2f}, {0.45f, 0.0f, 0.0f}, 1.0f, 0.20f, 0.40f, 3.0f, 9.0f, 0.9f, 8.0f, 0.90f, 0.24f, 0.0f, 0.08f, 0},
+		{8, {1.0f, 0.95f, 0.7f}, {0.55f, 0.4f, 0.25f}, 1.0f, 0.15f, 0.30f, 3.0f, 8.0f, 1.1f, 12.0f, 0.90f, 0.20f, 0.0f, 0.05f, 1}, 
+		// kBulletEntity: 敵/プレイヤーに当たった弾の赤い飛沫。進行方向へ散る(通常)
+		{10, {1.0f, 0.25f, 0.2f}, {0.45f, 0.0f, 0.0f}, 1.0f, 0.20f, 0.40f, 3.0f, 9.0f, 0.9f, 8.0f, 0.90f, 0.24f, 0.0f, 0.08f, 0},
+         // kSpawn: cyan motes burst out of a block as it materializes and shrink away (additive)
+	    {14, {0.8f, 1.0f, 1.0f}, {0.3f, 0.7f, 1.0f}, 0.9f, 0.30f, 0.60f, 1.5f, 4.5f, 3.14f, -1.0f, 0.92f, 0.25f, 0.0f, 0.45f, 1, 0.0f},
 	     }
     };
 };

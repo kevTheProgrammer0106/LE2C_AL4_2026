@@ -558,15 +558,9 @@ bool BaseEnemyBehavior::MoveAlongGround(int direction, float speed, MoveKind kin
 		return false;
 	}
 
-	// slow terrain (same rule as chase / roam)
-	float speedFactor = 1.0f;
-	if (owner_.mapChipField_) {
-		Vector3 footPos = owner_.worldTransform_.translation_ + Vector3(0.0f, -(BaseEnemy::GetBodyHeight() * 0.5f) - 0.05f, 0.0f);
-		if (owner_.mapChipField_->IsSlowAtPosition(footPos)) {
-			speedFactor = MapChipField::kSlowSpeedFactor;
-		}
-	}
-	const float walkSpeed = speed * speedFactor;
+
+	// slowBlockはBaseEnemy::MapChipCollisionUpdateで一括して掛ける
+	const float walkSpeed = speed;
 
 	const MoveProfile profile = GetMoveProfile(kind);
 	switch (ClassifyMoveTerrain(direction, profile)) {
@@ -708,15 +702,9 @@ void BaseEnemyBehavior::BehaviorRoamUpdate() {
 		}
 	}
 
-	float speedFactor = 1.0f;
-	if (owner_.mapChipField_) {
-		Vector3 footPos = owner_.worldTransform_.translation_ + Vector3(0.0f, -(owner_.kHeight / 2.0f) - 0.05f, 0.0f);
-		if (owner_.mapChipField_->IsSlowAtPosition(footPos))
-			speedFactor = MapChipField::kSlowSpeedFactor;
-	}
-
+	// slowBlockはBaseEnemy::MapChipCollisionUpdateで一括して掛ける
 	BaseEnemy::LRDirection roamLR = static_cast<BaseEnemy::LRDirection>(roamDirection_);
-	owner_.velocity_.x = (roamLR == BaseEnemy::LRDirection::kLeft) ? -owner_.kWalkSpeed * speedFactor : owner_.kWalkSpeed * speedFactor;
+	owner_.velocity_.x = (roamLR == BaseEnemy::LRDirection::kLeft) ? -owner_.kWalkSpeed : owner_.kWalkSpeed;
 	owner_.FaceDirection(roamLR);
 
 	roamTimer_ += 1.0f / 60.0f;

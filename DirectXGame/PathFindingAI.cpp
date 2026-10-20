@@ -65,15 +65,23 @@ void PathFindingAI::UpdatePathToPlayer() {
 	    livePlayer ? PredictPlayerLandingIndex(livePlayer->GetWorldPosition(), livePlayer->GetVelocity()) : GetGroundedGoalIndex(owner_->GetBehaviorModule().GetLastKnownPlayerPos());
 
 	PathFindingAlgorithm::PathCostProfile costProfile = owner_->BuildPathCostProfile();
-	currentPath_ = PathFindingAlgorithm::FindPath(mapChipField_, startIndex, goalIndex, 4000, &costProfile);
 
-	if (currentPath_.empty() && livePlayer) {
-		MapChipField::IndexSet fallbackGoal = GetGroundedGoalIndex(livePlayer->GetWorldPosition());
-		if (fallbackGoal.xIndex != goalIndex.xIndex || fallbackGoal.yIndex != goalIndex.yIndex) {
-			currentPath_ = PathFindingAlgorithm::FindPath(mapChipField_, startIndex, fallbackGoal, 4000, &costProfile);
+	auto search = [&](const PathFindingAlgorithm::PathCostProfile& profile) {
+		std::vector<MapChipField::IndexSet> path = PathFindingAlgorithm::FindPath(mapChipField_, startIndex, goalIndex, 4000, &profile);
+		if (path.empty() && livePlayer) {
+			MapChipField::IndexSet fallbackGoal = GetGroundedGoalIndex(livePlayer->GetWorldPosition());
+			if (fallbackGoal.xIndex != goalIndex.xIndex || fallbackGoal.yIndex != goalIndex.yIndex) {
+				path = PathFindingAlgorithm::FindPath(mapChipField_, startIndex, fallbackGoal, 4000, &profile);
+			}
 		}
-	}
+		return path;
+	};
 
+	currentPath_ = search(costProfile);
+	if (currentPath_.empty()) { // no clear route: allow breaking glass / breakables on the way
+		costProfile.allowDestructibles = true;
+		currentPath_ = search(costProfile);
+	}
 	currentPathIndex_ = 0;
 }
 
@@ -84,8 +92,10 @@ void PathFindingAI::ChaseMovement() {
 
 	Vector3 currentPos = owner_->GetWorldPosition();
 	Player* livePlayer = owner_->gameScene_ ? owner_->gameScene_->GetPlayer() : nullptr;
+	const bool wasBreaking = isBreakingObstacle_;
 
-	if (livePlayer) {
+	isBreakingObstacle_ = false;
+	if (livePlayer && !wasBreaking) {
 		owner_->FaceDirection(livePlayer->GetWorldPosition().x < currentPos.x ? LRDirection::kLeft : LRDirection::kRight);
 	}
 	// Player is below and we're on a platform: dropping takes priority over any computed route.
@@ -161,6 +171,10 @@ void PathFindingAI::ChaseMovement() {
 
 	MapChipField::IndexSet waypoint = currentPath_[currentPathIndex_];
 	Vector3 waypointPos = mapChipField_->GetMapChipPositionByIndex(waypoint.xIndex, waypoint.yIndex);
+
+	if (TryBreakObstacle(waypoint, waypointPos, currentPos)) {
+		return;
+	}
 
 	bool jumpNodeTriggered = false;
 
@@ -405,15 +419,8 @@ void PathFindingAI::ApplyChaseAcceleration(float desiredDir) {
 		return;
 	}
 
-	float speedFactor = 1.0f;
-	if (owner_->mapChipField_) {
-		Vector3 footPos = owner_->GetWorldPosition() + Vector3(0.0f, -(BaseEnemy::kHeight / 2.0f) - 0.05f, 0.0f);
-		if (owner_->mapChipField_->IsSlowAtPosition(footPos)) {
-			speedFactor = MapChipField::kSlowSpeedFactor;
-		}
-	}
-
-	float targetSpeed = BaseEnemy::kChaseSpeed * speedFactor;
+	// slowBlockはBaseEnemy::MapChipCollisionUpdateで一括して掛けるのでここでは扱わない
+	float targetSpeed = BaseEnemy::kChaseSpeed;
 
 	if (desiredDir == 0.0f) {
 		owner_->velocity_.x *= (1.0f - BaseEnemy::kAttenuation);
@@ -433,7 +440,7 @@ void PathFindingAI::ApplyChaseAcceleration(float desiredDir) {
 	}
 
 	if (!movingOppositeDir) {
-		owner_->velocity_.x += desiredDir * BaseEnemy::kAcceleration * speedFactor;
+		owner_->velocity_.x += desiredDir * BaseEnemy::kAcceleration;
 		owner_->velocity_.x = std::clamp(owner_->velocity_.x, -targetSpeed, targetSpeed);
 	}
 }
@@ -470,4 +477,21 @@ bool PathFindingAI::ShouldDropThroughToPlayer(const Vector3& playerPos) const {
 		return false;
 	}
 	return IsDropLandingSafe(pos);
+}
+bool PathFindingAI::TryBreakObstacle(const MapChipField::IndexSet& cell, const Vector3& cellPos, const Vector3& currentPos) {
+	if (!PathFindingAlgorithm::IsDestructible(mapChipField_->GetMapChipTypeByIndex(cell.xIndex, cell.yIndex))) {
+		return false;
+	}
+	const float dx = cellPos.x - currentPos.x;
+	const float dy = cellPos.y - currentPos.y;
+	if (std::abs(dx) > kObstacleReachX || std::abs(dy) > kObstacleReachY) {
+		return false; // keep walking up to it
+	}
+	ApplyChaseAcceleration(0.0f); // stand still
+	owner_->FaceDirection(dx < 0.0f ? LRDirection::kLeft : LRDirection::kRight);
+	if (!owner_->AttackObstacle(cellPos)) {
+		return false;
+	}
+	isBreakingObstacle_ = true;
+	return true;
 }

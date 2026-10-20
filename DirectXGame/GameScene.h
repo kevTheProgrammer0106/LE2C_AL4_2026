@@ -200,6 +200,11 @@ public:
 	// True if pos is within any live grenade's blast radius + margin. Outputs the nearest grenade's position.
 	bool FindGrenadeThreat(const KamataEngine::Vector3& pos, float margin, KamataEngine::Vector3& outGrenadePos) const;
 
+	bool HitObstaclesInAABB(const AABB& box, BaseMelee* weapon);
+	// One entry point for every camera reaction. intensity scales the preset (e.g. explosion distance falloff, damage size).
+	enum class CameraFx { kDamage, kDeath, kExplosion, kBlock, kSwing, kSpecial, kHitEnemy, kShoot, kShootHeavy };
+	void TriggerCameraFx(CameraFx fx, float intensity = 1.0f);
+
 private:
 	friend class DebugMenu;
 	GameAssets assets_;
@@ -278,6 +283,48 @@ private:
 	UIMenu::ButtonID victoryRestartButton_ = UIMenu::kInvalidButton;
 	UIMenu::ButtonID victoryMainMenuButton_ = UIMenu::kInvalidButton;
 	std::unique_ptr<KamataEngine::Sprite> victoryOverlay_;
+
+	// ---- メニュー共通の暗転オーバーレイ ----
+	std::unique_ptr<KamataEngine::Sprite> menuOverlay_;
+	static inline float kMenuOverlayAlpha = 0.6f; // 暗さの最大値(GlobalVariablesで調整可)
+	void InitializeMenuOverlay();
+	void DrawMenuOverlay(float fadeAlpha); // fadeAlpha: 各メニューのフェード値(0~1)
+
+		// ---- ポーズ中の設定パネル ----
+	struct VolumeSlider {
+		float (*get)() = nullptr;
+		void (*set)(float) = nullptr;
+		float x = 0.0f;
+		float y = 0.0f;
+		bool dragging = false;
+		std::unique_ptr<KamataEngine::Sprite> track;
+		std::unique_ptr<KamataEngine::Sprite> fill;
+		std::unique_ptr<KamataEngine::Sprite> knob;
+	};
+	static constexpr float kSliderWidth = 400.0f;
+	static constexpr float kSliderHeight = 16.0f;
+	static constexpr float kKnobWidth = 20.0f;
+	static constexpr float kKnobHeight = 36.0f;
+	static constexpr float kSliderSpacing = 90.0f;
+	static constexpr float kSliderStartY = 220.0f;
+
+	std::array<VolumeSlider, 3> sliders_;
+	UIMenu settingsMenuInput_; // Backボタン専用
+	UIMenu::ButtonID settingsBackButton_ = UIMenu::kInvalidButton;
+	UIMenu::ButtonID pauseSettingsButton_ = UIMenu::kInvalidButton;
+	uint32_t settingsButtonTex_ = 0;
+	bool settingsOpen_ = false; // true の間はポーズメニューの代わりに設定パネルを出す
+
+	// ---- 死亡演出の暗転 ----
+	float deathOverlayFade_ = 0.0f;
+	static inline float kDeathOverlayFadeDuration = 0.8f;
+	void UpdateDeathOverlay();
+
+	void InitializeSettingsPanel();
+	void OpenSettingsPanel();
+	void CloseSettingsPanel();
+	void UpdateSettingsPanel();
+	void DrawSettingsPanel();
 
 	static inline float kButtonFadeDuration = 0.25f;
 	void InitializeVictoryMenu();
@@ -533,4 +580,30 @@ private:
 
 	AimGuide aimGuide_;
 	void UpdateAimGuide();
+
+	bool AnyAlongBulletPath(const ProjectileBall& bullet, const std::function<bool(const KamataEngine::Vector3&)>& test);
+	bool BulletHitsDestructible(const ProjectileBall& bullet);
+
+	void UpdateParticles(); // visual effects + enemy death particles, shared by every phase
+
+	static inline float kShakeDamageAmp = 0.35f;
+	static inline float kShakeDamageDuration = 0.3f;
+	static inline float kShakeDeathAmp = 1.2f;
+	static inline float kShakeDeathDuration = 1.0f;
+	static inline float kShakeExplosionAmp = 1.0f;
+	static inline float kShakeExplosionDuration = 0.7f;
+	static inline float kShakeExplosionRange = 25.0f; // beyond this the player barely feels it
+	static inline float kBlockZoomIn = 0.08f;
+	static inline float kBlockZoomOut = 0.45f;
+	static inline float kShakeSwingAmp = 0.08f;
+	static inline float kShakeSwingDuration = 0.12f;
+	static inline float kShakeSpecialAmp = 0.18f; // lunge / bayonet / heavy lunge
+	static inline float kShakeSpecialDuration = 0.18f;
+	static inline float kShakeHitAmp = 0.14f; // player's attack connects
+	static inline float kShakeHitDuration = 0.14f;
+	static inline float kShakeShootAmp = 0.10f;
+	static inline float kShakeShootDuration = 0.10f;
+	static inline float kShakeHeavyShootAmp = 0.60f; // blunderbuss
+	static inline float kShakeHeavyShootDuration = 0.40f;
+	static inline float kBlockZoomRatio = 0.11f; // fraction of the current camera distance
 };

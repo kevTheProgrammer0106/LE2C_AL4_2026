@@ -2,6 +2,7 @@
 #include <Windows.h>
 
 #include "AudioSettings.h"
+#include "GameSettings.h"
 #include "GameScene.h"
 #include "GlobalVariables.h"
 #include "InputManager.h"
@@ -164,8 +165,10 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 
 	// Audio volumes must exist before the title music starts.
 	AudioSettings::RegisterGlobalVariables();
+	GameSettings::RegisterGlobalVariables();  
 	GlobalVariables::GetInstance()->LoadFiles();
 	AudioSettings::ApplyGlobalVariables();
+	GameSettings::ApplyGlobalVariables();  
 
 #ifdef _DEBUG
 	LoadDebugSettings();
@@ -187,6 +190,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		imguiManager->Begin();
 
 		AudioSettings::ApplyGlobalVariables();
+		GameSettings::ApplyGlobalVariables();  
 		AudioSettings::DrawImGui(); // temporary: replaced by the settings menu later
 
 		ChangeScene();
