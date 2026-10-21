@@ -258,7 +258,7 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	EnemySapper::RegisterGlobalVariables();
 	VisionSensor::RegisterGlobalVariables();
 	EnemySpawner::RegisterGlobalVariables();
-	EnemyHUD::RegisterGlobalVariables();
+	StatusIndicator::RegisterGlobalVariables();
 	ArenaManager::RegisterGlobalVariables();
 	HealthBlock::RegisterGlobalVariables();
 	GameScene::RegisterGlobalVariables();
@@ -269,6 +269,7 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	Grenade::RegisterGlobalVariables();
 	FirearmPistols::RegisterGlobalVariables();
 	AimGuide::RegisterGlobalVariables(); 
+	SpriteTutorial::RegisterGlobalVariables();
 
 	buffOfficer_ = nullptr;
 	OfficerBuff::gActive = false;
@@ -340,7 +341,8 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 
 	screenFlash_.Initialize(assets_.healthBarBackgroundTex);
 
-	enemyHUD_.Initialize(assets_.enemyIconArrowTex, assets_.enemyIconFighterTex);
+	statusIndicator_.Initialize(assets_.enemyIconArrowTex, assets_.enemyIconFighterTex);
+	statusIndicator_.InitializeStatus(assets_.healthBarBackgroundTex); // 状態アイコン(画像が無い間は白の代用色)
 	{
 		WeaponStatusUI::Textures icons;
 		icons.meleeLight = assets_.meleeIconLightTex;
@@ -467,6 +469,7 @@ void GameScene::DrawMenuOverlay(float fadeAlpha) {
 // ============================================================
 void GameScene::InitializeSettingsPanel() {
 	settingsMenuInput_.Initialize(assets_.pauseButtonTex[2], &camera_); // Back画像
+	settingsMenuInput_.SetCursorVisible(false);
 	settingsMenuInput_.SetButtonGroupAlpha(0.0f);
 
 	constexpr float kBackWidth = 200.0f;
@@ -476,27 +479,7 @@ void GameScene::InitializeSettingsPanel() {
 	    settingsMenuInput_.AddButton(assets_.pauseButtonTex[2], centerX - kBackWidth / 2.0f, static_cast<float>(WinApp::kWindowHeight) - kBackHeight - 30.0f, kBackWidth, kBackHeight, "Back");
 	settingsMenuInput_.SetButtonOnClick(settingsBackButton_, [this]() { CloseSettingsPanel(); });
 
-	// Master / Music / SFX。値はAudioSettings経由で読み書きする
-	sliders_[0].get = &AudioSettings::GetMasterVolume;
-	sliders_[0].set = &AudioSettings::SetMasterVolume;
-	sliders_[1].get = &AudioSettings::GetMusicSetting;
-	sliders_[1].set = &AudioSettings::SetMusicVolume;
-	sliders_[2].get = &AudioSettings::GetSfxSetting;
-	sliders_[2].set = &AudioSettings::SetSfxVolume;
-
-	const float sliderX = centerX - kSliderWidth / 2.0f;
-	for (size_t i = 0; i < sliders_.size(); ++i) {
-		VolumeSlider& s = sliders_[i];
-		s.x = sliderX;
-		s.y = kSliderStartY + static_cast<float>(i) * kSliderSpacing;
-
-		s.track.reset(Sprite::Create(assets_.healthBarBackgroundTex, {s.x, s.y}));
-		s.track->SetSize({kSliderWidth, kSliderHeight});
-		s.fill.reset(Sprite::Create(assets_.healthBarBackgroundTex, {s.x, s.y}));
-		s.fill->SetSize({kSliderWidth, kSliderHeight});
-		s.knob.reset(Sprite::Create(assets_.healthBarBackgroundTex, {s.x, s.y}));
-		s.knob->SetSize({kKnobWidth, kKnobHeight});
-	}
+	settingsPanel_.Initialize(assets_.healthBarBackgroundTex, false); // false: 難易度はタイトルのみ
 }
 
 void GameScene::OpenSettingsPanel() {
@@ -505,15 +488,9 @@ void GameScene::OpenSettingsPanel() {
 }
 
 void GameScene::CloseSettingsPanel() {
-	// ドラッグ中に閉じた場合も保存しておく
-	for (VolumeSlider& s : sliders_) {
-		if (s.dragging) {
-			s.dragging = false;
-			AudioSettings::SaveToFile();
-		}
-	}
+	settingsPanel_.CancelDrag();
 	settingsOpen_ = false;
-	pauseMenuInput_.StartButtonFade(true, kButtonFadeDuration); // ポーズメニューをフェードインし直す
+	pauseMenuInput_.StartButtonFade(true, kButtonFadeDuration);
 }
 
 void GameScene::UpdateSettingsPanel() {
@@ -521,48 +498,15 @@ void GameScene::UpdateSettingsPanel() {
 	settingsMenuInput_.Update();
 	if (!settingsOpen_)
 		return; // Backが押されて閉じた直後
-
-	InputManager* input = InputManager::GetInstance();
-	const float mouseX = static_cast<float>(input->GetMouseX());
-	const float mouseY = static_cast<float>(input->GetMouseY());
-	const float alpha = settingsMenuInput_.GetButtonFadeAlpha();
-
-	for (VolumeSlider& s : sliders_) {
-		float value = s.get();
-
-		const bool hover = mouseX >= s.x - kKnobWidth && mouseX <= s.x + kSliderWidth + kKnobWidth && mouseY >= s.y - kKnobHeight * 0.5f && mouseY <= s.y + kSliderHeight + kKnobHeight * 0.5f;
-		if (input->IsPrimaryTriggered() && hover)
-			s.dragging = true;
-
-		if (s.dragging) {
-			if (input->IsPrimaryHeld()) {
-				value = std::clamp((mouseX - s.x) / kSliderWidth, 0.0f, 1.0f);
-				s.set(value);
-			} else {
-				s.dragging = false;
-				AudioSettings::SaveToFile(); // 離した時に1回だけ保存
-			}
-		}
-
-		s.track->SetColor({0.15f, 0.15f, 0.15f, 0.9f * alpha});
-		s.fill->SetSize({kSliderWidth * value, kSliderHeight});
-		s.fill->SetColor({0.25f, 0.55f, 0.95f, alpha});
-		s.knob->SetPosition({s.x + kSliderWidth * value - kKnobWidth * 0.5f, s.y + kSliderHeight * 0.5f - kKnobHeight * 0.5f});
-		s.knob->SetColor({1.0f, 1.0f, 1.0f, alpha});
-	}
+	settingsPanel_.Update(settingsMenuInput_.GetButtonFadeAlpha(), true);
 }
 
 void GameScene::DrawSettingsPanel() {
-	DrawMenuOverlay(1.0f); // ポーズから切り替えてもちらつかないよう常に最大
-	Sprite::PreDraw();
-	for (VolumeSlider& s : sliders_) {
-		s.track->Draw();
-		s.fill->Draw();
-		s.knob->Draw();
-	}
-	Sprite::PostDraw();
-	settingsMenuInput_.Draw(); // Back + カーソル
+	DrawMenuOverlay(1.0f);
+	settingsPanel_.Draw();
+	settingsMenuInput_.Draw(); // Backボタン(カーソルは cursor_ が最後に描く)
 }
+
 void GameScene::InitializeRetryMenu() {
 	retryMenuInput_.Initialize(assets_.pauseButtonTex, 3, &camera_);
 	retryMenuInput_.SetCursorVisible(false); // カーソルは GameScene::cursor_ が描く
@@ -867,7 +811,7 @@ void GameScene::ChangePhase() {
 					}
 				}
 			}
-			enemyHUD_.Update(arenaEnemies, camera_, WinApp::kWindowWidth, WinApp::kWindowHeight);
+			statusIndicator_.Update(arenaEnemies, camera_, WinApp::kWindowWidth, WinApp::kWindowHeight);
 		}
 		if (player_) {
 			playerHealthUI_.Update(player_->GetHP(), player_->GetMaxHP());
@@ -955,7 +899,7 @@ void GameScene::ChangePhase() {
 }
 
 void GameScene::TriggerCameraFx(CameraFx fx, float intensity) {
-	if (!cameraController_)
+	if (!cameraController_ || !GameSettings::IsScreenShakeEnabled())
 		return;
 	switch (fx) {
 	case CameraFx::kDamage:
@@ -1287,6 +1231,12 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 				sp.timer = kWeaponRespawnDelay; // spawns on the first update
 				weaponSpawners_.push_back(sp);
 			} break;
+			case MapChipType::kTutorialBlock: {
+				uint8_t subID = mapChipField_->GetMapChipSubIDByIndex(j, i);
+				auto tutorial = std::make_unique<SpriteTutorial>();
+				tutorial->Initialize(assets_.modelTutorialBlock.get(), assets_.tutorialBlockTex, &camera_, mapChipField_->GetMapChipPositionByIndex(j, i), static_cast<TutorialTextureType>(subID));
+				tutorials_.push_back(std::move(tutorial));
+			} break;
 			default:
 				break;
 			}
@@ -1373,7 +1323,7 @@ void GameScene::Update() {
 	PlayerBehavior::ApplyGlobalVariables();
 	VisionSensor::ApplyGlobalVariables();
 	EnemySpawner::ApplyGlobalVariables();
-	EnemyHUD::ApplyGlobalVariables();
+	StatusIndicator::ApplyGlobalVariables();
 	ArenaManager::ApplyGlobalVariables();
 	HealthBlock::ApplyGlobalVariables();
 	GameScene::ApplyGlobalVariables();
@@ -1384,6 +1334,7 @@ void GameScene::Update() {
 	Grenade::ApplyGlobalVariables();
 	FirearmPistols::ApplyGlobalVariables();
 	AimGuide::ApplyGlobalVariables(); 
+	SpriteTutorial::ApplyGlobalVariables();
 
 	debugMenu();
 #ifdef _DEBUG
@@ -1422,6 +1373,9 @@ void GameScene::Update() {
 	ChangePhase();
 	UpdateDeathOverlay();
 	UpdateOfficerBuff();
+	// 状態アイコン(standard / reactive)。ポーズ中は更新しない=タイマーも止まる
+	if (phase_ == Phase::kPlay || phase_ == Phase::kDeath)
+		statusIndicator_.UpdateStatus(player_.get(), enemies_, camera_, WinApp::kWindowWidth, WinApp::kWindowHeight);
 	// 出続ける色(スタン=黄 / 低HP=赤)。死亡演出中は低HPのまま赤、リトライ画面などでは消える
 	if (player_) {
 		const bool playing = (phase_ == Phase::kPlay);
@@ -1448,6 +1402,7 @@ void GameScene::Update() {
 	UpdateCheckpointTriggers();
 	UpdatePeriodicEnemySpawners();
 	UpdateHealthBlocks();
+	for (auto& t : tutorials_) if (t) t->Update(player_.get());
 	UpdateWeaponSpawners();
 	UpdateExplosions();
 	UpdateGrenades();
@@ -1835,6 +1790,9 @@ void GameScene::Draw() {
 	for (auto& sw : switches_)
 		if (sw)
 			sw->Draw();
+	for (auto& t : tutorials_)
+		if (t)
+			t->DrawBlock();
 	for (auto& hb : healthBlocks_)
 		if (hb)
 			hb->Draw();
@@ -1876,14 +1834,21 @@ void GameScene::Draw() {
 #ifdef _DEBUG
 	DrawCollisionDebug();
 #endif
-	aimGuide_.Draw();
-	screenFlash_.Draw();
-	enemyHUD_.Draw();
-	interactionPrompt_.Draw();
+	if (!player_->isDead() )
+	{
+		aimGuide_.Draw();
+		screenFlash_.Draw();
+		statusIndicator_.DrawStatus();
+		statusIndicator_.Draw();
+		interactionPrompt_.Draw();
 
-	playerHealthUI_.Draw();
-	weaponStatusUI_.Draw();
-	playerBlockUI_.Draw();
+		playerHealthUI_.Draw();
+		weaponStatusUI_.Draw();
+		playerBlockUI_.Draw();
+	}
+	for (auto& t : tutorials_)
+		if (t)
+			t->DrawSprite();
 	// 死亡演出中: 世界とHUDだけ暗くする(死亡パーティクルはこの後に描くので暗くならない)
 	if (phase_ == Phase::kDeath)
 		DrawMenuOverlay(deathOverlayFade_);
@@ -2333,6 +2298,8 @@ void GameScene::UnloadChunkVisuals(uint32_t chunkIndex) {
 		it = (x >= xStart && x < xEnd) ? fragileTimers_.erase(it) : std::next(it);
 	}
 	regenCells_.erase(std::remove_if(regenCells_.begin(), regenCells_.end(), [&](const RegenCell& c) { return c.x >= xStart && c.x < xEnd; }), regenCells_.end());
+
+	tutorials_.erase(std::remove_if(tutorials_.begin(), tutorials_.end(), [&](const std::unique_ptr<SpriteTutorial>& t) { return !t || inRange(t->GetWorldPosition().x); }), tutorials_.end());
 }
 
 void GameScene::TriggerLevelClear() {
@@ -2512,6 +2479,7 @@ void GameScene::UpdateCheckpointTriggers() {
 		float distSq = diff.x * diff.x + diff.y * diff.y;
 		if (distSq <= kCheckpointRadius * kCheckpointRadius) {
 			cp.consumed = true;
+			statusIndicator_.NotifyCheckpoint(); // チェックポイント到達の演出
 			SetCheckpoint(cp.position);
 		}
 	}

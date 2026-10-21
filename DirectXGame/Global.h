@@ -129,6 +129,8 @@ struct AimFacing {
 	float localAngle; // rotation_.z to feed the gun, already mirrored for the flip side
 };
 
+KamataEngine::Vector3 WorldToScreen(const KamataEngine::Camera& camera, const KamataEngine::Vector3& world);
+
 AimFacing ComputeAimFacing(const KamataEngine::Vector2& aimDir, bool currentFacingRight);
 
 float TriangleWave(float timer, float speed);

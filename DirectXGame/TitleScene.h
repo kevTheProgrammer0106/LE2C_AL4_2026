@@ -5,6 +5,7 @@
 #include "KamataEngine.h"
 #include "MusicManager.h"
 #include "UIMenu.h"
+#include "SettingsPanel.h"
 #include <memory>
 
 /// <summary>
@@ -45,7 +46,6 @@ private:
 	void ClosePanel();
 
 	void InitializePanels();
-	void UpdateSliders(float alpha);
 	void DrawPanel();
 
 	bool finished_ = false;
@@ -71,24 +71,7 @@ private:
 	Panel currentPanel_ = Panel::kNone;
 	Panel pendingPanel_ = Panel::kNone;
 
-	// --- settings sliders ---
-	struct VolumeSlider {
-		float (*get)() = nullptr;
-		void (*set)(float) = nullptr;
-		float x = 0.0f;
-		float y = 0.0f;
-		bool dragging = false;
-		std::unique_ptr<KamataEngine::Sprite> track;
-		std::unique_ptr<KamataEngine::Sprite> fill;
-		std::unique_ptr<KamataEngine::Sprite> knob;
-	};
-	std::array<VolumeSlider, 3> sliders_; // master, music, sfx
-	static inline float kSliderWidth = 400.0f;
-	static inline float kSliderHeight = 16.0f;
-	static inline float kKnobWidth = 20.0f;
-	static inline float kKnobHeight = 36.0f;
-	static inline float kSliderSpacing = 90.0f;
-	static inline float kSliderStartY = 220.0f;
+	SettingsPanel settingsPanel_; // 音量 / 画面揺れ / フラッシュ / 難易度
 
 	// --- credits ---
 	uint32_t creditsTex_ = 0;

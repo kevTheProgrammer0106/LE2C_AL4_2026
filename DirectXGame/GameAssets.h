@@ -136,6 +136,9 @@ public:
 	uint32_t slowBlockTex = 0;
 	uint32_t fragileTex = 0;
 
+	std::unique_ptr<KamataEngine::Model> modelTutorialBlock;
+	uint32_t tutorialBlockTex = 0;
+
 	// --- Goal / Gate / Switch / HealthBlock ---
 	std::unique_ptr<KamataEngine::Model> modelGoal;
 	uint32_t goalTex = 0;

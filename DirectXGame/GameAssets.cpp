@@ -170,6 +170,7 @@ void GameAssets::LoadModelsAndTextures() {
 	switchTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
 	modelHealthBlock.reset(Model::CreateFromOBJ("blockNormal"));
 	healthBlockTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
+	modelTutorialBlock.reset(Model::CreateFromOBJ("blockNormal", true));
 
 	// --- Gameplay HUD ---
 	healthBarBackgroundTex = TextureManager::Load("./Resources/white1x1.png");
@@ -231,6 +232,7 @@ void GameAssets::LoadModelsAndTextures() {
 	spikeTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
 	slowBlockTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
 	fragileTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
+	tutorialBlockTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
 }
 
 void GameAssets::LoadAudio() {

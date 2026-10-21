@@ -74,29 +74,7 @@ void TitleScene::InitializePanels() {
 	panelBackButton_ = panelMenu_.AddButton(buttonBackTex_, centerX - kBackWidth / 2.0f, static_cast<float>(WinApp::kWindowHeight) - kBackHeight - 30.0f, kBackWidth, kBackHeight, "Back");
 	panelMenu_.SetButtonOnClick(panelBackButton_, [this]() { ClosePanel(); });
 
-	// volume sliders (Master / Music / SFX), values read/written through AudioSettings
-	sliders_[0].get = &AudioSettings::GetMasterVolume;
-	sliders_[0].set = &AudioSettings::SetMasterVolume;
-	sliders_[1].get = &AudioSettings::GetMusicSetting;
-	sliders_[1].set = &AudioSettings::SetMusicVolume;
-	sliders_[2].get = &AudioSettings::GetSfxSetting;
-	sliders_[2].set = &AudioSettings::SetSfxVolume;
-
-	float sliderX = centerX - kSliderWidth / 2.0f;
-	for (size_t i = 0; i < sliders_.size(); ++i) {
-		VolumeSlider& s = sliders_[i];
-		s.x = sliderX;
-		s.y = kSliderStartY + static_cast<float>(i) * kSliderSpacing;
-
-		s.track.reset(Sprite::Create(whiteTex_, {s.x, s.y}));
-		s.track->SetSize({kSliderWidth, kSliderHeight});
-
-		s.fill.reset(Sprite::Create(whiteTex_, {s.x, s.y}));
-		s.fill->SetSize({kSliderWidth, kSliderHeight});
-
-		s.knob.reset(Sprite::Create(whiteTex_, {s.x, s.y}));
-		s.knob->SetSize({kKnobWidth, kKnobHeight});
-	}
+		settingsPanel_.Initialize(whiteTex_, true); // true: 難易度の行を出す(タイトルのみ)
 
 	// credits image, centered
 	constexpr float kCreditsWidth = 640.0f;
@@ -126,45 +104,7 @@ void TitleScene::OpenPanel(Panel panel) {
 void TitleScene::ClosePanel() {
 	phase_ = Phase::kPanelToMenu;
 	panelMenu_.StartButtonFade(false, kButtonFadeDuration);
-	for (VolumeSlider& s : sliders_) {
-		if (s.dragging) {
-			s.dragging = false;
-			AudioSettings::SaveToFile();
-		}
-	}
-}
-
-void TitleScene::UpdateSliders(float alpha) {
-	InputManager* input = InputManager::GetInstance();
-	const float mouseX = static_cast<float>(input->GetMouseX());
-	const float mouseY = static_cast<float>(input->GetMouseY());
-	const bool interactive = (phase_ == Phase::kPanel);
-
-	for (VolumeSlider& s : sliders_) {
-		float value = s.get();
-
-		if (interactive) {
-			bool hover = mouseX >= s.x - kKnobWidth && mouseX <= s.x + kSliderWidth + kKnobWidth && mouseY >= s.y - kKnobHeight * 0.5f && mouseY <= s.y + kSliderHeight + kKnobHeight * 0.5f;
-			if (input->IsPrimaryTriggered() && hover) {
-				s.dragging = true;
-			}
-			if (s.dragging) {
-				if (input->IsPrimaryHeld()) {
-					value = std::clamp((mouseX - s.x) / kSliderWidth, 0.0f, 1.0f);
-					s.set(value);
-				} else {
-					s.dragging = false;
-					AudioSettings::SaveToFile(); // write once on release, like the ImGui window
-				}
-			}
-		}
-
-		s.track->SetColor({0.15f, 0.15f, 0.15f, 0.9f * alpha});
-		s.fill->SetSize({kSliderWidth * value, kSliderHeight});
-		s.fill->SetColor({0.25f, 0.55f, 0.95f, alpha});
-		s.knob->SetPosition({s.x + kSliderWidth * value - kKnobWidth * 0.5f, s.y + kSliderHeight * 0.5f - kKnobHeight * 0.5f});
-		s.knob->SetColor({1.0f, 1.0f, 1.0f, alpha});
-	}
+	settingsPanel_.CancelDrag();
 }
 
 void TitleScene::Update() {
@@ -239,25 +179,21 @@ void TitleScene::Update() {
 	}
 
 	if (currentPanel_ == Panel::kSettings && (phase_ == Phase::kPanel || phase_ == Phase::kPanelToMenu)) {
-		UpdateSliders(panelMenu_.GetButtonFadeAlpha());
+		settingsPanel_.Update(panelMenu_.GetButtonFadeAlpha(), phase_ == Phase::kPanel);
 	}
 }
 
 void TitleScene::DrawPanel() {
 	const float alpha = panelMenu_.GetButtonFadeAlpha();
 
-	Sprite::PreDraw();
 	if (currentPanel_ == Panel::kSettings) {
-		for (VolumeSlider& s : sliders_) {
-			s.track->Draw();
-			s.fill->Draw();
-			s.knob->Draw();
-		}
+		settingsPanel_.Draw();
 	} else if (currentPanel_ == Panel::kCredits && creditsSprite_) {
+		Sprite::PreDraw();
 		creditsSprite_->SetColor({1.0f, 1.0f, 1.0f, alpha});
 		creditsSprite_->Draw();
+		Sprite::PostDraw();
 	}
-	Sprite::PostDraw();
 
 	panelMenu_.Draw(); // Back button + cursor
 }

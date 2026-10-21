@@ -21,7 +21,7 @@ void GameSettings::ApplyGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
 	kScreenShake = gv->GetIntValue(kGroupName, "ScreenShake") != 0 ? 1 : 0;
 	kScreenFlash = gv->GetIntValue(kGroupName, "ScreenFlash") != 0 ? 1 : 0;
-	kDifficulty = std::clamp(gv->GetIntValue(kGroupName, "Difficulty"), 0, 1);
+	kDifficulty = std::clamp(gv->GetIntValue(kGroupName, "Difficulty"), 0, 2);
 	kHardDamageScale = std::max(gv->GetFloatValue(kGroupName, "HardDamageScale"), 0.1f);
 }
 

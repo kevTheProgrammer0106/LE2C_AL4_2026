@@ -1,5 +1,6 @@
 #define NOMINMAX
 #include "ScreenFlash.h"
+#include "GameSettings.h"
 #include "GlobalVariables.h"
 
 #include <algorithm>
@@ -51,6 +52,8 @@ void ScreenFlash::Initialize(uint32_t whiteTextureHandle) {
 }
 
 void ScreenFlash::Trigger(Type type) {
+	if (!GameSettings::IsScreenFlashEnabled())
+		return; // 設定でフラッシュオフ
 	flashType_ = type;
 	flashTimer_ = kFlashDuration;
 }
@@ -59,7 +62,13 @@ void ScreenFlash::Update() {
 	if (!sprite_) {
 		return;
 	}
-
+	// 設定でオフ: 点滅も出続ける色(低HP/スタン)も全部消す
+	if (!GameSettings::IsScreenFlashEnabled()) {
+		flashTimer_ = 0.0f;
+		persistentAlpha_ = 0.0f;
+		sprite_->SetColor(Vector4(1.0f, 1.0f, 1.0f, 0.0f));
+		return;
+	}
 	// ---- 出続ける色: スタンが優先、次に低HP。出入りは滑らかに補間 ----
 	float targetAlpha = 0.0f;
 	if (stunned_) {

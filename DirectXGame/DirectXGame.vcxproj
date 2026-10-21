@@ -203,7 +203,8 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClCompile Include="EnemyCuirassier.cpp" />
     <ClCompile Include="EnemyFighter.cpp" />
     <ClCompile Include="EnemyGrenadier.cpp" />
-    <ClCompile Include="EnemyHUD.cpp" />
+    <ClCompile Include="SpriteTutorial.cpp" />
+    <ClCompile Include="StatusIndicator.cpp" />
     <ClCompile Include="EnemyOfficer.cpp" />
     <ClCompile Include="EnemyRifleman.cpp" />
     <ClCompile Include="EnemySapper.cpp" />
@@ -286,7 +287,8 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClInclude Include="EnemyCuirassier.h" />
     <ClInclude Include="EnemyFighter.h" />
     <ClInclude Include="EnemyGrenadier.h" />
-    <ClInclude Include="EnemyHUD.h" />
+    <ClInclude Include="SpriteTutorial.h" />
+    <ClInclude Include="StatusIndicator.h" />
     <ClInclude Include="EnemyOfficer.h" />
     <ClInclude Include="EnemyRifleman.h" />
     <ClInclude Include="EnemySapper.h" />

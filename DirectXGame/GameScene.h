@@ -13,7 +13,7 @@
 #include "BaseFirearm.h"
 #include "BaseMelee.h"
 
-#include "EnemyHUD.h"
+#include "StatusIndicator.h"
 #include "Goal.h"
 #include "HealthBlock.h"
 #include "InputManager.h"
@@ -58,10 +58,13 @@
 #include "GameAssets.h"
 #include "MusicManager.h"
 #include "UIMenu.h"
+#include"SettingsPanel.h"
+#include"GameSettings.h"
 
 #include "EffectMuzzleFlash.h"
 #include "ScreenFlash.h"
 #include "EffectParticleBurst.h"
+#include "SpriteTutorial.h"
 
 class StageManager;
 
@@ -290,25 +293,7 @@ private:
 	void InitializeMenuOverlay();
 	void DrawMenuOverlay(float fadeAlpha); // fadeAlpha: 各メニューのフェード値(0~1)
 
-		// ---- ポーズ中の設定パネル ----
-	struct VolumeSlider {
-		float (*get)() = nullptr;
-		void (*set)(float) = nullptr;
-		float x = 0.0f;
-		float y = 0.0f;
-		bool dragging = false;
-		std::unique_ptr<KamataEngine::Sprite> track;
-		std::unique_ptr<KamataEngine::Sprite> fill;
-		std::unique_ptr<KamataEngine::Sprite> knob;
-	};
-	static constexpr float kSliderWidth = 400.0f;
-	static constexpr float kSliderHeight = 16.0f;
-	static constexpr float kKnobWidth = 20.0f;
-	static constexpr float kKnobHeight = 36.0f;
-	static constexpr float kSliderSpacing = 90.0f;
-	static constexpr float kSliderStartY = 220.0f;
-
-	std::array<VolumeSlider, 3> sliders_;
+	SettingsPanel settingsPanel_; // 難易度の行を出さない(タイトルのみ)
 	UIMenu settingsMenuInput_; // Backボタン専用
 	UIMenu::ButtonID settingsBackButton_ = UIMenu::kInvalidButton;
 	UIMenu::ButtonID pauseSettingsButton_ = UIMenu::kInvalidButton;
@@ -345,7 +330,7 @@ private:
 
 	UIMenu cursor_;
 
-	EnemyHUD enemyHUD_;
+	StatusIndicator statusIndicator_;
 
 	std::unique_ptr<Goal> goal_ = nullptr;
 
@@ -606,4 +591,6 @@ private:
 	static inline float kShakeHeavyShootAmp = 0.60f; // blunderbuss
 	static inline float kShakeHeavyShootDuration = 0.40f;
 	static inline float kBlockZoomRatio = 0.11f; // fraction of the current camera distance
+
+	std::vector<std::unique_ptr<SpriteTutorial>> tutorials_;
 };

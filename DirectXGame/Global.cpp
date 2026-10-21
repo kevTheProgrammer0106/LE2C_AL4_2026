@@ -76,6 +76,10 @@ void WorldTransformUpdate(KamataEngine::WorldTransform& worldTransform) {
 	// 定数バッフアへの書き込み
 	worldTransform.TransferMatrix(); 
 }
+Vector3 WorldToScreen(const Camera& camera, const Vector3& world) {
+	Matrix4x4 vp = MakeViewportMatrix(0.0f, 0.0f, static_cast<float>(WinApp::kWindowWidth), static_cast<float>(WinApp::kWindowHeight), 0.0f, 1.0f);
+	return TransformCoordinate(world, Multiply(camera.matView, Multiply(camera.matProjection, vp)));
+}
 AimFacing ComputeAimFacing(const Vector2& aimDir, bool currentFacingRight) {
 	float worldAngle = std::atan2(aimDir.y, aimDir.x); // 0 = +X, +pi/2 = up
 

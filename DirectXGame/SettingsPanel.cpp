@@ -13,6 +13,8 @@ using namespace KamataEngine;
 namespace {
 // 画像の置き場所(ここだけ変えれば全部の画像パスが変わる)
 constexpr const char* kImageDir = "./Resources/UserInterface/Settings/";
+// 難易度ボタンの並び順(左から)
+constexpr GameSettings::Difficulty kDifficultyOrder[3] = {GameSettings::Difficulty::kEasy, GameSettings::Difficulty::kNormal, GameSettings::Difficulty::kHard};
 } // namespace
 
 bool SettingsPanel::LoadIfExists(const char* fileName, uint32_t& outTex) {
@@ -75,9 +77,9 @@ void SettingsPanel::Initialize(uint32_t whiteTexture, bool showDifficulty) {
 		Vector4 color;
 	};
 	const SliderDef defs[3] = {
-	    {&AudioSettings::GetMasterVolume, &AudioSettings::SetMasterVolume, "iconMaster.png", "tipMaster.png", {1.0f, 0.85f, 0.3f, 1.0f}},
-	    {&AudioSettings::GetMusicSetting, &AudioSettings::SetMusicVolume,  "iconMusic.png",  "tipMusic.png",  {0.4f, 0.8f, 1.0f, 1.0f} },
-	    {&AudioSettings::GetSfxSetting,   &AudioSettings::SetSfxVolume,    "iconSfx.png",    "tipSfx.png",    {1.0f, 0.5f, 0.4f, 1.0f} },
+	    {&AudioSettings::GetMasterVolume, &AudioSettings::SetMasterVolume, "iconButtonMaster.png", "iconTipMaster.png", {1.0f, 0.85f, 0.3f, 1.0f}},
+	    {&AudioSettings::GetMusicSetting, &AudioSettings::SetMusicVolume,  "iconButtonMusic.png",  "iconTipMusic.png",  {0.4f, 0.8f, 1.0f, 1.0f} },
+	    {&AudioSettings::GetSfxSetting,   &AudioSettings::SetSfxVolume,    "iconButtonSfx.png",    "iconTipSFX.png",    {1.0f, 0.5f, 0.4f, 1.0f} },
 	};
 	for (int i = 0; i < 3; ++i) {
 		Slider& s = sliders_[i];
@@ -109,8 +111,8 @@ void SettingsPanel::Initialize(uint32_t whiteTexture, bool showDifficulty) {
 		Vector4 color;
 	};
 	const CheckDef checks[2] = {
-	    {&GameSettings::IsScreenShakeEnabled, &GameSettings::SetScreenShakeEnabled, "iconShake.png", kTipShake, "tipShake.png", {0.8f, 0.6f, 1.0f, 1.0f}},
-	    {&GameSettings::IsScreenFlashEnabled, &GameSettings::SetScreenFlashEnabled, "iconFlash.png", kTipFlash, "tipFlash.png", {1.0f, 1.0f, 0.6f, 1.0f}},
+	    {&GameSettings::IsScreenShakeEnabled, &GameSettings::SetScreenShakeEnabled, "iconButtonShake.png", kTipShake, "iconTipShake.png", {0.8f, 0.6f, 1.0f, 1.0f}},
+	    {&GameSettings::IsScreenFlashEnabled, &GameSettings::SetScreenFlashEnabled, "iconButtonFlash.png", kTipFlash, "iconTipFlash.png", {1.0f, 1.0f, 0.6f, 1.0f}},
 	};
 	const float groupW = kIconSize + kIconGap + kBoxSize;
 	const float rowStartX = centerX - (groupW * 2.0f + kGroupGap) * 0.5f;
@@ -125,22 +127,31 @@ void SettingsPanel::Initialize(uint32_t whiteTexture, bool showDifficulty) {
 		c.hit = {gx, kCheckboxRowY, groupW, kIconSize}; // アイコンとボックスの両方がクリック/ホバー範囲
 
 		MakeElement(c.icon, checks[i].icon, {gx, kCheckboxRowY, kIconSize, kIconSize}, checks[i].color);
-		MakeElement(c.boxOff, "checkboxOff.png", {gx + kIconSize + kIconGap, boxY, kBoxSize, kBoxSize}, {0.15f, 0.15f, 0.15f, 0.9f});
-		MakeElement(c.boxOn, "checkboxOn.png", {gx + kIconSize + kIconGap, boxY, kBoxSize, kBoxSize}, {0.25f, 0.55f, 0.95f, 1.0f});
+		MakeElement(c.boxOff, "iconButtonCheckbox.png", {gx + kIconSize + kIconGap, boxY, kBoxSize, kBoxSize}, {0.15f, 0.15f, 0.15f, 0.9f});
+		MakeElement(c.boxOn, "iconButtonCheckmark.png", {gx + kIconSize + kIconGap, boxY, kBoxSize, kBoxSize}, {0.25f, 0.55f, 0.95f, 1.0f});
 		LoadTip(checks[i].tip, checks[i].tipFile);
 	}
 
 	// ---- 難易度(タイトルのみ): アイコン + Normal / Hard のボタン2つ ----
+	// ---- 難易度(タイトルのみ): アイコン + Easy / Normal / Hard のボタン3つ ----
 	if (showDifficulty_) {
-		const float rowW = kIconSize + kIconGap + kDiffButtonW * 2.0f + kDiffButtonGap;
+		const float rowW = kIconSize + kIconGap + kDiffButtonW * 3.0f + kDiffButtonGap * 2.0f;
 		const float startX = centerX - rowW * 0.5f;
 		const float centerY = kDiffRowY + kDiffButtonH * 0.5f;
 		MakeElement(difficultyIcon_, "iconDifficulty.png", {startX, centerY - kIconSize * 0.5f, kIconSize, kIconSize}, {0.9f, 0.9f, 0.5f, 1.0f});
 
 		const float bx = startX + kIconSize + kIconGap;
-		MakeElement(difficultyButtons_[0], "buttonDifficultyNormal.png", {bx, kDiffRowY, kDiffButtonW, kDiffButtonH}, {0.3f, 0.7f, 0.35f, 1.0f});
-		MakeElement(difficultyButtons_[1], "buttonDifficultyHard.png", {bx + kDiffButtonW + kDiffButtonGap, kDiffRowY, kDiffButtonW, kDiffButtonH}, {0.8f, 0.25f, 0.25f, 1.0f});
+		const char* files[3] = {"buttonDifficultyEasy.png", "buttonDifficultyNormal.png", "buttonDifficultyHard.png"};
+		const Vector4 colors[3] = {
+		    {0.3f, 0.7f,  0.35f, 1.0f}, // Easy: 緑
+		    {0.9f, 0.8f,  0.3f,  1.0f}, // Normal: 黄
+		    {0.8f, 0.25f, 0.25f, 1.0f}, // Hard: 赤
+		};
+		for (int i = 0; i < 3; ++i)
+			MakeElement(difficultyButtons_[i], files[i], {bx + static_cast<float>(i) * (kDiffButtonW + kDiffButtonGap), kDiffRowY, kDiffButtonW, kDiffButtonH}, colors[i]);
+
 		LoadTip(kTipDifficulty, "tipDifficulty.png");
+		LoadTip(kTipEasy, "tipDifficultyEasy.png");
 		LoadTip(kTipNormal, "tipDifficultyNormal.png");
 		LoadTip(kTipHard, "tipDifficultyHard.png");
 	}
@@ -217,12 +228,12 @@ void SettingsPanel::Update(float alpha, bool interactive) {
 			hoveredTip_ = kTipDifficulty;
 		ApplyElement(difficultyIcon_, iconHover, alpha, 1.0f);
 
-		for (int i = 0; i < 2; ++i) {
+		for (int i = 0; i < 3; ++i) {
 			Element& b = difficultyButtons_[i];
-			const GameSettings::Difficulty d = static_cast<GameSettings::Difficulty>(i);
+			const GameSettings::Difficulty d = kDifficultyOrder[i];
 			const bool hover = canUse && Inside(b.rect, mx, my);
 			if (hover)
-				hoveredTip_ = kTipNormal + i;
+				hoveredTip_ = kTipEasy + i;
 			if (clicked && hover && d != GameSettings::GetDifficulty()) {
 				GameSettings::SetDifficulty(d);
 				GameSettings::SaveToFile();

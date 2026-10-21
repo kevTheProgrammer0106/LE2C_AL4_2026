@@ -43,6 +43,7 @@ enum class MapChipType {
 	kArenaCamera, // 'F' — linkID = arenaID, marks exact camera focus point for that arena
 	kHealthBlock, // 'H' — subID: 0 = limited (one-time), non-zero = timer (respawns every N sec)
 	kCameraTrigger, // 'G' — walkable (non-solid) trigger, linkID = camera ID to fire
+	kTutorialBlock, // 'U' — subID = TutorialTextureType, non-solid
 };
 
 enum MapChipCharIndex { kChipType = 0, kChipSubID = 1, kChipLinkID = 2 };

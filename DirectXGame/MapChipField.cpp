@@ -49,6 +49,7 @@ std::map<char, MapChipType> mapChipTypeTable = {
     {'9', MapChipType::kFragile       },
     {'Q', MapChipType::kMeleeSpawner  },
     {'O', MapChipType::kFirearmSpawner},
+    {'U', MapChipType::kTutorialBlock },
 };
 } // namespace
 
