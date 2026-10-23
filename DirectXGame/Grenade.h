@@ -36,6 +36,13 @@ public:
 	static int32_t GetNormalDamage() { return kNormalDamage; }
 	static float GetImpact() { return kImpact; }
 
+	// 毎フレーム呼ぶ。trueなら導火線の火花を1つ出す(信管が進むほど間隔が短くなる)
+	bool ConsumeFuseTrailTick() {
+		const bool t = trailTick_;
+		trailTick_ = false;
+		return t;
+	}
+
 private:
 	KamataEngine::WorldTransform worldTransform_;
 	KamataEngine::ObjectColor objectColor_;
@@ -77,4 +84,9 @@ private:
 	static inline float kNormalRadius = 5.0f; // damage (like the barrel's normal radius)
 	static inline int32_t kNormalDamage = 20;
 	static inline float kImpact = 2.0f;
+
+	float trailTimer_ = 0.0f;
+	bool trailTick_ = false;
+	static inline float kTrailIntervalStart = 0.20f;
+	static inline float kTrailIntervalEnd = 0.04f;
 };

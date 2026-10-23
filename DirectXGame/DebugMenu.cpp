@@ -2,12 +2,16 @@
 
 #include "DebugMenu.h"
 
-#include "GameScene.h"
-#include "StageManager.h"
 #include "EnemyCarabinier.h"
+#include "GameScene.h"
+#include "GlobalVariables.h"
+#include "PoseGV.h"
+#include "StageManager.h"
 
 #include <array>
 #include <cstdio>
+#include <initializer_list>
+#include <string>
 #include <unordered_map>
 
 using namespace KamataEngine;
@@ -65,6 +69,217 @@ bool EditComboPatterns(const char* id, std::array<ComboAttackPattern, 3>& patter
 	}
 	ImGui::PopID();
 	return changed;
+}
+
+// ============================================================
+// GlobalVariables直接編集ヘルパー
+// 値はGVの中にあるので、ここで変えた値は次フレームのApplyGlobalVariables()で各クラスへ反映される。
+// ============================================================
+struct GvOriginal {
+	Vector3 s{};
+	Vector3 r{};
+	Vector3 t{};
+};
+std::unordered_map<const void*, GvOriginal> sGvOriginals;
+
+Vector3* GvVec(const char* group, const char* key) {
+	if (!key || !*key)
+		return nullptr;
+	return GlobalVariables::GetInstance()->GetVector3Ptr(group, key);
+}
+
+// 1つのポーズ(Scale/Rotation/Translation)。キーがnullptr/未登録の行は出さない。折りたたみ式 + Reset付き
+bool GvPoseKeys(const char* label, const char* group, const char* scaleKey, const char* rotKey, const char* transKey) {
+	Vector3* s = GvVec(group, scaleKey);
+	Vector3* r = GvVec(group, rotKey);
+	Vector3* t = GvVec(group, transKey);
+	if (!s && !r && !t) {
+		ImGui::TextDisabled("%s : (not registered)", label);
+		return false;
+	}
+	const void* id = t ? static_cast<const void*>(t) : (r ? static_cast<const void*>(r) : static_cast<const void*>(s));
+
+	auto it = sGvOriginals.find(id);
+	if (it == sGvOriginals.end()) {
+		GvOriginal o;
+		if (s)
+			o.s = *s;
+		if (r)
+			o.r = *r;
+		if (t)
+			o.t = *t;
+		it = sGvOriginals.emplace(id, o).first;
+	}
+
+	bool changed = false;
+	ImGui::PushID(id);
+	if (ImGui::TreeNode(label)) {
+		if (s)
+			changed |= ImGui::DragFloat3("Scale", &s->x, 0.01f);
+		if (r)
+			changed |= ImGui::DragFloat3("Rotation (rad)", &r->x, 0.01f);
+		if (t)
+			changed |= ImGui::DragFloat3("Translation", &t->x, 0.005f);
+		if (ImGui::SmallButton("Reset")) {
+			if (s)
+				*s = it->second.s;
+			if (r)
+				*r = it->second.r;
+			if (t)
+				*t = it->second.t;
+			changed = true;
+		}
+		ImGui::TreePop();
+	}
+	ImGui::PopID();
+	return changed;
+}
+
+// <base>Scale / <base>Rotation / <base>Translation 形式のキー
+bool GvPose(const char* label, const char* group, const std::string& base) {
+	const std::string s = base + "Scale";
+	const std::string r = base + "Rotation";
+	const std::string t = base + "Translation";
+	return GvPoseKeys(label, group, s.c_str(), r.c_str(), t.c_str());
+}
+
+bool GvFloat(const char* label, const char* group, const char* key, float speed = 0.01f) {
+	float* p = GlobalVariables::GetInstance()->GetFloatPtr(group, key);
+	if (!p) {
+		ImGui::TextDisabled("%s : (not registered)", label);
+		return false;
+	}
+	ImGui::PushID(group);
+	ImGui::PushID(key);
+	const bool changed = ImGui::DragFloat(label, p, speed);
+	ImGui::PopID();
+	ImGui::PopID();
+	return changed;
+}
+
+bool GvInt(const char* label, const char* group, const char* key) {
+	int32_t* p = GlobalVariables::GetInstance()->GetIntPtr(group, key);
+	if (!p) {
+		ImGui::TextDisabled("%s : (not registered)", label);
+		return false;
+	}
+	ImGui::PushID(group);
+	ImGui::PushID(key);
+	const bool changed = ImGui::DragInt(label, p, 0.2f);
+	ImGui::PopID();
+	ImGui::PopID();
+	return changed;
+}
+
+bool GvVec3(const char* label, const char* group, const char* key, float speed = 0.01f) {
+	Vector3* p = GvVec(group, key);
+	if (!p) {
+		ImGui::TextDisabled("%s : (not registered)", label);
+		return false;
+	}
+	ImGui::PushID(group);
+	ImGui::PushID(key);
+	const bool changed = ImGui::DragFloat3(label, &p->x, speed);
+	ImGui::PopID();
+	ImGui::PopID();
+	return changed;
+}
+
+// 表示中のグループをまとめてjsonへ保存する
+void SaveGroups(std::initializer_list<const char*> groups) {
+	if (ImGui::Button("Save this tab (json)")) {
+		for (const char* g : groups)
+			GlobalVariables::GetInstance()->SaveFile(g);
+	}
+	ImGui::SameLine();
+	ImGui::TextDisabled("Edits apply live. Save writes every group used in this tab.");
+	ImGui::Separator();
+}
+
+// 近接武器のコンボ(3段 x 4キーフレーム)。キー: Combo<i><AntStart|AntEnd|AtkEnd|RecEnd>
+void GvWeaponCombos(const char* group) {
+	static const char* kLabels[4] = {"1 Anticipate start", "2 Anticipate end (wind-up)", "3 Attack end (swing)", "4 Recovery end"};
+	ImGui::TextDisabled("Tip: a combo's Recovery end is usually the next combo's Anticipate start.");
+	ImGui::PushID(group);
+	for (int i = 0; i < 3; ++i) {
+		char name[32];
+		std::snprintf(name, sizeof(name), "Combo %d", i + 1);
+		if (ImGui::CollapsingHeader(name)) {
+			for (int k = 0; k < 4; ++k)
+				GvPose(kLabels[k], group, "Combo" + std::to_string(i) + PoseGV::kComboPhaseKeys[k]);
+		}
+	}
+	ImGui::PopID();
+}
+
+// 体のコンボポーズ(RegisterBodyComboPoseSet): キー <prefix><i><Anticipate|Peak|Recovery>
+void GvBodyCombo(const char* title, const char* group, const char* prefix) {
+	static const char* kPhases[3] = {"Anticipate", "Peak", "Recovery"};
+	ImGui::PushID(group);
+	ImGui::PushID(prefix);
+	for (int i = 0; i < 3; ++i) {
+		char name[64];
+		std::snprintf(name, sizeof(name), "%s combo %d", title, i + 1);
+		if (ImGui::CollapsingHeader(name)) {
+			for (int k = 0; k < 3; ++k)
+				GvPose(kPhases[k], group, std::string(prefix) + std::to_string(i) + kPhases[k]);
+		}
+	}
+	ImGui::PopID();
+	ImGui::PopID();
+}
+
+// 体の突き/叩きつけポーズ(RegisterBodyLungePoseSet): キー <prefix>WindUp / <prefix>Thrust
+void GvBodyLunge(const char* title, const char* group, const char* prefix) {
+	ImGui::PushID(group);
+	ImGui::PushID(prefix);
+	if (ImGui::CollapsingHeader(title)) {
+		GvPose("Wind-up", group, std::string(prefix) + "WindUp");
+		GvPose("Thrust / slam", group, std::string(prefix) + "Thrust");
+	}
+	ImGui::PopID();
+	ImGui::PopID();
+}
+
+// 3つのリアクションの構え(ノックバック / スタン / ブロック)
+void GvReactionPoses(const char* group) {
+	GvPose("Knockback", group, "Knockback");
+	GvPose("Stun", group, "Stun");
+	GvPose("Block (guard)", group, "Block");
+}
+
+// 銃の構え。キー名は既存のOffset*(Rotateの綴り)を使う
+void GvFirearmPoses(const char* group, bool dual) {
+	if (ImGui::CollapsingHeader("Weapon poses", ImGuiTreeNodeFlags_DefaultOpen)) {
+		GvPoseKeys("Combat (aim / fire)", group, "OffsetScale", "OffsetRotate", "OffsetTranslate");
+		if (dual) {
+			GvPoseKeys("Holster - pistol 1", group, "OffsetHolsterScale", "OffsetHolsterRotate", "OffsetHolsterTranslate");
+			GvPose("Holster - pistol 2", group, "Holster2");
+		} else {
+			GvPoseKeys("Holster", group, "OffsetHolsterScale", "OffsetHolsterRotate", "OffsetHolsterTranslate");
+		}
+		GvPoseKeys("Reload (stowed pose while reloading)", group, "OffsetReloadScale", "OffsetReloadRotate", "OffsetReloadTranslate");
+	}
+	if (ImGui::CollapsingHeader("Reaction poses"))
+		GvReactionPoses(group);
+}
+
+// 全ての銃で共通の撃った時の動き(BaseFirearm)
+void GvFireFeel() {
+	if (ImGui::CollapsingHeader("Fire feel (shared by ALL firearms)")) {
+		GvFloat("Recoil kick", "BaseFirearm", "RecoilKick", 0.005f);
+		GvInt("Recoil frames", "BaseFirearm", "RecoilDuration");
+		GvFloat("Aim lean", "BaseFirearm", "AimLeanAmount", 0.005f);
+		GvVec3("Muzzle offset (gun local)", "BaseFirearm", "MuzzleOffset", 0.01f);
+	}
+}
+
+// 敵ガンナー(Rifleman / Shotgunner)の体のポーズ。キーはTranslation/Rotationのみ登録
+void GvGunnerBodyPoses(const char* group) {
+	GvPoseKeys("Aim pose (body)", group, nullptr, "AimPoseRotation", "AimPoseTranslation");
+	GvPoseKeys("Fire pose (body)", group, nullptr, "FirePoseRotation", "FirePoseTranslation");
+	GvPoseKeys("Reload pose (body)", group, nullptr, "ReloadPoseRotation", "ReloadPoseTranslation");
+	GvFloat("Fire pose duration (s)", group, "FirePoseDuration", 0.005f);
 }
 
 const char* EnemyTypeName(BaseEnemy* e) {
@@ -153,7 +368,7 @@ void DebugMenu::Draw(GameScene* gs) {
 	}
 
 	ImGui::TextDisabled("F1 Reload field | F2 freeze enemies | F3 this window | F4 collision boxes | P debug camera");
-	ImGui::TextDisabled("Values registered in GlobalVariables are edited in the Global Variables window, not here.");
+	ImGui::TextDisabled("Weapon tabs edit GlobalVariables directly (live). 'Save this tab' writes the json.");
 
 	if (ImGui::BeginTabBar("DebugMenuTabs")) {
 		if (ImGui::BeginTabItem("Scene")) {
@@ -176,12 +391,28 @@ void DebugMenu::Draw(GameScene* gs) {
 			DrawSabreTab();
 			ImGui::EndTabItem();
 		}
-		if (ImGui::BeginTabItem("Heavy Sabre (Cuirassier)")) {
+		if (ImGui::BeginTabItem("Heavy Sabre")) {
 			DrawHeavySabreTab();
 			ImGui::EndTabItem();
 		}
-		if (ImGui::BeginTabItem("Musket (Rifleman)")) {
-			DrawMusketTab();
+		if (ImGui::BeginTabItem("Axe")) {
+			DrawAxeTab();
+			ImGui::EndTabItem();
+		}
+		if (ImGui::BeginTabItem("Spontoon")) {
+			DrawSpearTab();
+			ImGui::EndTabItem();
+		}
+		if (ImGui::BeginTabItem("Bayonet Musket")) {
+			DrawBayonetTab();
+			ImGui::EndTabItem();
+		}
+		if (ImGui::BeginTabItem("Shotgun")) {
+			DrawShotgunTab();
+			ImGui::EndTabItem();
+		}
+		if (ImGui::BeginTabItem("Pistols")) {
+			DrawPistolsTab();
 			ImGui::EndTabItem();
 		}
 		if (ImGui::BeginTabItem("Body / Anim")) {
@@ -422,7 +653,7 @@ void DebugMenu::DrawSpawnTab(GameScene* gs) {
 		gs->AddEnemySpawner(p, 1, 8.0f, EnemySpawner::SpawnMode::kEndless, -1, true);
 	ImGui::Text("Active spawners: %d", static_cast<int>(gs->enemySpawners_.size()));
 
-		// ---- アイテムスポーナー(武器ドロップ) ----
+	// ---- アイテムスポーナー(武器ドロップ) ----
 	ImGui::Separator();
 	ImGui::Text("Item spawner");
 
@@ -440,13 +671,13 @@ void DebugMenu::DrawSpawnTab(GameScene* gs) {
 		DropWeaponKind kind;
 	};
 	static const ItemEntry kItemTable[] = {
-	    {"Sabre (light)",    DropItemCategory::kMelee,   DropWeaponKind::kSabreLight   },
-	    {"Sabre (heavy)",    DropItemCategory::kMelee,   DropWeaponKind::kSabreHeavy   },
-	    {"Axe",              DropItemCategory::kMelee,   DropWeaponKind::kLongAxe      },
-	    {"Spontoon", DropItemCategory::kMelee,   DropWeaponKind::kSpear},
-	    {"Musket (long)",    DropItemCategory::kFirearm, DropWeaponKind::kMusketLong   },
-	    {"Musket (bayonet)", DropItemCategory::kFirearm, DropWeaponKind::kMusketBayonet},
-	    {"Shotgun",  DropItemCategory::kFirearm, DropWeaponKind::kShotgun},
+	    {"Sabre (light)",          DropItemCategory::kMelee,   DropWeaponKind::kSabreLight   },
+	    {"Sabre (heavy)",          DropItemCategory::kMelee,   DropWeaponKind::kSabreHeavy   },
+	    {"Axe",	                DropItemCategory::kMelee,   DropWeaponKind::kLongAxe      },
+	    {"Spontoon",               DropItemCategory::kMelee,   DropWeaponKind::kSpear        },
+	    {"Musket (long)",          DropItemCategory::kFirearm, DropWeaponKind::kMusketLong   },
+	    {"Musket (bayonet)",       DropItemCategory::kFirearm, DropWeaponKind::kMusketBayonet},
+	    {"Shotgun",                DropItemCategory::kFirearm, DropWeaponKind::kShotgun      },
 	    {"Dual Artillery Pistols", DropItemCategory::kFirearm, DropWeaponKind::kDualPistols  },
 	};
 	constexpr int kItemCount = static_cast<int>(sizeof(kItemTable) / sizeof(kItemTable[0]));
@@ -565,7 +796,7 @@ void DebugMenu::DrawEnemiesTab(GameScene* gs) {
 
 // ------------------------------------------------------------------ Sabre (EnemyFighter)
 void DebugMenu::DrawSabreTab() {
-	ImGui::TextColored(kWarn, "WeaponSabre statics are shared with the PLAYER's sabre.");
+	ImGui::TextColored(kWarn, "WeaponSabre statics are shared with the PLAYER's sabre. (not in GlobalVariables: lost on restart)");
 	EditSRT("readyStanceOffset_", WeaponSabre::readyStanceOffset_);
 
 	if (ImGui::CollapsingHeader("Combo poses (visible while attacking)", ImGuiTreeNodeFlags_DefaultOpen))
@@ -576,7 +807,7 @@ void DebugMenu::DrawSabreTab() {
 		DragF3Arr("kComboSwingHeight", WeaponSabre::kComboSwingHeight, 0.02f);
 	}
 
-	if (ImGui::CollapsingHeader("BaseMelee timing (shared by ALL melee weapons)")) {
+	if (ImGui::CollapsingHeader("BaseMelee timing (shared by ALL melee weapons: sabre / heavy / axe / spontoon)")) {
 		ImGui::TextDisabled("Player");
 		DragF3Arr("P Attack speed", WeaponSabre::kComboAttackSpeedPlayer, 0.01f);
 		DragF3Arr("P Anticipate (frames)", WeaponSabre::kComboAnticipateDurationPlayer, 0.2f);
@@ -592,31 +823,215 @@ void DebugMenu::DrawSabreTab() {
 
 // ------------------------------------------------------------------ Heavy sabre (EnemyCuirassier)
 void DebugMenu::DrawHeavySabreTab() {
-	EditSRT("readyStanceOffset_", WeaponHeavySabre::readyStanceOffset_);
+	const char* g = "WeaponHeavySabre";
+	SaveGroups({g, "EnemyCuirassier", "PlayerBehavior"});
 
-	if (ImGui::CollapsingHeader("Lunge poses", ImGuiTreeNodeFlags_DefaultOpen)) {
-		EditSRT("kLungeAnticipate", WeaponHeavySabre::kLungeAnticipate);
-		EditSRT("kLungeExtend", WeaponHeavySabre::kLungeExtend);
+	if (ImGui::CollapsingHeader("Weapon poses", ImGuiTreeNodeFlags_DefaultOpen)) {
+		GvPose("Holster", g, "HolsterOffset");
+		GvPose("Ready stance", g, "Ready");
+		GvPose("Down attack (player)", g, "DownAttack");
+	}
+	if (ImGui::CollapsingHeader("Reaction poses"))
+		GvReactionPoses(g);
+
+	if (ImGui::CollapsingHeader("Combo poses (3 steps x 4 keyframes)", ImGuiTreeNodeFlags_DefaultOpen))
+		GvWeaponCombos(g);
+
+	if (ImGui::CollapsingHeader("Lunge poses")) {
+		GvPose("Enemy lunge - wind-up", g, "LungePoseAnticipate");
+		GvPose("Enemy lunge - extend", g, "LungePoseExtend");
+		GvPose("Player lunge - wind-up", g, "PlayerLungePoseAnticipate");
+		GvPose("Player lunge - extend", g, "PlayerLungePoseExtend");
 	}
 
-	if (ImGui::CollapsingHeader("Combo poses (visible while attacking)"))
-		EditComboPatterns("heavyCombos", WeaponHeavySabre::comboPatterns_);
+	if (ImGui::CollapsingHeader("Reach / lunge stats")) {
+		GvVec3("Combo reach (x3 steps)", g, "ComboReach", 0.02f);
+		GvVec3("Combo swing height (x3 steps)", g, "ComboSwingHeight", 0.02f);
+		GvFloat("Enemy lunge reach", g, "LungeReach", 0.05f);
+		GvFloat("Player lunge reach", g, "PlayerLungeReach", 0.05f);
+		GvFloat("Player lunge height", g, "PlayerLungeHeight", 0.05f);
+		GvFloat("Player lunge anticipate (frames)", g, "PlayerLungeAnticipate", 0.2f);
+		GvFloat("Player lunge attack (frames)", g, "PlayerLungeAttack", 0.2f);
+		GvFloat("Player lunge recovery (frames)", g, "PlayerLungeRecovery", 0.2f);
+		GvFloat("Player lunge speed", g, "PlayerLungeSpeed", 0.005f);
+	}
 
-	if (ImGui::CollapsingHeader("Reach / height (enemy hitbox)")) {
-		DragF3Arr("kComboReach", WeaponHeavySabre::kComboReach, 0.02f);
-		DragF3Arr("kComboSwingHeight", WeaponHeavySabre::kComboSwingHeight, 0.02f);
+	if (ImGui::CollapsingHeader("Entity (body) offsets")) {
+		ImGui::TextColored(kWarn, "Cuirassier = enemy. PlayerBehavior values are shared with the player's other weapons.");
+		GvBodyCombo("Cuirassier", "EnemyCuirassier", "BodyCombo");
+		GvBodyLunge("Cuirassier lunge (body)", "EnemyCuirassier", "BodyLunge");
+		GvBodyLunge("Player heavy lunge (body)", "PlayerBehavior", "BodyLungeHeavy");
+		GvBodyCombo("Player (shared)", "PlayerBehavior", "BodyCombo");
 	}
 }
 
-// ------------------------------------------------------------------ Musket (EnemyRifleman)
-void DebugMenu::DrawMusketTab() {
-	ImGui::TextDisabled("Musket offsets, rifleman poses and lunge timings (frames) are in the Global Variables window.");
-	EditSRT("firearmOffset_ (extra, applied via SetOffset)", EnemyRifleman::firearmOffset_);
+// ------------------------------------------------------------------ Axe (EnemySapper)
+void DebugMenu::DrawAxeTab() {
+	const char* g = "WeaponAxe";
+	SaveGroups({g, "EnemySapper", "PlayerBehavior"});
 
-	if (ImGui::CollapsingHeader("Bayonet lunge poses", ImGuiTreeNodeFlags_DefaultOpen)) {
+	if (ImGui::CollapsingHeader("Weapon poses", ImGuiTreeNodeFlags_DefaultOpen)) {
+		GvPose("Holster", g, "HolsterOffset");
+		GvPose("Ready stance", g, "Ready");
+		GvPose("Down attack (player)", g, "DownAttack");
+	}
+	if (ImGui::CollapsingHeader("Reaction poses"))
+		GvReactionPoses(g);
+
+	if (ImGui::CollapsingHeader("Combo poses (3 steps x 4 keyframes)", ImGuiTreeNodeFlags_DefaultOpen))
+		GvWeaponCombos(g);
+
+	if (ImGui::CollapsingHeader("Smash poses (Sapper leap)")) {
+		GvPoseKeys("Raise (overhead)", g, nullptr, "SmashRaiseRotation", "SmashRaiseTranslation");
+		GvPoseKeys("Slam (ground)", g, nullptr, "SmashSlamRotation", "SmashSlamTranslation");
+		GvFloat("Smash half width", g, "SmashHalfWidth", 0.05f);
+		GvFloat("Smash below", g, "SmashBelow", 0.05f);
+		GvFloat("Smash above", g, "SmashAbove", 0.05f);
+	}
+
+	if (ImGui::CollapsingHeader("Reach / damage")) {
+		GvVec3("Combo reach (x3 steps)", g, "ComboReach", 0.02f);
+		GvVec3("Combo swing height (x3 steps)", g, "ComboSwingHeight", 0.02f);
+		ImGui::TextDisabled("Enemy");
+		GvInt("Damage 1", g, "ComboDamage0");
+		GvInt("Damage 2", g, "ComboDamage1");
+		GvInt("Damage 3", g, "ComboDamage2");
+		GvFloat("Base impact", g, "BaseImpact", 0.05f);
+		GvFloat("Impact step", g, "ImpactStep", 0.05f);
+		GvInt("Smash damage", g, "SmashDamage");
+		GvFloat("Smash impact", g, "SmashImpact", 0.05f);
+		ImGui::TextDisabled("Player");
+		GvInt("P Damage 1", g, "PlayerComboDamage0");
+		GvInt("P Damage 2", g, "PlayerComboDamage1");
+		GvInt("P Damage 3", g, "PlayerComboDamage2");
+		GvFloat("P Base impact", g, "PlayerBaseImpact", 0.05f);
+		GvFloat("P Impact step", g, "PlayerImpactStep", 0.05f);
+	}
+
+	if (ImGui::CollapsingHeader("Entity (body) offsets")) {
+		ImGui::TextColored(kWarn, "Sapper = enemy. Player combo body poses are shared with the player's other melee weapons.");
+		GvBodyCombo("Sapper", "EnemySapper", "BodyCombo");
+		GvBodyLunge("Sapper smash (body)", "EnemySapper", "BodySmash");
+		GvBodyCombo("Player (shared)", "PlayerBehavior", "BodyCombo");
+	}
+}
+
+// ------------------------------------------------------------------ Spontoon (EnemyOfficer)
+void DebugMenu::DrawSpearTab() {
+	const char* g = "WeaponSpear";
+	SaveGroups({g, "EnemyOfficer", "EnemyFighter", "PlayerBehavior"});
+
+	if (ImGui::CollapsingHeader("Weapon poses", ImGuiTreeNodeFlags_DefaultOpen)) {
+		GvPose("Holster", g, "HolsterOffset");
+		GvPose("Ready stance", g, "Ready");
+		GvPose("Down attack (player)", g, "DownAttack");
+	}
+	if (ImGui::CollapsingHeader("Reaction poses"))
+		GvReactionPoses(g);
+
+	if (ImGui::CollapsingHeader("Combo poses (3 steps x 4 keyframes)", ImGuiTreeNodeFlags_DefaultOpen))
+		GvWeaponCombos(g);
+
+	if (ImGui::CollapsingHeader("Reach")) {
+		GvFloat("Reach (all 3 steps)", g, "Reach", 0.05f);
+		GvVec3("Combo swing height (x3 steps)", g, "ComboSwingHeight", 0.02f);
+	}
+
+	if (ImGui::CollapsingHeader("Entity (body) offsets")) {
+		ImGui::TextColored(kWarn, "Officer swings with the Fighter's body combo (EnemyFighter, shared with the sabre Fighter).");
+		GvPoseKeys("Officer buff pose (body)", "EnemyOfficer", "BuffPoseScale", "BuffPoseRotation", "BuffPoseTranslation");
+		GvFloat("Buff anim duration (s)", "EnemyOfficer", "BuffAnimDuration", 0.02f);
+		GvFloat("Buff apply time (s)", "EnemyOfficer", "BuffApplyTime", 0.02f);
+		GvBodyCombo("Fighter/Officer", "EnemyFighter", "BodyCombo");
+		GvBodyCombo("Player (shared)", "PlayerBehavior", "BodyCombo");
+	}
+}
+
+// ------------------------------------------------------------------ Bayonet musket (EnemyRifleman / Carabinier)
+void DebugMenu::DrawBayonetTab() {
+	const char* g = "FirearmMusketBayonet";
+	SaveGroups({g, "EnemyRifleman", "Player", "PlayerBehavior", "BaseFirearm"});
+
+	GvFirearmPoses(g, false);
+
+	if (ImGui::CollapsingHeader("Bayonet lunge poses")) {
 		ImGui::TextDisabled("rotation.y must stay -1.5708. translation.z = forward, .x = camera side, rotation.x = barrel pitch.");
-		EditSRT("windUp", FirearmMusketBayonet::kLungePoses.windUp);
-		EditSRT("thrust", FirearmMusketBayonet::kLungePoses.thrust);
+		GvPose("Enemy lunge - wind-up", g, "LungeWindUp");
+		GvPose("Enemy lunge - thrust", g, "LungeThrust");
+		GvPose("Player lunge - wind-up", g, "PlayerLungeWindUp");
+		GvPose("Player lunge - thrust", g, "PlayerLungeThrust");
+	}
+
+	GvFireFeel();
+
+	if (ImGui::CollapsingHeader("Lunge timing / hitbox")) {
+		ImGui::TextDisabled("Enemy (frames @60fps)");
+		GvFloat("Anticipate", g, "BayonetAnticipateDuration", 0.2f);
+		GvFloat("Attack", g, "BayonetAttackDuration", 0.2f);
+		GvFloat("Recovery", g, "BayonetRecoveryDuration", 0.2f);
+		GvFloat("Advance speed", g, "BayonetAttackSpeed", 0.005f);
+		GvFloat("Reach", g, "BayonetReach", 0.05f);
+		GvFloat("Swing height", g, "BayonetSwingHeight", 0.05f);
+		ImGui::TextDisabled("Player");
+		GvFloat("P Anticipate", g, "PlayerBayonetAnticipate", 0.2f);
+		GvFloat("P Attack", g, "PlayerBayonetAttack", 0.2f);
+		GvFloat("P Recovery", g, "PlayerBayonetRecovery", 0.2f);
+		GvFloat("P Advance speed", g, "PlayerBayonetSpeed", 0.005f);
+		GvFloat("P Reach", g, "PlayerBayonetReach", 0.05f);
+		GvFloat("P Height", g, "PlayerBayonetHeight", 0.05f);
+	}
+
+	if (ImGui::CollapsingHeader("Entity (body) offsets")) {
+		ImGui::TextColored(kWarn, "Rifleman (and Carabinier, same statics). Player offsets are shared with the player's other firearms.");
+		GvGunnerBodyPoses("EnemyRifleman");
+		GvBodyLunge("Rifleman bayonet lunge (body)", "EnemyRifleman", "BodyLunge");
+		EditSRT("Rifleman firearmOffset_ (extra, not in GV)", EnemyRifleman::firearmOffset_);
+		GvBodyLunge("Player bayonet lunge (body)", "PlayerBehavior", "BodyLungeBayonet");
+		GvPose("Player firearm offset (shared)", "Player", "FirearmOffset");
+	}
+}
+
+// ------------------------------------------------------------------ Shotgun (EnemyShotgunner)
+void DebugMenu::DrawShotgunTab() {
+	const char* g = "FirearmShotgun";
+	SaveGroups({g, "EnemyShotgunner", "Player", "BaseFirearm"});
+
+	GvFirearmPoses(g, false);
+	GvFireFeel();
+
+	if (ImGui::CollapsingHeader("Fire pattern / recoil")) {
+		GvInt("Pellet count", g, "PelletCount");
+		GvFloat("Spread step (rad)", g, "SpreadStep", 0.005f);
+		GvInt("Pellet life (frames)", g, "PelletLifeFrames");
+		GvFloat("Fire knockback power", g, "FireKnockbackPower", 0.1f);
+	}
+
+	if (ImGui::CollapsingHeader("Entity (body) offsets")) {
+		ImGui::TextColored(kWarn, "Shotgunner = enemy. Player offsets are shared with the player's other firearms.");
+		GvGunnerBodyPoses("EnemyShotgunner");
+		EditSRT("Shotgunner firearmOffset_ (extra, not in GV)", EnemyShotgunner::firearmOffset_);
+		GvPose("Player firearm offset (shared)", "Player", "FirearmOffset");
+	}
+}
+
+// ------------------------------------------------------------------ Dual pistols (player only)
+void DebugMenu::DrawPistolsTab() {
+	const char* g = "FirearmPistols";
+	SaveGroups({g, "Player", "BaseFirearm"});
+
+	GvFirearmPoses(g, true);
+	GvFireFeel();
+
+	if (ImGui::CollapsingHeader("Second pistol / reload")) {
+		GvVec3("2nd pistol delta (combat, parent-local)", g, "SecondPistolDelta", 0.01f);
+		GvFloat("Reload per pistol (player, s)", g, "ReloadDurationPlayer", 0.05f);
+		GvFloat("Reload hit bonus (player, s)", g, "ReloadHitBonusPlayer", 0.01f);
+		GvFloat("Reload min (player, s)", g, "ReloadDurationMinPlayer", 0.05f);
+	}
+
+	if (ImGui::CollapsingHeader("Entity (body) offsets")) {
+		ImGui::TextColored(kWarn, "Pistols are player-only. This offset is shared with the player's other firearms.");
+		GvPose("Player firearm offset (shared)", "Player", "FirearmOffset");
 	}
 }
 
@@ -664,7 +1079,6 @@ void DebugMenu::DrawBodyTab() {
 		EditSRT("kRunPoseHigh", AnimationManager::kRunPoseHigh);
 		EditSRT("kJumpPose", AnimationManager::kJumpPose);
 		EditSRT("kFallPose", AnimationManager::kFallPose);
-
 	}
 
 	DragF("FootstepInterval", AnimationManager::kFootstepInterval, 0.005f);

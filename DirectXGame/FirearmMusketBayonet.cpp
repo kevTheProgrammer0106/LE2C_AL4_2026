@@ -1,6 +1,7 @@
 #define NOMINMAX
 #include "FirearmMusketBayonet.h"
 #include "GlobalVariables.h"
+#include "PoseGV.h"
 
 using namespace KamataEngine;
 
@@ -24,6 +25,17 @@ void FirearmMusketBayonet::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "OffsetReloadRotate", musketReloadOffset_.rotation);
 	gv->AddItem(kGroupName, "OffsetReloadTranslate", musketReloadOffset_.translation);
 
+	// ---- リアクションの構え(ノックバック / スタン / ブロック) ----
+	PoseGV::Register(kGroupName, "Knockback", musketKnockbackOffset_);
+	PoseGV::Register(kGroupName, "Stun", musketStunOffset_);
+	PoseGV::Register(kGroupName, "Block", musketBlockOffset_);
+
+	// ---- 銃剣ランジのポーズ(敵 / プレイヤー) ----
+	PoseGV::Register(kGroupName, "LungeWindUp", kLungePoses.windUp);
+	PoseGV::Register(kGroupName, "LungeThrust", kLungePoses.thrust);
+	PoseGV::Register(kGroupName, "PlayerLungeWindUp", kPlayerLungePoses.windUp);
+	PoseGV::Register(kGroupName, "PlayerLungeThrust", kPlayerLungePoses.thrust);
+
 	gv->AddItem(kGroupName, "ReloadDurationPlayer", kReloadDurationPlayer);
 	gv->AddItem(kGroupName, "ReloadHitBonusPlayer", kReloadHitBonusPlayer);
 	gv->AddItem(kGroupName, "ReloadDurationMinPlayer", kReloadDurationMinPlayer);
@@ -41,7 +53,7 @@ void FirearmMusketBayonet::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "BayonetReach", kBayonetReach);
 	gv->AddItem(kGroupName, "BayonetSwingHeight", kBayonetSwingHeight);
 
-		gv->AddItem(kGroupName, "PlayerBayonetAnticipate", kPlayerBayonetAnticipate);
+	gv->AddItem(kGroupName, "PlayerBayonetAnticipate", kPlayerBayonetAnticipate);
 	gv->AddItem(kGroupName, "PlayerBayonetAttack", kPlayerBayonetAttack);
 	gv->AddItem(kGroupName, "PlayerBayonetRecovery", kPlayerBayonetRecovery);
 	gv->AddItem(kGroupName, "PlayerBayonetSpeed", kPlayerBayonetSpeed);
@@ -66,6 +78,15 @@ void FirearmMusketBayonet::ApplyGlobalVariables() {
 	musketReloadOffset_.scale = gv->GetVector3Value(kGroupName, "OffsetReloadScale");
 	musketReloadOffset_.rotation = gv->GetVector3Value(kGroupName, "OffsetReloadRotate");
 	musketReloadOffset_.translation = gv->GetVector3Value(kGroupName, "OffsetReloadTranslate");
+
+	PoseGV::Apply(kGroupName, "Knockback", musketKnockbackOffset_);
+	PoseGV::Apply(kGroupName, "Stun", musketStunOffset_);
+	PoseGV::Apply(kGroupName, "Block", musketBlockOffset_);
+
+	PoseGV::Apply(kGroupName, "LungeWindUp", kLungePoses.windUp);
+	PoseGV::Apply(kGroupName, "LungeThrust", kLungePoses.thrust);
+	PoseGV::Apply(kGroupName, "PlayerLungeWindUp", kPlayerLungePoses.windUp);
+	PoseGV::Apply(kGroupName, "PlayerLungeThrust", kPlayerLungePoses.thrust);
 
 	kReloadDurationPlayer = gv->GetFloatValue(kGroupName, "ReloadDurationPlayer");
 	kReloadHitBonusPlayer = gv->GetFloatValue(kGroupName, "ReloadHitBonusPlayer");

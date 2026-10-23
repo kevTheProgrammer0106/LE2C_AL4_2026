@@ -249,6 +249,11 @@ public:
 	// 照準ライン用: 実際の射線(発射位置/正規化した狙い方向)と、カーソルまでのワールド距離
 	bool GetAimGuideInfo(KamataEngine::Vector3& outOrigin, KamataEngine::Vector2& outDir, float& outCursorDistance) const;
 
+	void StartBlastSmoke(float duration) {
+		blastSmokeTimer_ = duration;
+		blastSmokeEmitTimer_ = 0.0f;
+	}
+
 private:
 	bool controlLocked_ = false;
 
@@ -464,4 +469,10 @@ private:
 	static inline int kAttackEnemyCollisionMode = 1; // 0=常に敵で止まる / 1=先に角があるときだけ止まる
 	static inline float kAttackEnemyGap = 0.02f;     // 敵の手前で止まる時の隙間
 	static inline float kCornerLookAhead = 4.0f;     // 角を探す距離(体の端から)
+
+	void UpdateBlastSmoke();
+	float blastSmokeTimer_ = 0.0f;
+	float blastSmokeEmitTimer_ = 0.0f;
+	static inline float kBlastSmokeInterval = 0.08f;
+	static inline float kBlastSmokeDepthOffset = -0.5f;
 };

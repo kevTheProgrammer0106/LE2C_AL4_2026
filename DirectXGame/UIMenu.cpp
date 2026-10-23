@@ -10,6 +10,8 @@ void UIMenu::Initialize(uint32_t tex, KamataEngine::Camera* camera) {
 	buttonTextures_.clear();
 	buttonTextures_.push_back(tex);
 
+	barTexture_ = TextureManager::Load("./Resources/white1x1.png");
+
 	worldTransform_.Initialize();
 
 	Vector2 targetPos = {worldTransform_.translation_.x, worldTransform_.translation_.y};
@@ -30,6 +32,8 @@ void UIMenu::Initialize(const uint32_t* textures, size_t textureCount, KamataEng
 	if (textures != nullptr && textureCount > 0) {
 		buttonTextures_.assign(textures, textures + textureCount);
 	}
+
+	barTexture_ = TextureManager::Load("./Resources/white1x1.png");
 
 	worldTransform_.Initialize();
 
@@ -59,7 +63,7 @@ void UIMenu::UpdateCursor() {
 }
 
 void UIMenu::Update() {
-	// マウス座標/クリック状態はInputManagerから取得する。ここではKamataEngine::Inputへ直接触らない。
+	// マウス座標/クリック状態はInputManagerから取得する。ここではKamataEngine::Inputへは直接触らない。
 	InputManager* input = InputManager::GetInstance();
 
 	float mouseX = static_cast<float>(input->GetMouseX());
@@ -83,21 +87,32 @@ void UIMenu::Update() {
 void UIMenu::Draw() {
 	Sprite::PreDraw();
 	for (Button& button : buttons_) {
-		if (button.visible && button.sprite) {
-			button.sprite->SetColor({1.0f, 1.0f, 1.0f, buttonFadeAlpha_});
+		if (!button.visible) {
+			continue;
+		}
+		// バー(奥) -> ボタン本体(手前)。登場/退場はスライドで表現するので、アルファは常に固定
+		if (button.barSprite) {
+			button.barSprite->Draw();
+		}
+		if (button.sprite) {
+			button.sprite->SetColor({1.0f, 1.0f, 1.0f, 1.0f});
 			button.sprite->Draw();
 		}
 	}
-	if (cursorVisible_)
+	if (cursorVisible_) {
 		cursorSprite_->Draw();
+	}
 	Sprite::PostDraw();
 }
 
 void UIMenu::StartButtonFade(bool fadeIn, float duration) {
 	buttonFadeStatus_ = fadeIn ? ButtonFadeStatus::kFadeIn : ButtonFadeStatus::kFadeOut;
-	buttonFadeDuration_ = std::max(duration, 0.0001f);
+	// 登場はゆっくりイージング、退場は素早く。呼び出し側の値は下限/上限で補正する
+	const float clamped = fadeIn ? std::max(duration, kSlideInDuration) : std::min(duration, kSlideOutDuration);
+	buttonFadeDuration_ = std::max(clamped, 0.0001f);
 	buttonFadeTimer_ = 0.0f;
 	buttonFadeAlpha_ = fadeIn ? 0.0f : 1.0f;
+	buttonSlide_ = fadeIn ? 0.0f : 1.0f;
 }
 
 void UIMenu::UpdateButtonFade() {
@@ -111,8 +126,12 @@ void UIMenu::UpdateButtonFade() {
 	}
 
 	float t = std::clamp(buttonFadeTimer_ / buttonFadeDuration_, 0.0f, 1.0f);
-	buttonFadeAlpha_ = (buttonFadeStatus_ == ButtonFadeStatus::kFadeIn) ? t : (1.0f - t);
+	const bool fadeIn = (buttonFadeStatus_ == ButtonFadeStatus::kFadeIn);
+	buttonFadeAlpha_ = fadeIn ? t : (1.0f - t);
+	// 登場: 減速しながら本来の位置へ / 退場: 加速しながら端へ
+	buttonSlide_ = fadeIn ? EaseOut(0.0f, 1.0f, t) : (1.0f - EaseIn(0.0f, 1.0f, t));
 }
+
 void UIMenu::DrawHoverLabel(float mouseX, float mouseY) const {
 	if (buttonFadeAlpha_ <= 0.01f) {
 		return;
@@ -154,9 +173,49 @@ void UIMenu::DrawHoverLabel(float mouseX, float mouseY) const {
 	drawList->AddRect(p0, p1, IM_COL32(255, 255, 255, static_cast<int>(180 * a)), 6.0f, 0, 1.5f);
 	drawList->AddText(font, kLabelFontSize, {left + kLabelPadX, top + kLabelPadY}, IM_COL32(255, 255, 255, static_cast<int>(255 * a)), hovered->label.c_str());
 }
+
 #pragma region UIボタン(AABB)
 
 bool UIMenu::IsInsideAABB(const ButtonAABB& aabb, float x, float y) { return x >= aabb.left && x <= aabb.right && y >= aabb.top && y <= aabb.bottom; }
+
+UIMenu::SlideSide UIMenu::ResolveSide(const Button& button) const {
+	if (button.side != SlideSide::kAuto) {
+		return button.side;
+	}
+	const float centerX = (button.aabb.left + button.aabb.right) * 0.5f;
+	return (centerX < static_cast<float>(WinApp::kWindowWidth) * 0.5f) ? SlideSide::kLeft : SlideSide::kRight;
+}
+
+// 完全に画面外へ出るぶんのずれ(hidden)に、(1 - スライド進行度)を掛ける。
+// 左: バーの右端が画面の左端(x=0)に来る位置 / 右: ボタン本体の左端が画面の右端に来る位置
+float UIMenu::ComputeSlideOffset(const Button& button) const {
+	const float screenW = static_cast<float>(WinApp::kWindowWidth);
+	const float hidden = (ResolveSide(button) == SlideSide::kLeft) ? -button.aabb.right : (screenW - button.aabb.left);
+	return hidden * (1.0f - buttonSlide_);
+}
+
+// バー = 本来のボタン矩形を端側へ kSliderExtend だけ伸ばしたもの(スライド位置込み)
+UIMenu::ButtonAABB UIMenu::ComputeBarRect(const Button& button) const {
+	ButtonAABB rect = button.aabb;
+	if (ResolveSide(button) == SlideSide::kLeft) {
+		rect.left -= kSliderExtend;
+	} else {
+		rect.right += kSliderExtend;
+	}
+	const float offset = ComputeSlideOffset(button);
+	rect.left += offset;
+	rect.right += offset;
+	return rect;
+}
+
+// ボタン本体 = 本来のボタン矩形(元のサイズ)をスライドぶんずらしたもの
+UIMenu::ButtonAABB UIMenu::ComputeFaceRect(const Button& button) const {
+	ButtonAABB rect = button.aabb;
+	const float offset = ComputeSlideOffset(button);
+	rect.left += offset;
+	rect.right += offset;
+	return rect;
+}
 
 UIMenu::ButtonID UIMenu::AddButton(uint32_t textureHandle, float x, float y, float width, float height, const std::string& label) {
 	Button button;
@@ -164,10 +223,14 @@ UIMenu::ButtonID UIMenu::AddButton(uint32_t textureHandle, float x, float y, flo
 	button.aabb = {x, y, x + width, y + height};
 	button.label = label;
 
+	// バーは本体より先に描くので別スプライト。本体は元のサイズのまま
+	button.barSprite.reset(Sprite::Create(barTexture_, {x, y}));
+	button.barSprite->SetSize({width, height});
 	button.sprite.reset(Sprite::Create(textureHandle, {x, y}));
 	button.sprite->SetSize({width, height});
 
 	buttons_.push_back(std::move(button));
+	ApplyButtonVisual(buttons_.back());
 	return buttons_.back().id;
 }
 UIMenu::ButtonID UIMenu::AddButton(size_t textureIndex, float x, float y, float width, float height, const std::string& label) {
@@ -214,6 +277,12 @@ void UIMenu::SetButtonSize(ButtonID id, float width, float height) {
 	button->aabb.right = button->aabb.left + width;
 	button->aabb.bottom = button->aabb.top + height;
 	ApplyButtonVisual(*button);
+}
+void UIMenu::SetButtonSlideSide(ButtonID id, SlideSide side) {
+	if (Button* button = FindButton(id)) {
+		button->side = side;
+		ApplyButtonVisual(*button);
+	}
 }
 void UIMenu::SetButtonVisible(ButtonID id, bool visible) {
 	if (Button* button = FindButton(id)) {
@@ -275,7 +344,8 @@ void UIMenu::UpdateButtons(float mouseX, float mouseY, bool mouseDown, bool mous
 			continue;
 		}
 
-		button.isHovered = IsInsideAABB(button.aabb, mouseX, mouseY);
+		// 判定は現在のスライド位置にあるバー全体(画面外にいる間はマウスが届かないので自然に無効)
+		button.isHovered = IsInsideAABB(ComputeBarRect(button), mouseX, mouseY);
 
 		if (button.isHeld) {
 			if (mouseDown) {
@@ -305,15 +375,27 @@ void UIMenu::UpdateButtons(float mouseX, float mouseY, bool mouseDown, bool mous
 		ApplyButtonVisual(button);
 	}
 }
-void UIMenu::ApplyButtonVisual(Button& button) {
-	if (!button.sprite) {
-		return;
+
+// バーとボタン本体を、それぞれの矩形の中心を保ったままscaleで拡縮してスプライトへ反映する。
+// 判定矩形(ComputeBarRect)自体はscaleの影響を受けない
+void UIMenu::ApplyButtonVisual(Button& button) const {
+	auto apply = [&](Sprite* sprite, const ButtonAABB& rect) {
+		if (!sprite) {
+			return;
+		}
+		const float w = rect.right - rect.left;
+		const float h = rect.bottom - rect.top;
+		const float sw = w * button.scale;
+		const float sh = h * button.scale;
+		sprite->SetSize({sw, sh});
+		sprite->SetPosition({rect.left - (sw - w) * 0.5f, rect.top - (sh - h) * 0.5f});
+	};
+
+	apply(button.barSprite.get(), ComputeBarRect(button));
+	apply(button.sprite.get(), ComputeFaceRect(button));
+
+	if (button.barSprite) {
+		button.barSprite->SetColor(button.isHovered ? kBarHoverColor : kBarColor);
 	}
-	float w = button.aabb.right - button.aabb.left;
-	float h = button.aabb.bottom - button.aabb.top;
-	float sw = w * button.scale;
-	float sh = h * button.scale;
-	button.sprite->SetSize({sw, sh});
-	button.sprite->SetPosition({button.aabb.left - (sw - w) * 0.5f, button.aabb.top - (sh - h) * 0.5f});
 }
 #pragma endregion

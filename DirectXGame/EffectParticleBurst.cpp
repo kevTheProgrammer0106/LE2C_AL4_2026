@@ -12,7 +12,9 @@ using namespace KamataEngine;
 namespace {
 constexpr float kDeltaTime = 1.0f / 60.0f; // same fixed 60FPS as BaseEffect
 
-constexpr const char* kGroupNames[] = {"ParticleBurstHit",   "ParticleBurstJump", "ParticleBurstLand",        "ParticleBurstExplosion", "ParticleBurstSmoke", "ParticleBurstAura", "ParticleBurstBulletBlock", "ParticleBurstBulletEntity", "ParticleBurstSpawn"};
+constexpr const char* kGroupNames[] = {"ParticleBurstHit",         "ParticleBurstJump",         "ParticleBurstLand",  "ParticleBurstExplosion", "ParticleBurstSmoke",       "ParticleBurstAura",
+                                       "ParticleBurstBulletBlock", "ParticleBurstBulletEntity", "ParticleBurstSpawn", "ParticleBurstSmash",     "ParticleBurstGrenadeFuse", "ParticleBurstBlockDamage",
+                                       "ParticleBurstBulletTrail", "ParticleBurstSwingTrail",   "ParticleBurstSpike", "ParticleBurstBlastSmoke"};
 static_assert(std::size(kGroupNames) == static_cast<size_t>(BurstType::kCount), "kGroupNames must have one entry per BurstType");
 
 const char* GroupName(size_t i) { return kGroupNames[i]; }

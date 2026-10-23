@@ -36,6 +36,8 @@ void PlayerBehavior::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "KnockbackRestitution", kKnockbackRestitution);
 	gv->AddItem(kGroupName, "KnockbackBounceMinSpeed", kKnockbackBounceMinSpeed);
 	gv->AddItem(kGroupName, "KnockBackMaxDuration", static_cast<int32_t>(kKnockBackMaxDuration));
+	gv->AddItem(kGroupName, "DeathSpinPerSpeed", kDeathSpinPerSpeed);
+	gv->AddItem(kGroupName, "DeathMinSpin", kDeathMinSpin);
 }
 void PlayerBehavior::ApplyGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
@@ -61,6 +63,8 @@ void PlayerBehavior::ApplyGlobalVariables() {
 	kKnockbackRestitution = gv->GetFloatValue(kGroupName, "KnockbackRestitution");
 	kKnockbackBounceMinSpeed = gv->GetFloatValue(kGroupName, "KnockbackBounceMinSpeed");
 	kKnockBackMaxDuration = static_cast<uint32_t>(gv->GetIntValue(kGroupName, "KnockBackMaxDuration"));
+	kDeathSpinPerSpeed = gv->GetFloatValue(kGroupName, "DeathSpinPerSpeed");
+	kDeathMinSpin = gv->GetFloatValue(kGroupName, "DeathMinSpin");
 }
 
 void PlayerBehavior::ResolveBehaviorRequest() {
@@ -250,7 +254,7 @@ void PlayerBehavior::BehaviorDeathInitialize() {
 	owner_.velocity_ = {
 	    deathDirection_.x * (deathPower_ * kDeathFlingSpeedScale) + 0.0f, deathDirection_.y * (deathPower_ * kDeathFlingSpeedScale) + kDeathFlingUpBoost,
 	    deathDirection_.z * (deathPower_ * kDeathFlingSpeedScale) + 0.0f};
-	deathSpinSpeed_ = (deathDirection_.x < 0.0f) ? -0.35f : 0.35f;
+	deathSpinSpeed_ = (deathDirection_.x >= 0.0f) ? -1.0f : 1.0f;
 	owner_.onGround_ = false;
 	PlayDeathSound();
 }
@@ -261,8 +265,7 @@ void PlayerBehavior::BehaviorDeathUpdate() {
 	bool settled = (deathBounceCount_ >= kDeathMaxBounces) || (owner_.velocity_.x == 0.0f && owner_.velocity_.y == 0.0f && deathBounceCount_ > 0);
 
 	if (!settled) {
-		owner_.worldTransform_.rotation_.x += deathSpinSpeed_ * 0.6f;
-		owner_.worldTransform_.rotation_.z += deathSpinSpeed_;
+		owner_.worldTransform_.rotation_.z += ObjectBounce::TumbleSpin(owner_.velocity_.x, deathSpinSpeed_, kDeathSpinPerSpeed, kDeathMinSpin, kDeathMaxSpin);
 	} else {
 		float targetX = std::numbers::pi_v<float> / 2.0f;
 		owner_.worldTransform_.rotation_.x = EaseOut(owner_.worldTransform_.rotation_.x, targetX, 0.15f);

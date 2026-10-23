@@ -183,6 +183,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClCompile Include="AnimationUI.cpp" />
     <ClCompile Include="ArenaManager.cpp" />
     <ClCompile Include="AudioSettings.cpp" />
+    <ClCompile Include="BannerUI.cpp" />
     <ClCompile Include="BaseEffect.cpp" />
     <ClCompile Include="BaseEnemy.cpp" />
     <ClCompile Include="BaseEnemyBehavior.cpp" />
@@ -203,6 +204,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClCompile Include="EnemyCuirassier.cpp" />
     <ClCompile Include="EnemyFighter.cpp" />
     <ClCompile Include="EnemyGrenadier.cpp" />
+    <ClCompile Include="PoseGV.cpp" />
     <ClCompile Include="SpriteTutorial.cpp" />
     <ClCompile Include="StatusIndicator.cpp" />
     <ClCompile Include="EnemyOfficer.cpp" />
@@ -267,6 +269,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClInclude Include="AnimationUI.h" />
     <ClInclude Include="ArenaManager.h" />
     <ClInclude Include="AudioSettings.h" />
+    <ClInclude Include="BannerUI.h" />
     <ClInclude Include="BaseEffect.h" />
     <ClInclude Include="BaseEnemy.h" />
     <ClInclude Include="BaseEnemyBehavior.h" />
@@ -287,6 +290,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClInclude Include="EnemyCuirassier.h" />
     <ClInclude Include="EnemyFighter.h" />
     <ClInclude Include="EnemyGrenadier.h" />
+    <ClInclude Include="PoseGV.h" />
     <ClInclude Include="SpriteTutorial.h" />
     <ClInclude Include="StatusIndicator.h" />
     <ClInclude Include="EnemyOfficer.h" />

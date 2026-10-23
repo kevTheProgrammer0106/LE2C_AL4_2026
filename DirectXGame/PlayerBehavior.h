@@ -167,6 +167,10 @@ static inline BodyComboPoseSet kBodyCombo = {
 	    MakeBodyPose(0.35f, 0.25f, 0.0f, {1.02f, 0.98f, 1.0f}),
 	};
 
+	static inline float kDeathSpinPerSpeed = 1.25f;
+	static inline float kDeathMinSpin = 0.05f;
+	static inline float kDeathMaxSpin = 0.5f;
+
 	// --- SFX ---
 	static inline uint32_t sHurtSoundHandle_ = 0;
 	static inline uint32_t sDeathSoundHandle_ = 0;

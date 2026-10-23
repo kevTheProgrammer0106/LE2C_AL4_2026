@@ -1,4 +1,6 @@
 #include "GameAssets.h"
+#include <algorithm>
+#include <initializer_list>
 
 using namespace KamataEngine;
 
@@ -39,7 +41,6 @@ void GameAssets::LoadModelsAndTextures() {
 	modelPistol.reset(Model::CreateFromOBJ("musketPistol", true));
 	pistolTex = TextureManager::Load("./Resources/musketBlunderbuss/musketSkin.png");
 
-
 	modelProjectileBall.reset(Model::CreateFromOBJ("firearmBall", true));
 	firearmBallTex = TextureManager::Load("./Resources/firearmBall/firearmBall.png");
 
@@ -67,13 +68,7 @@ void GameAssets::LoadModelsAndTextures() {
 	fighterHeadTex = TextureManager::Load("./Resources/fighterHead/fighterHead.png");
 	fighterHatTex = TextureManager::Load("./Resources/fighterHat/fighterShako.png");
 
-	// --- Enemy: Carabinier ---
-	//modelCarabinierBody.reset(Model::CreateFromOBJ("carabinierBody", true));
-	//modelCarabinierHead.reset(Model::CreateFromOBJ("carabinierHead", true));
-	//modelCarabinierHat.reset(Model::CreateFromOBJ("carabinierHat", true));
-	//carabinierBodyTex = TextureManager::Load("./Resources/carabinierBody/carabinierTorso.png");
-	//carabinierHeadTex = TextureManager::Load("./Resources/carabinierHead/carabinierHead.png");
-	//carabinierHatTex = TextureManager::Load("./Resources/carabinierHat/carabinierHelmet.png");
+	// --- Enemy: Carabinier (placeholder: Cuirassier art) ---
 	modelCarabinierBody.reset(Model::CreateFromOBJ("cuirassierBody", true));
 	modelCarabinierHead.reset(Model::CreateFromOBJ("cuirassierHead", true));
 	modelCarabinierHat.reset(Model::CreateFromOBJ("cuirassierHat", true));
@@ -81,14 +76,7 @@ void GameAssets::LoadModelsAndTextures() {
 	carabinierHeadTex = TextureManager::Load("./Resources/cuirassierHead/cuirassierHead.png");
 	carabinierHatTex = TextureManager::Load("./Resources/cuirassierHat/cuirassierHelmet.png");
 
-	// --- Enemy: Shotgunner ---
-	//modelShotgunnerBody.reset(Model::CreateFromOBJ("shotgunnerBody", true));
-	//modelShotgunnerHead.reset(Model::CreateFromOBJ("shotgunnerHead", true));
-	//modelShotgunnerHat.reset(Model::CreateFromOBJ("shotgunnerHat", true));
-	//shotgunnerBodyTex = TextureManager::Load("./Resources/shotgunnerBody/shotgunnerTorso.png");
-	//shotgunnerHeadTex = TextureManager::Load("./Resources/shotgunnerHead/shotgunnerHead.png");
-	//shotgunnerHatTex = TextureManager::Load("./Resources/shotgunnerHat/shotgunnerShako.png");
-
+	// --- Enemy: Shotgunner (placeholder: Rifleman art) ---
 	modelShotgunnerBody.reset(Model::CreateFromOBJ("riflemanBody", true));
 	modelShotgunnerHead.reset(Model::CreateFromOBJ("riflemanHead", true));
 	modelShotgunnerHat.reset(Model::CreateFromOBJ("riflemanHat", true));
@@ -96,14 +84,7 @@ void GameAssets::LoadModelsAndTextures() {
 	shotgunnerHeadTex = TextureManager::Load("./Resources/riflemanHead/riflemanHead.png");
 	shotgunnerHatTex = TextureManager::Load("./Resources/riflemanHat/riflemanShako.png");
 
-	// --- Enemy: Grenadier ---
-	// modelGrenadierBody.reset(Model::CreateFromOBJ("grenadierBody", true));
-	// modelGrenadierHead.reset(Model::CreateFromOBJ("grenadierHead", true));
-	// modelGrenadierHat.reset(Model::CreateFromOBJ("grenadierHat", true));
-	// grenadierBodyTex = TextureManager::Load("./Resources/grenadierBody/grenadierTorso.png");
-	// grenadierHeadTex = TextureManager::Load("./Resources/grenadierHead/grenadierHead.png");
-	// grenadierHatTex = TextureManager::Load("./Resources/grenadierHat/grenadierShako.png");
-
+	// --- Enemy: Grenadier (placeholder) ---
 	modelGrenadierBody.reset(Model::CreateFromOBJ("fighterBody", true));
 	modelGrenadierHead.reset(Model::CreateFromOBJ("riflemanHead", true));
 	modelGrenadierHat.reset(Model::CreateFromOBJ("riflemanHat", true));
@@ -111,14 +92,7 @@ void GameAssets::LoadModelsAndTextures() {
 	grenadierHeadTex = TextureManager::Load("./Resources/riflemanHead/riflemanHead.png");
 	grenadierHatTex = TextureManager::Load("./Resources/riflemanHat/riflemanShako.png");
 
-		// --- Enemy: Officer ---
-	// modelOfficerBody.reset(Model::CreateFromOBJ("officerBody", true));
-	// modelOfficerHead.reset(Model::CreateFromOBJ("officerHead", true));
-	// modelOfficerHat.reset(Model::CreateFromOBJ("officerHat", true));
-	// officerBodyTex = TextureManager::Load("./Resources/officerBody/officerTorso.png");
-	// officerHeadTex = TextureManager::Load("./Resources/officerHead/officerHead.png");
-	// officerHatTex = TextureManager::Load("./Resources/officerHat/officerShako.png");
-
+	// --- Enemy: Officer (placeholder) ---
 	modelOfficerBody.reset(Model::CreateFromOBJ("fighterBody", true));
 	modelOfficerHead.reset(Model::CreateFromOBJ("riflemanHead", true));
 	modelOfficerHat.reset(Model::CreateFromOBJ("riflemanHat", true));
@@ -126,7 +100,7 @@ void GameAssets::LoadModelsAndTextures() {
 	officerHeadTex = TextureManager::Load("./Resources/riflemanHead/riflemanHead.png");
 	officerHatTex = TextureManager::Load("./Resources/riflemanHat/riflemanShako.png");
 
-	// --- Enemy: Sapper (仮: Cuirassierのモデルを流用) ---
+	// --- Enemy: Sapper (placeholder: Cuirassier art) ---
 	modelSapperBody.reset(Model::CreateFromOBJ("cuirassierBody", true));
 	modelSapperHead.reset(Model::CreateFromOBJ("cuirassierHead", true));
 	modelSapperHat.reset(Model::CreateFromOBJ("cuirassierHat", true));
@@ -134,43 +108,78 @@ void GameAssets::LoadModelsAndTextures() {
 	sapperHeadTex = TextureManager::Load("./Resources/cuirassierHead/cuirassierHead.png");
 	sapperHatTex = TextureManager::Load("./Resources/cuirassierHat/cuirassierHelmet.png");
 
-
 	// --- Effects ---
-	slashEffectTex = TextureManager::Load("./Resources/hit_effect/hit_effect.png");
+	slashEffectTex = TextureManager::Load("./Resources/spriteIngame/attackSlash.png");
 	modelSlashEffect.reset(Model::CreateFromOBJ("hit_effect", true));
-	hitEffectTex = TextureManager::Load("./Resources/particle/circle.png");
+	hitEffectTex = TextureManager::Load("./Resources/spriteIngame/effectExplosion.png");
 	hitEffectModel.reset(Model::CreateFromOBJ("particle"));
-	guardEffectTex = TextureManager::Load("./Resources/ring/ring.png");
+	guardEffectTex = TextureManager::Load("./Resources/spriteIngame/effectSpark.png");
 	guardEffectModel.reset(Model::CreateFromOBJ("ring"));
 	deathParticleTex = TextureManager::Load("./Resources/deathParticle/white1x1.png");
 	deathParticleModel.reset(Model::CreateFromOBJ("deathParticle", true));
 
 	// --- Blocks ---
-	blockTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
 	blockModel.reset(Model::CreateFromOBJ("blockNormal"));
-	blockPlatformTex = TextureManager::Load("./Resources/platform/block.png");
-	blockPlatformModel.reset(Model::CreateFromOBJ("platform"));
+	blockPlatformModel.reset(Model::CreateFromOBJ("blockPlatform"));
 
-	// Per-tile texture variants selected by the map chip subID (0 grass, 1 wood, 2 brick, 3 cobble, 4 concrete, 5 rubber).
-	// All point at grassBlock.png for now; swap individual lines when the real textures exist.
-	{
-		uint32_t grass = TextureManager::Load("./Resources/block/grassBlock.png");
-		for (uint8_t subID = 0; subID <= 5; ++subID) {
-			blockTexVariants[subID] = grass;
-			platformTexVariants[subID] = grass;
-		}
-	}
+	modelBlockTypeOne.reset(Model::CreateFromOBJ("blockTypeOne"));
+	modelBlockTypeTwo.reset(Model::CreateFromOBJ("blockTypeTwo"));
+	modelBlockTypeThree.reset(Model::CreateFromOBJ("blockTypeThree"));
+	modelBlockTypeFour.reset(Model::CreateFromOBJ("blockTypeFour"));
+	modelBlockWoodPlanks.reset(Model::CreateFromOBJ("blockWoodPlanks"));
+	modelBlockSupport.reset(Model::CreateFromOBJ("blockWoodSupport"));
 
-	// --- Goal / Gate / Switch / HealthBlock ---
-	modelGoal.reset(Model::CreateFromOBJ("blockNormal", true));
-	goalTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
-	modelGate.reset(Model::CreateFromOBJ("blockNormal", true));
-	gateTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
-	modelSwitch.reset(Model::CreateFromOBJ("blockNormal", true));
-	switchTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
-	modelHealthBlock.reset(Model::CreateFromOBJ("blockNormal"));
-	healthBlockTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
-	modelTutorialBlock.reset(Model::CreateFromOBJ("blockNormal", true));
+	blockGrassTex = TextureManager::Load("./Resources/blockTypeOne/blockGrass.png");
+	blockDirtTex = TextureManager::Load("./Resources/blockTypeOne/blockDirt.png");
+	blockStoneTex = TextureManager::Load("./Resources/blockTypeOne/blockStone.png");
+	blockCobblestoneTex = TextureManager::Load("./Resources/blockTypeOne/blockCobblestone.png");
+	blockLeavesTex = TextureManager::Load("./Resources/blockTypeOne/blockLeaves.png");
+	blockSandTex = TextureManager::Load("./Resources/blockTypeOne/blockSand.png");
+
+	blockCrateTex = TextureManager::Load("./Resources/blockTypeTwo/blockCrate.png");
+	blockIronTex = TextureManager::Load("./Resources/blockTypeTwo/blockIron.png");
+
+	blockShinglesTex = TextureManager::Load("./Resources/blockTypeThree/blockShingles.png");
+	blockThatchTex = TextureManager::Load("./Resources/blockTypeThree/blockThatch.png");
+	blockTilesTex = TextureManager::Load("./Resources/blockTypeThree/blockTiles.png");
+
+	blockWoodTex = TextureManager::Load("./Resources/blockTypeFour/blockWood.png");
+	blockWoodPlanksTex = TextureManager::Load("./Resources/blockWoodPlanks/blockWoodPlanks.png");
+	blockSupportTex = TextureManager::Load("./Resources/blockWoodSupport/blockWoodSupport.png");
+
+	blockPlatformLeavesTex = TextureManager::Load("./Resources/blockPlatform/blockPlatformLeaves.png");
+	blockPlatformDirtTex = TextureManager::Load("./Resources/blockPlatform/blockPlatformDirt.png");
+	blockPlatformWoodTex = TextureManager::Load("./Resources/blockPlatform/blockPlatformWood.png");
+	blockPlatformIronTex = TextureManager::Load("./Resources/blockPlatform/blockPlatformIron.png");
+
+	blockMudTex = TextureManager::Load("./Resources/blockSlow/blockMud.png");
+	blockGravelTex = TextureManager::Load("./Resources/blockSlow/blockGravel.png");
+	blockHeavySandTex = TextureManager::Load("./Resources/blockSlow/blockSandHeavy.png");
+
+	blockSpikesTex = TextureManager::Load("./Resources/blockSpikes/blockSpikes.png");
+	blockGateTex = TextureManager::Load("./Resources/blockGate/blockGate.png");
+	blockGlassTex = TextureManager::Load("./Resources/blockGlass/blockGlass.png");
+	blockBarrelTex = TextureManager::Load("./Resources/blockBarrel/blockBarrel.png");
+	blockHealthTex = TextureManager::Load("./Resources/blockHealth/blockHealth.png");
+
+	// placeholders until destructible art exists
+	breakableTex[0] = breakableTex[1] = breakableTex[2] = blockCrateTex;
+	fragileTex = blockWoodPlanksTex;
+
+	modelTutorialBlock.reset(Model::CreateFromOBJ("blockSign", true));
+	tutorialBlockTex = TextureManager::Load("./Resources/blockSign/blockSign.png");
+
+	// --- Goal / Gate / HealthBlock ---
+	modelGoal.reset(Model::CreateFromOBJ("blockGoal", true));
+	goalTex = TextureManager::Load("./Resources/blockGoal/blockGoal.png");
+	modelGate.reset(Model::CreateFromOBJ("blockGate", true));
+	modelHealthBlock.reset(Model::CreateFromOBJ("blockHealth"));
+
+	// --- Lever (handle + support) ---
+	modelLever.reset(Model::CreateFromOBJ("blockLever"));
+	modelLeverSupport.reset(Model::CreateFromOBJ("blockLeverSupport"));
+	blockLeverTex = TextureManager::Load("./Resources/blockLever/blockLever.png");
+	blockLeverSupportTex = TextureManager::Load("./Resources/blockLeverSupport/blockLeverSupport.png");
 
 	// --- Gameplay HUD ---
 	healthBarBackgroundTex = TextureManager::Load("./Resources/white1x1.png");
@@ -185,8 +194,6 @@ void GameAssets::LoadModelsAndTextures() {
 
 	enemyIconArrowTex = TextureManager::Load("./Resources/UserInterface/enemyDirectionArrow.png");
 
-	// Placeholder icons: reuse the weapon textures until real icon art exists.
-	// Swap each line for TextureManager::Load("./Resources/UserInterface/iconXxx.png") when the files are ready.
 	meleeIconLightTex = TextureManager::Load("./Resources/UserInterface/weaponSabre.png");
 	meleeIconHeavyTex = TextureManager::Load("./Resources/UserInterface/weaponSabreHeavy.png");
 	meleeIconAxeTex = TextureManager::Load("./Resources/UserInterface/weaponAxe.png");
@@ -196,10 +203,9 @@ void GameAssets::LoadModelsAndTextures() {
 	firearmIconBayonetTex = TextureManager::Load("./Resources/UserInterface/weaponMusketBayonet.png");
 	firearmIconShotgunTex = TextureManager::Load("./Resources/UserInterface/weaponBlunderbuss.png");
 	firearmIconPistolTex = TextureManager::Load("./Resources/UserInterface/weaponPistols.png");
-	
-	
+
 	bayonetLungeIconTex = TextureManager::Load("./Resources/UserInterface/weaponBayonet.png");
-	
+
 	interactionPromptTex = TextureManager::Load("./Resources/UserInterface/InteractionPrompt.png");
 
 	// --- Menus / cursor ---
@@ -212,27 +218,15 @@ void GameAssets::LoadModelsAndTextures() {
 	victoryButtonTex[0] = TextureManager::Load("./Resources/UserInterface/buttonRestart.png");
 	victoryButtonTex[1] = TextureManager::Load("./Resources/UserInterface/buttonBack.png");
 	inGamePauseButtonTex = TextureManager::Load("./Resources/UserInterface/buttonIngamePause.png");
-	cursorTex[0] = TextureManager::Load("./Resources/UserInterface/directionAim.png");
-	cursorTex[1] = TextureManager::Load("./Resources/UserInterface/directionArrow.png");
-
-	// glassTex = loadOr("./Resources/block/glass.png", blockTex);
-	// breakableTex[0] = loadOr("./Resources/block/breakable.png", blockTex);
-	// breakableTex[1] = loadOr("./Resources/block/breakable_cracked1.png", breakableTex[0]);
-	// breakableTex[2] = loadOr("./Resources/block/breakable_cracked2.png", breakableTex[1]);
-	// explosiveTex = loadOr("./Resources/block/explosive.png", blockTex);
-	// spikeTex = loadOr("./Resources/block/spike.png", blockTex);
-	// slowBlockTex = loadOr("./Resources/block/slowBlock.png", blockTexVariants[0]);
-	// fragileTex = loadOr("./Resources/block/fragile.png", blockTex);
-
-	glassTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
-	breakableTex[0] = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
-	breakableTex[1] = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
-	breakableTex[2] = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
-	explosiveTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
-	spikeTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
-	slowBlockTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
-	fragileTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
-	tutorialBlockTex = TextureManager::Load("./Resources/blockNormal/blockGrass.png");
+	cursorTex[0] = TextureManager::Load("./Resources/UserInterface/iconDirectionCrosshair.png");
+	cursorTex[1] = TextureManager::Load("./Resources/UserInterface/iconCursor.png");
+	// --- Banner(2048x512) ---
+	bannerTex[0] = TextureManager::Load("./Resources/UserInterface/bannerObjective.png");
+	bannerTex[1] = TextureManager::Load("./Resources/UserInterface/bannerArena.png");
+	bannerTex[2] = TextureManager::Load("./Resources/UserInterface/bannerPaused.png");
+	bannerTex[3] = TextureManager::Load("./Resources/UserInterface/bannerDefeat.png");
+	bannerTex[4] = TextureManager::Load("./Resources/UserInterface/bannerVictory.png");
+	bannerTex[5] = TextureManager::Load("./Resources/UserInterface/bannerBuffed.png");
 }
 
 void GameAssets::LoadAudio() {
@@ -281,9 +275,42 @@ void GameAssets::LoadAudio() {
 	sfxExplosion = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
 	sfxSpikeHit = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
 
-	// Arena SFX (placeholders — swap in real wavs; handle 0 = silent)
-	sfxArenaStart = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
-	sfxWaveStart = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
-	sfxWaveEnd = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
-	sfxArenaClear = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
+	// Arena SFX (placeholders; handle 0 = silent)
+	sfxArenaStart = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
+	sfxWaveStart = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
+	sfxWaveEnd = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
+	sfxArenaClear = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
+}
+
+// B / T / M chips -> model + texture. Out-of-range subID falls back to the last entry of the group.
+TileVisual GameAssets::ResolveTile(MapChipType type, uint8_t subID, uint8_t linkID) const {
+	auto pick = [subID](std::initializer_list<uint32_t> list) {
+		const size_t i = std::min<size_t>(subID, list.size() - 1);
+		return *(list.begin() + i);
+	};
+
+	switch (type) {
+	case MapChipType::kBlock:
+		switch (linkID) {
+		default:
+		case 0:
+			return {modelBlockTypeOne.get(), pick({blockGrassTex, blockDirtTex, blockStoneTex, blockCobblestoneTex, blockLeavesTex, blockSandTex})};
+		case 1:
+			return {modelBlockTypeTwo.get(), pick({blockCrateTex, blockIronTex})};
+		case 2:
+			return {modelBlockTypeThree.get(), pick({blockShinglesTex, blockThatchTex, blockTilesTex})};
+		case 3:
+			return {modelBlockTypeFour.get(), blockWoodTex};
+		case 4:
+			return {modelBlockWoodPlanks.get(), blockWoodPlanksTex};
+		case 5:
+			return {modelBlockSupport.get(), blockSupportTex};
+		}
+	case MapChipType::kPlatform:
+		return {blockPlatformModel.get(), pick({blockPlatformLeavesTex, blockPlatformDirtTex, blockPlatformWoodTex, blockPlatformIronTex})};
+	case MapChipType::kSlowBlock:
+		return {blockModel.get(), pick({blockMudTex, blockGravelTex, blockHeavySandTex})};
+	default:
+		return {blockModel.get(), blockGrassTex};
+	}
 }

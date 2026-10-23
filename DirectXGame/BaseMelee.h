@@ -8,7 +8,7 @@
 #include <array>
 #include <vector>
 
-class Player; // FIX: was used below without any declaration
+class Player;
 
 enum class WeaponState { kHolstered, kEquipped };
 
@@ -170,6 +170,11 @@ public:
 
 	static void RegisterGlobalVariables();
 	static void ApplyGlobalVariables();
+
+	// 剣先のワールド座標(トレイル用)。刃はモデルのローカル+Z方向と仮定。ずれる場合は GlobalVariables の TrailTipOffset で調整
+	virtual KamataEngine::Vector3 GetTrailTipLocalOffset() const { return kTrailTipOffset; }
+	KamataEngine::Vector3 GetTipWorldPosition() const { return TransformCoordinate(GetTrailTipLocalOffset(), worldTransform_.matWorld_); }
+	static inline KamataEngine::Vector3 kTrailTipOffset = {0.0f, 0.0f, 1.3f};
 
 	// --- SFX ---
 	static void SetDefaultSwingSoundHandle(uint32_t handle) { sDefaultSwingSoundHandle_ = handle; }

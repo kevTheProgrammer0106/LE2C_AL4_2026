@@ -10,6 +10,7 @@
 ///   is reloaded you can fire once, then it cycles (fire / reload / fire ...).
 /// - Damage = musket - 10, reload = musket - 1s (see the k... values below, tunable in GlobalVariables).
 /// - Both pistols are drawn (second one is the first one shifted by kSecondDelta). Unloaded pistols are darkened.
+/// - ホルスターは2丁それぞれ別のオフセット(pistolHolsterOffset_ / pistolHolsterOffset2_)。他のポーズは1つを共有する。
 /// - "Hold to fire both" is handled by Player::UseFirearm (needs IsFullyLoaded()).
 /// </summary>
 class FirearmPistols final : public BaseFirearm {
@@ -105,6 +106,12 @@ private:
         {0.6f, 0.2f,        -0.1f}
     };
 	static inline SRTOffset pistolHolsterOffset_ = {
+	    {1.0f,    1.0f,  1.0f },
+        {-1.371f, 0.0f,  0.0f },
+        {-0.4f,   -0.3f, -0.3f}
+    };
+	// 2丁目のホルスター(既定は1丁目と同じ値 = 重なって収まる)
+	static inline SRTOffset pistolHolsterOffset2_ = {
 	    {1.0f,    1.0f,  1.0f },
         {-1.371f, 0.0f,  0.0f },
         {-0.4f,   -0.3f, -0.3f}

@@ -84,7 +84,7 @@ Vector3 CameraController::ComputeFollowTarget() const {
 	return {
 	    wt.translation_.x + targetOffset_.x + smoothedVelocity_.x * kVelocityBias,
 	    wt.translation_.y + targetOffset_.y + smoothedVelocity_.y * kVelocityBias,
-	    wt.translation_.z + targetOffset_.z + smoothedVelocity_.z * kVelocityBias + zoomDelta_,
+	    wt.translation_.z + targetOffset_.z + smoothedVelocity_.z * kVelocityBias,
 	};
 }
 
@@ -172,6 +172,12 @@ void CameraController::UpdateFx() {
 	const float distance = std::max(std::abs(camera_->translation_.z - targetZ), 1.0f);
 	const float distScale = distance / kShakeReferenceDistance;
 
+		// ---- zoom: a fraction of the CURRENT camera distance, added after every camera mode (follow / arena focus / forced scroll) ----
+	const float followDist = std::max(std::abs(targetOffset_.z), 1.0f);
+	const float zoomRatio = std::clamp(zoomDelta_ / followDist, -kMaxZoomOutRatio, 0.95f);
+	float zoomOffset = zoomRatio * distance;
+	zoomOffset = std::min(zoomOffset, std::max(distance - kMinCameraDistance, 0.0f)); // never zoom through the player
+
 	if (shakeTimer_ > 0.0f) {
 		shakeTimer_ = std::max(0.0f, shakeTimer_ - kDt);
 		shakeTime_ += kDt;
@@ -197,7 +203,7 @@ void CameraController::UpdateFx() {
 	} else {
 		pulseDelta_ = 0.0f;
 	}
-	offset.z = pulseDelta_; // +z = toward the scene. Added after every camera mode (follow / zone focus / scroll), so it works inside arena cameras too
+	offset.z = zoomOffset + pulseDelta_; // +z = toward the scene
 
 	fxOffset_ = offset;
 	fxRoll_ = roll;
@@ -220,25 +226,16 @@ void CameraController::RemoveFx() {
 }
 
 // ---------------- Zoom ----------------
-void CameraController::ZoomTo(float zoomDelta, float duration, Ease ease) {
-	zoomStart_ = zoomDelta_;
+void CameraController::ZoomTo(float zoomDelta, float duration, Ease /*ease: the spring has its own curve*/) {
 	zoomTarget_ = zoomDelta;
-	zoomDuration_ = std::max(duration, 0.0001f);
-	zoomTimer_ = 0.0f;
-	zoomEase_ = ease;
-	zoomActive_ = true;
+	zoomSmoothTime_ = std::max(duration * kZoomSettleFactor, 0.02f); // keeps zoomVel_, so interrupting a zoom never snaps
 }
 
 void CameraController::UpdateZoom() {
-	if (!zoomActive_) {
-		return;
-	}
-	zoomTimer_ += 1.0f / 60.0f;
-	float t = std::clamp(zoomTimer_ / zoomDuration_, 0.0f, 1.0f);
-	zoomDelta_ = Lerp(zoomStart_, zoomTarget_, ApplyEase(zoomEase_, t));
-	if (t >= 1.0f) {
+	zoomDelta_ = SmoothDamp(zoomDelta_, zoomTarget_, zoomVel_, zoomSmoothTime_, 1.0f / 60.0f);
+	if (std::abs(zoomDelta_ - zoomTarget_) < 0.001f && std::abs(zoomVel_) < 0.001f) {
 		zoomDelta_ = zoomTarget_;
-		zoomActive_ = false;
+		zoomVel_ = 0.0f;
 	}
 }
 
@@ -315,8 +312,7 @@ void CameraController::Reset() {
 	if (mode_ == Mode::kFocus) {
 		mode_ = modeBeforeFocus_;
 	}
-	zoomDelta_ = 0.0f;
-	zoomActive_ = false;
+	zoomDelta_ = zoomTarget_ = zoomVel_ = 0.0f;
 
 	const WorldTransform& targetWT = target_->GetWorldTransform();
 

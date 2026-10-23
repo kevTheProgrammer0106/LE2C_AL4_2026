@@ -160,18 +160,26 @@ private:
 	float focusTimer_ = 0.0f;
 	Mode modeBeforeFocus_ = Mode::kFollow;
 	void UpdateFocusCamera();
+	KamataEngine::Vector3 FocusTargetPosition() const; // shot position with the current zoom applied (scaled to the shot distance)
 	void BeginFocusReturn();
 
 	KamataEngine::Vector3 ComputeFollowTarget() const;
 
-	float zoomDelta_ = 0.0f;
 	float zoomStart_ = 0.0f;
-	float zoomTarget_ = 0.0f;
 	float zoomTimer_ = 0.0f;
 	float zoomDuration_ = 0.0f;
 	Ease zoomEase_ = Ease::kInOut;
 	bool zoomActive_ = false;
 	void UpdateZoom();
+
+		float zoomDelta_ = 0.0f; // current zoom, in "follow-camera units" (positive = in, negative = out)
+	float zoomTarget_ = 0.0f;
+	float zoomVel_ = 0.0f;
+	float zoomSmoothTime_ = 0.2f;
+
+	static inline float kZoomSettleFactor = 0.42f; // smoothTime = duration * this -> ~95% settled by `duration`
+	static inline float kMinCameraDistance = 2.0f; // the camera never zooms closer than this to the player
+	static inline float kMaxZoomOutRatio = 1.5f;   // furthest zoom-out, as a fraction of the current distance
 
 	float scrollX_ = 0.0f;
 	float scrollSpeed_ = 0.025f;

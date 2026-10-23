@@ -769,7 +769,7 @@ void BaseEnemyBehavior::BehaviorDieInitialize() {
 	    owner_.pendingHitDirection_.x * (owner_.pendingImpactPower_ * kDeathFlingSpeedScale) + 0.0f,
 	    owner_.pendingHitDirection_.y * (owner_.pendingImpactPower_ * kDeathFlingSpeedScale) + kDeathFlingUpBoost,
 	    owner_.pendingHitDirection_.z * (owner_.pendingImpactPower_ * kDeathFlingSpeedScale) + 0.0f};
-	deathSpinSpeed_ = sRandom_.GetRandValue(-kDeathMaxSpin, kDeathMaxSpin);
+	deathSpinSpeed_ = (owner_.pendingHitDirection_.x >= 0.0f) ? -1.0f : 1.0f; // 右へ飛ぶなら時計回り
 	owner_.onGround_ = false;
 }
 
@@ -780,8 +780,8 @@ void BaseEnemyBehavior::BehaviorDieUpdate() {
 	bool settled = (deathBounceCount_ >= kDeathMaxBounces) || (owner_.velocity_.x == 0.0f && owner_.velocity_.y == 0.0f && deathBounceCount_ > 0);
 
 	if (!settled) {
-		owner_.worldTransform_.rotation_.x += deathSpinSpeed_ * 0.6f;
-		owner_.worldTransform_.rotation_.z += deathSpinSpeed_;
+		// x軸の回転はやめ、画面内(z軸)で進行方向へ転がす
+		owner_.worldTransform_.rotation_.z += ObjectBounce::TumbleSpin(owner_.velocity_.x, deathSpinSpeed_, kDeathSpinPerSpeed, kDeathMinSpin, kDeathMaxSpin);
 	} else {
 		float targetX = std::numbers::pi_v<float> / 2.0f;
 		owner_.worldTransform_.rotation_.x = EaseOut(owner_.worldTransform_.rotation_.x, targetX, 0.15f);

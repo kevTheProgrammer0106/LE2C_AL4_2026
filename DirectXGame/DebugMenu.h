@@ -12,6 +12,9 @@ class GameScene;
 /// enemy weapon / firearm / body offset tweaker. Debug builds only.
 /// Needs `friend class DebugMenu;` in GameScene and in every class whose private statics it edits.
 /// Hotkeys: F1 collision boxes, F2 freeze/unfreeze enemies, F3 this window, P debug camera.
+///
+/// 武器タブ(Heavy Sabre / Axe / Spontoon / Bayonet Musket / Shotgun / Pistols)は
+/// GlobalVariablesの値を直接編集する(GetVector3Ptr等)。Save this tab でjsonへ保存。
 /// </summary>
 class DebugMenu {
 public:
@@ -24,7 +27,11 @@ private:
 	void DrawEnemiesTab(GameScene* gs);
 	void DrawSabreTab();
 	void DrawHeavySabreTab();
-	void DrawMusketTab();
+	void DrawAxeTab();
+	void DrawSpearTab();
+	void DrawBayonetTab();
+	void DrawShotgunTab();
+	void DrawPistolsTab();
 	void DrawBodyTab();
 	void DrawCombatTab();
 	void PushBodyOffsetsToEnemies(GameScene* gs);

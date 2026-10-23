@@ -3,6 +3,7 @@
 #include "BaseEnemy.h"
 #include "GlobalVariables.h"
 #include "Player.h"
+#include "PoseGV.h"
 
 using namespace KamataEngine;
 
@@ -20,6 +21,7 @@ void WeaponHeavySabre::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "HalfDepthMin", kHalfDepthMin);
 	gv->AddItem(kGroupName, "HalfDepthMax", kHalfDepthMax);
 	gv->AddItem(kGroupName, "LungeReach", kLungeReach);
+	gv->AddItem(kGroupName, "HolsterOffsetScale", holsterOffset_.scale);
 	gv->AddItem(kGroupName, "HolsterOffsetTranslation", holsterOffset_.translation);
 	gv->AddItem(kGroupName, "HolsterOffsetRotation", holsterOffset_.rotation);
 	gv->AddItem(kGroupName, "LungeDamage", kLungeDamage);
@@ -33,6 +35,23 @@ void WeaponHeavySabre::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "PlayerLungeCooldown", kPlayerLungeCooldown);
 	gv->AddItem(kGroupName, "PlayerLungeReach", kPlayerLungeReach);
 	gv->AddItem(kGroupName, "PlayerLungeHeight", kPlayerLungeHeight);
+
+	// ---- ポーズ(構え / リアクション / 下攻撃) ----
+	PoseGV::Register(kGroupName, "Ready", readyStanceOffset_);
+	PoseGV::Register(kGroupName, "Knockback", kKnockbackOffset);
+	PoseGV::Register(kGroupName, "Stun", kStunOffset);
+	PoseGV::Register(kGroupName, "Block", kBlockOffset);
+	PoseGV::Register(kGroupName, "DownAttack", kDownAttackOffset);
+	// ---- コンボ(3段 x 4キーフレーム) ----
+	PoseGV::RegisterCombo(kGroupName, "Combo", comboPatterns_);
+	// ---- ランジのポーズ(敵 / プレイヤー) ----
+	PoseGV::Register(kGroupName, "LungePoseAnticipate", kLungeAnticipate);
+	PoseGV::Register(kGroupName, "LungePoseExtend", kLungeExtend);
+	PoseGV::Register(kGroupName, "PlayerLungePoseAnticipate", kPlayerLungeAnticipatePose);
+	PoseGV::Register(kGroupName, "PlayerLungePoseExtend", kPlayerLungeExtendPose);
+	// ---- コンボの射程 / 高さ(3段分を1行で) ----
+	gv->AddItem(kGroupName, "ComboReach", PoseGV::ToVec3(kComboReach));
+	gv->AddItem(kGroupName, "ComboSwingHeight", PoseGV::ToVec3(kComboSwingHeight));
 }
 
 void WeaponHeavySabre::ApplyGlobalVariables() {
@@ -44,6 +63,7 @@ void WeaponHeavySabre::ApplyGlobalVariables() {
 	kHalfDepthMin = gv->GetFloatValue(kGroupName, "HalfDepthMin");
 	kHalfDepthMax = gv->GetFloatValue(kGroupName, "HalfDepthMax");
 	kLungeReach = gv->GetFloatValue(kGroupName, "LungeReach");
+	holsterOffset_.scale = gv->GetVector3Value(kGroupName, "HolsterOffsetScale");
 	holsterOffset_.translation = gv->GetVector3Value(kGroupName, "HolsterOffsetTranslation");
 	holsterOffset_.rotation = gv->GetVector3Value(kGroupName, "HolsterOffsetRotation");
 	kLungeDamage = gv->GetIntValue(kGroupName, "LungeDamage");
@@ -57,6 +77,19 @@ void WeaponHeavySabre::ApplyGlobalVariables() {
 	kPlayerLungeCooldown = gv->GetFloatValue(kGroupName, "PlayerLungeCooldown");
 	kPlayerLungeReach = gv->GetFloatValue(kGroupName, "PlayerLungeReach");
 	kPlayerLungeHeight = gv->GetFloatValue(kGroupName, "PlayerLungeHeight");
+
+	PoseGV::Apply(kGroupName, "Ready", readyStanceOffset_);
+	PoseGV::Apply(kGroupName, "Knockback", kKnockbackOffset);
+	PoseGV::Apply(kGroupName, "Stun", kStunOffset);
+	PoseGV::Apply(kGroupName, "Block", kBlockOffset);
+	PoseGV::Apply(kGroupName, "DownAttack", kDownAttackOffset);
+	PoseGV::ApplyCombo(kGroupName, "Combo", comboPatterns_);
+	PoseGV::Apply(kGroupName, "LungePoseAnticipate", kLungeAnticipate);
+	PoseGV::Apply(kGroupName, "LungePoseExtend", kLungeExtend);
+	PoseGV::Apply(kGroupName, "PlayerLungePoseAnticipate", kPlayerLungeAnticipatePose);
+	PoseGV::Apply(kGroupName, "PlayerLungePoseExtend", kPlayerLungeExtendPose);
+	PoseGV::FromVec3(kComboReach, gv->GetVector3Value(kGroupName, "ComboReach"));
+	PoseGV::FromVec3(kComboSwingHeight, gv->GetVector3Value(kGroupName, "ComboSwingHeight"));
 }
 
 AABB WeaponHeavySabre::GetAABB() const {

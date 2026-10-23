@@ -30,6 +30,7 @@ void Grenade::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "NormalRadius", kNormalRadius);
 	gv->AddItem(kGroupName, "NormalDamage", kNormalDamage);
 	gv->AddItem(kGroupName, "Impact", kImpact);
+	gv->AddItem(kGroupName, "TrailIntervalStart", kTrailIntervalStart);
 }
 
 void Grenade::ApplyGlobalVariables() {
@@ -50,6 +51,7 @@ void Grenade::ApplyGlobalVariables() {
 	kNormalRadius = gv->GetFloatValue(kGroupName, "NormalRadius");
 	kNormalDamage = gv->GetIntValue(kGroupName, "NormalDamage");
 	kImpact = gv->GetFloatValue(kGroupName, "Impact");
+	kTrailIntervalStart = gv->GetFloatValue(kGroupName, "TrailIntervalStart");
 }
 
 Vector3 Grenade::MakeThrowVelocity(bool facingRight) { return {facingRight ? kThrowSpeedX : -kThrowSpeedX, kThrowSpeedY, 0.0f}; }
@@ -68,6 +70,8 @@ void Grenade::Initialize(Model* model, uint32_t textureHandle, Camera* camera, M
 
 	fuseTimer_ = kFuseTime;
 	flashPhase_ = 0.0f;
+	trailTimer_ = 0.0f;
+	trailTick_ = false;
 	readyToExplode_ = false;
 	isDead_ = false;
 
@@ -111,6 +115,14 @@ void Grenade::Update() {
 	worldTransform_.rotation_.z -= velocity_.x / (kBodySize * 0.5f); // rolls as it travels
 
 	// ---- fuse visuals ----
+	// ---- 導火線の火花タイミング ----
+	trailTimer_ -= kDt;
+	if (trailTimer_ <= 0.0f) {
+		trailTick_ = true;
+		const float progress = std::clamp(1.0f - fuseTimer_ / std::max(kFuseTime, 0.001f), 0.0f, 1.0f);
+		trailTimer_ = Lerp(kTrailIntervalStart, kTrailIntervalEnd, progress);
+	}
+
 	const float remaining = fuseTimer_;
 
 	bool flashOn = false;

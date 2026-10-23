@@ -169,6 +169,11 @@ void EnemySapper::TickSmashImpact() {
 			Vector3 feet = GetWorldPosition() + Vector3(0.0f, -kHeight * 0.5f, 0.0f);
 			gameScene_->CreateBurstEffect(BurstType::kLand, feet, {0.0f, 1.0f});
 			gameScene_->CreateBurstEffect(BurstType::kHit, feet, {0.0f, 1.0f});
+			// 叩きつけの衝撃波: 地面に沿って左右へ土煙を飛ばす(手前に出して見やすくする)
+			Vector3 fx = feet;
+			fx.z -= 0.3f;
+			gameScene_->CreateBurstEffect(BurstType::kSmash, fx, {-1.0f, 0.15f});
+			gameScene_->CreateBurstEffect(BurstType::kSmash, fx, {1.0f, 0.15f});
 		}
 	} else if (smashLandingWait_ >= kSmashLandingTimeout) {
 		awaitingSmashLanding_ = false;

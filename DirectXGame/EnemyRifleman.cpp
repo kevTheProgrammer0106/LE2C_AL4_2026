@@ -140,15 +140,14 @@ void EnemyRifleman::ShootFirearm() {
 	if (!currentFirearm_->TryFire())
 		return;
 
-	Vector3 origin = GetWorldPosition();
+	const Vector3 bodyAlignment = GetWorldPosition();
+	Vector3 muzzle = currentFirearm_->GetFiredMuzzleWorldPosition();
+	muzzle.z = bodyAlignment.z;
 	Vector2 aimDir = ComputeTargetAimPosition();
 
 	if (gameScene_) {
-		// ShootFirearm 内
-		gameScene_->CreateFirearmProjectile(Owner::kEnemy, origin, aimDir, currentFirearm_->GetBulletDamage());
-		Vector3 muzzlePos = origin;
-		// 敵は銃口に追従させない
-		gameScene_->CreateMuzzleFlash(currentFirearm_->GetMuzzleWorldPosition(), aimDir, false);
+		gameScene_->CreateFirearmProjectile(Owner::kEnemy, muzzle, aimDir, currentFirearm_->GetBulletDamage(), 0, &bodyAlignment);
+		gameScene_->CreateMuzzleFlash(muzzle, aimDir, false);
 	}
 	currentFirearm_->TriggerRecoil(isRight());
 	BaseFirearm::PlayFireSound();

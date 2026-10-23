@@ -49,6 +49,12 @@ public:
 	float GetFloatValue(const std::string& groupName, const std::string& key) const { return GetImpl<float>(groupName, key); }
 	KamataEngine::Vector3 GetVector3Value(const std::string& groupName, const std::string& key) const { return GetImpl<KamataEngine::Vector3>(groupName, key); }
 
+	// エディタUI(DebugMenu)用の直接ポインタ。項目が無い/型が違う場合はnullptr。
+	// ここを書き換えると、次の ApplyGlobalVariables() で各クラスの値へ反映される。
+	KamataEngine::Vector3* GetVector3Ptr(const std::string& groupName, const std::string& key) { return GetPtrImpl<KamataEngine::Vector3>(groupName, key); }
+	float* GetFloatPtr(const std::string& groupName, const std::string& key) { return GetPtrImpl<float>(groupName, key); }
+	int32_t* GetIntPtr(const std::string& groupName, const std::string& key) { return GetPtrImpl<int32_t>(groupName, key); }
+
 	/// <summary>
 	/// 毎フレーム処理。独立ウィンドウ "Global Variables" を描画する(Debugビルドのみ)。
 	/// </summary>
@@ -87,6 +93,17 @@ private:
 		assert(std::holds_alternative<T>(item.value));
 #endif
 		return std::get<T>(item.value);
+	}
+
+	// 存在しなければnullptrを返す(assertしない)。std::mapなのでポインタは安定
+	template<typename T> T* GetPtrImpl(const std::string& groupName, const std::string& key) {
+		auto itGroup = datas_.find(groupName);
+		if (itGroup == datas_.end())
+			return nullptr;
+		auto itItem = itGroup->second.items.find(key);
+		if (itItem == itGroup->second.items.end())
+			return nullptr;
+		return std::get_if<T>(&itItem->second.value);
 	}
 
 	// 保存結果などの表示用

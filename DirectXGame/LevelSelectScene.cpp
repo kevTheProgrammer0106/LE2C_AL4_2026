@@ -65,7 +65,7 @@ void LevelSelectScene::Initialize(StageManager* stageManager, bool withScreenFad
 		menuInput_.StartButtonFade(false, kButtonFadeDuration);
 	});
 
-	cursorTex_ = TextureManager::Load("./Resources/UserInterface/directionArrow.png");
+	cursorTex_ = TextureManager::Load("./Resources/UserInterface/iconCursor.png");
 	menuInput_.SetCursorTexture(cursorTex_);
 
 	if (withScreenFadeIn) {

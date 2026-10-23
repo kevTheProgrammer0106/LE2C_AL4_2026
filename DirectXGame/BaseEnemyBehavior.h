@@ -474,4 +474,7 @@ protected:
 	static inline float kLungeLedgeGuardSpeed = 0.1f;
 
 	static inline float kGrenadeSafeMargin = 1.5f; // extra distance kept outside the blast radius
+
+	static inline float kDeathSpinPerSpeed = 1.25f; // 水平速度1あたりの回転量(rad/frame)
+	static inline float kDeathMinSpin = 0.05f;      // 空中で最低限回る量
 };

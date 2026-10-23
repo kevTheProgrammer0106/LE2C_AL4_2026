@@ -94,5 +94,9 @@ inline void Step(MapChipField* field, KamataEngine::Vector3& pos, KamataEngine::
 		}
 	}
 }
-
+// 転がり回転の増分。右へ進むと負(時計回り)、左へ進むと正。速度が0に近い時は fallbackSign
+inline float TumbleSpin(float velocityX, float fallbackSign, float perSpeed, float minSpin, float maxSpin) {
+	const float sign = (std::abs(velocityX) > 0.01f) ? ((velocityX > 0.0f) ? -1.0f : 1.0f) : fallbackSign;
+	return sign * std::clamp(std::abs(velocityX) * perSpeed + minSpin, 0.0f, maxSpin);
+}
 } // namespace DeathBounce

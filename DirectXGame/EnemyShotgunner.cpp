@@ -132,9 +132,15 @@ void EnemyShotgunner::ShootFirearm() {
 	if (!currentFirearm_->TryFire())
 		return;
 
-	Vector3 origin = GetWorldPosition();
+	const Vector3 bodyAlignment = GetWorldPosition();
+	Vector3 muzzle = currentFirearm_->GetFiredMuzzleWorldPosition();
+	muzzle.z = bodyAlignment.z;
 	Vector2 aimDir = ComputeTargetAimPosition();
 
+	if (gameScene_) {
+
+		gameScene_->CreateMuzzleFlash(muzzle, aimDir, false);
+	}
 	if (gameScene_) {
 		// 銃の発射パターンに従って、ペレットを固定角で扇状に撃つ(Player::UseFirearmと同じ回転計算)
 		const int pelletCount = std::max(1, currentFirearm_->GetPelletCount());
@@ -143,10 +149,10 @@ void EnemyShotgunner::ShootFirearm() {
 			const float c = std::cos(angle);
 			const float s = std::sin(angle);
 			Vector2 dir = {aimDir.x * c - aimDir.y * s, aimDir.x * s + aimDir.y * c};
-			gameScene_->CreateFirearmProjectile(Owner::kEnemy, origin, dir, currentFirearm_->GetBulletDamage(), currentFirearm_->GetProjectileLifeFrames());
+			gameScene_->CreateFirearmProjectile(Owner::kEnemy, muzzle, dir, currentFirearm_->GetBulletDamage(), currentFirearm_->GetProjectileLifeFrames(), &bodyAlignment);
 		}
 		// 敵は銃口に追従させない
-		gameScene_->CreateMuzzleFlash(currentFirearm_->GetMuzzleWorldPosition(), aimDir, false);
+		gameScene_->CreateMuzzleFlash(muzzle, aimDir, false);
 	}
 	currentFirearm_->TriggerRecoil(isRight());
 	BaseFirearm::PlayFireSound();

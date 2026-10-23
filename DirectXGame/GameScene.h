@@ -66,6 +66,8 @@
 #include "EffectParticleBurst.h"
 #include "SpriteTutorial.h"
 
+#include "BannerUI.h"
+
 class StageManager;
 
 struct BlockVisual {
@@ -106,7 +108,8 @@ public:
 	void CreateExplosion(const KamataEngine::Vector3& position, float smokeLoopDuration = -1.0f);
 	
 
-	void CreateFirearmProjectile(Owner owner, const KamataEngine::Vector3& position, const KamataEngine::Vector2& aimDirection, int damage = -1, int32_t lifeFrames = 0);
+	void CreateFirearmProjectile(
+	    Owner owner, const KamataEngine::Vector3& position, const KamataEngine::Vector2& aimDirection, int damage = -1, int32_t lifeFrames = 0, const KamataEngine::Vector3* sweepFrom = nullptr);
 	void CreateGrenade(const KamataEngine::Vector3& position, const KamataEngine::Vector3& velocity, Owner owner);
 
 	DroppableItem* CreateDroppableItem(const KamataEngine::Vector3& position, DropItemCategory category, DropWeaponKind kind, DropItemState state = DropItemState::kReady);
@@ -593,4 +596,22 @@ private:
 	static inline float kBlockZoomRatio = 0.11f; // fraction of the current camera distance
 
 	std::vector<std::unique_ptr<SpriteTutorial>> tutorials_;
+
+	BannerUI banner_;
+	Phase bannerPrevPhase_ = Phase::kFadeIn; // バナー切り替え用に前フレームのフェーズを覚える
+	float resultTimer_ = 0.0f;               // 死亡/ゴール到達からの経過秒数
+	bool resultButtonsStarted_ = false;
+	static inline float kResultButtonDelay = 3.0f; // 敗北/勝利バナーを見せてからボタンが出るまでの秒数
+	static inline float kStartBannerHold = 2.0f;
+	static inline float kArenaBannerHold = 2.0f;
+	bool officerBannerShown_ = false; // 将校バフのバナーを出したか(初回のみ)
+	static inline float kOfficerBannerHold = 2.0f;
+	void UpdateBanners();
+	void UpdateResultButtons();
+
+	void UpdateBulletTrails();
+	void UpdateMeleeTrails();
+	std::unordered_map<const BaseMelee*, KamataEngine::Vector3> meleeTrailPrev_;
+	static inline float kFxDepthOffset = -0.2f;     // 新しいエフェクトをカメラ側へ寄せる量
+	static inline float kBlastSmokeDuration = 2.5f; // 爆風を受けた体が煙を出す最大秒数
 };

@@ -1,6 +1,7 @@
 #include "EnemyOfficer.h"
 #include "GlobalVariables.h"
 #include "OfficerBuff.h"
+#include "PoseGV.h"
 
 using namespace KamataEngine;
 
@@ -17,6 +18,7 @@ void EnemyOfficer::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "BuffDamageReduction", OfficerBuff::kDamageReduction);
 	gv->AddItem(kGroupName, "BuffMoveBonus", OfficerBuff::kMoveBonus);
 	gv->AddItem(kGroupName, "BuffChaseTimeBonus", OfficerBuff::kChaseTimeBonus);
+	PoseGV::Register(kGroupName, "BuffPose", kBuffPose); // バフ時の体のポーズ
 	WeaponSpear::RegisterGlobalVariables();
 	OfficerBehavior::RegisterGlobalVariables();
 }
@@ -28,6 +30,7 @@ void EnemyOfficer::ApplyGlobalVariables() {
 	OfficerBuff::kDamageReduction = gv->GetFloatValue(kGroupName, "BuffDamageReduction");
 	OfficerBuff::kMoveBonus = gv->GetFloatValue(kGroupName, "BuffMoveBonus");
 	OfficerBuff::kChaseTimeBonus = gv->GetFloatValue(kGroupName, "BuffChaseTimeBonus");
+	PoseGV::Apply(kGroupName, "BuffPose", kBuffPose);
 	WeaponSpear::ApplyGlobalVariables();
 	OfficerBehavior::ApplyGlobalVariables();
 }

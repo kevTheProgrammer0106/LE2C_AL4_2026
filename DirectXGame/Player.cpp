@@ -91,6 +91,8 @@ void Player::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "CornerLookAhead", kCornerLookAhead);
 	gv->AddItem(kGroupName, "BlockerKnockbackScale", kBlockerKnockbackScale);
 	gv->AddItem(kGroupName, "BlockSpecialKnockbackScale", kBlockSpecialKnockbackScale);
+	gv->AddItem(kGroupName, "BlastSmokeInterval", kBlastSmokeInterval);
+	gv->AddItem(kGroupName, "BlastSmokeDepthOffset", kBlastSmokeDepthOffset);
 }
 void Player::ApplyGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
@@ -141,8 +143,11 @@ void Player::ApplyGlobalVariables() {
 	kAttackEnemyGap = gv->GetFloatValue(kGroupName, "AttackEnemyGap");
 	kCornerLookAhead = gv->GetFloatValue(kGroupName, "CornerLookAhead");
 
-		kBlockerKnockbackScale = gv->GetFloatValue(kGroupName, "BlockerKnockbackScale");
+	kBlockerKnockbackScale = gv->GetFloatValue(kGroupName, "BlockerKnockbackScale");
 	kBlockSpecialKnockbackScale = gv->GetFloatValue(kGroupName, "BlockSpecialKnockbackScale");
+
+	kBlastSmokeInterval = gv->GetFloatValue(kGroupName, "BlastSmokeInterval");
+	kBlastSmokeDepthOffset = gv->GetFloatValue(kGroupName, "BlastSmokeDepthOffset");
 }
 #pragma endregion
 
@@ -366,20 +371,21 @@ void Player::UseFirearm() {
 }
 
 void Player::FireCurrentFirearm() {
-	Vector3 origin = GetModelWorldPosition();
+	const Vector3 bodyCenter = GetModelWorldPosition();
+	// 銃本体の原点 + 銃口オフセット(撃った側の銃身)から発射する
+	Vector3 origin = currentFirearm_->GetFiredMuzzleWorldPosition();
+	origin.z = bodyCenter.z;
 	Vector2 aimDir = GetEffectiveAimDir();
 
 	if (gameScene_) {
-		// pellet pattern per firearm (normal guns: 1 pellet, angle 0)
 		const int pelletCount = std::max(1, currentFirearm_->GetPelletCount());
 		for (int i = 0; i < pelletCount; ++i) {
 			const float angle = currentFirearm_->GetPelletAngle(i);
 			const float c = std::cos(angle);
 			const float s = std::sin(angle);
 			Vector2 dir = {aimDir.x * c - aimDir.y * s, aimDir.x * s + aimDir.y * c};
-			gameScene_->CreateFirearmProjectile(Owner::kPlayer, origin, dir, currentFirearm_->GetBulletDamage(), currentFirearm_->GetProjectileLifeFrames());
+			gameScene_->CreateFirearmProjectile(Owner::kPlayer, origin, dir, currentFirearm_->GetBulletDamage(), currentFirearm_->GetProjectileLifeFrames(), &bodyCenter);
 		}
-		// from the barrel that fired (dual pistols: the right one); follows the gun
 		gameScene_->CreateMuzzleFlash(currentFirearm_->GetFiredMuzzleWorldPosition(), aimDir, true);
 	}
 	currentFirearm_->TriggerRecoil(lrDirection_ == LRDirection::kRight);
@@ -488,6 +494,7 @@ void Player::UpdateGoalSequence() {
 	UpdateModelCollision();
 	UpdateMeleeVisual();
 	UpdateBodyParts();
+	UpdateBlastSmoke();
 }
 void Player::UpdateTurnRotation() {
 	if (turnTimer_ > 0.0f) {
@@ -1175,7 +1182,11 @@ float Player::LimitAttackMoveByEnemies(float moveX) {
 bool Player::GetAimGuideInfo(Vector3& outOrigin, Vector2& outDir, float& outCursorDistance) const {
 	if (!camera_)
 		return false;
-	outOrigin = GetModelWorldPosition(); // 弾の発射位置と同じ(FireCurrentFirearm)
+	outOrigin = GetModelWorldPosition();
+	if (currentFirearm_) {
+		outOrigin = currentFirearm_->GetFiredMuzzleWorldPosition(); // 弾の発射位置と同じ
+		outOrigin.z = GetModelWorldPosition().z;
+	}
 	const Vector2 raw = GetEffectiveAimDir();
 	const float len = std::sqrt(raw.x * raw.x + raw.y * raw.y);
 	if (len < 0.0001f)
@@ -1192,4 +1203,18 @@ bool Player::GetAimGuideInfo(Vector3& outOrigin, Vector2& outDir, float& outCurs
 	const float screenDistance = std::sqrt((static_cast<float>(mouse.x) - o.x) * (static_cast<float>(mouse.x) - o.x) + (static_cast<float>(mouse.y) - o.y) * (static_cast<float>(mouse.y) - o.y));
 	outCursorDistance = (pixelsPerUnit > 0.0001f) ? screenDistance / pixelsPerUnit : 0.0f;
 	return true;
+}
+void Player::UpdateBlastSmoke() {
+	if (blastSmokeTimer_ <= 0.0f || !gameScene_)
+		return;
+	constexpr float kDt = 1.0f / 60.0f;
+	blastSmokeTimer_ -= kDt;
+	blastSmokeEmitTimer_ -= kDt;
+	const bool bouncing = behavior_.IsDeathBehavior() || behavior_.IsKnockback() || !onGround_;
+	if (!bouncing || blastSmokeEmitTimer_ > 0.0f)
+		return;
+	blastSmokeEmitTimer_ = kBlastSmokeInterval;
+	Vector3 pos = GetModelWorldPosition();
+	pos.z += kBlastSmokeDepthOffset;
+	gameScene_->CreateBurstEffect(BurstType::kBlastSmoke, pos, {0.0f, 1.0f});
 }

@@ -1,6 +1,7 @@
 #define NOMINMAX
 #include "FirearmPistols.h"
 #include "GlobalVariables.h"
+#include "PoseGV.h"
 
 using namespace KamataEngine;
 
@@ -22,6 +23,12 @@ void FirearmPistols::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "OffsetReloadRotate", pistolReloadOffset_.rotation);
 	gv->AddItem(kGroupName, "OffsetReloadTranslate", pistolReloadOffset_.translation);
 	gv->AddItem(kGroupName, "SecondPistolDelta", kSecondDelta);
+
+	// ---- 2丁目のホルスター / リアクションの構え ----
+	PoseGV::Register(kGroupName, "Holster2", pistolHolsterOffset2_);
+	PoseGV::Register(kGroupName, "Knockback", pistolKnockbackOffset_);
+	PoseGV::Register(kGroupName, "Stun", pistolStunOffset_);
+	PoseGV::Register(kGroupName, "Block", pistolBlockOffset_);
 
 	gv->AddItem(kGroupName, "ReloadDurationPlayer", kReloadDurationPlayer);
 	gv->AddItem(kGroupName, "ReloadHitBonusPlayer", kReloadHitBonusPlayer);
@@ -47,6 +54,11 @@ void FirearmPistols::ApplyGlobalVariables() {
 	pistolReloadOffset_.rotation = gv->GetVector3Value(kGroupName, "OffsetReloadRotate");
 	pistolReloadOffset_.translation = gv->GetVector3Value(kGroupName, "OffsetReloadTranslate");
 	kSecondDelta = gv->GetVector3Value(kGroupName, "SecondPistolDelta");
+
+	PoseGV::Apply(kGroupName, "Holster2", pistolHolsterOffset2_);
+	PoseGV::Apply(kGroupName, "Knockback", pistolKnockbackOffset_);
+	PoseGV::Apply(kGroupName, "Stun", pistolStunOffset_);
+	PoseGV::Apply(kGroupName, "Block", pistolBlockOffset_);
 
 	kReloadDurationPlayer = gv->GetFloatValue(kGroupName, "ReloadDurationPlayer");
 	kReloadHitBonusPlayer = gv->GetFloatValue(kGroupName, "ReloadHitBonusPlayer");
@@ -147,11 +159,29 @@ void FirearmPistols::UpdateFollow(const WorldTransform& parentTransform, float l
 
 	// Second pistol = first pistol shifted in the parent's local space. Own WorldTransform (never copy one: shared constant buffer).
 	Matrix4x4 rotMatrix = Multiply(MakeRotateXMatrix(parentTransform.rotation_.x), Multiply(MakeRotateYMatrix(parentTransform.rotation_.y), MakeRotateZMatrix(parentTransform.rotation_.z)));
-	Vector3 delta = TransformNormal(Vector3{kSecondDelta.x * equipFactor_, kSecondDelta.y * equipFactor_, kSecondDelta.z * equipFactor_}, rotMatrix);
+
+	// 収納中だけ、2丁目のホルスター(pistolHolsterOffset2_)と1丁目のホルスターの差分を足す。
+	// 基底の合成は Lerp(収納, 戦闘, equipFactor_) なので、2丁目は (1 - equipFactor_) * (holster2 - holster1) だけずれる。
+	// リロードポーズ中は2丁とも同じ収納ポーズなので差分なし。
+	const float stow = 1.0f - equipFactor_;
+	Vector3 holsterTranslation = {0.0f, 0.0f, 0.0f};
+	Vector3 holsterRotation = {0.0f, 0.0f, 0.0f};
+	Vector3 holsterScale = {0.0f, 0.0f, 0.0f};
+	if (!isShowingReloadPose_) {
+		const SRTOffset& h1 = pistolHolsterOffset_;
+		const SRTOffset& h2 = pistolHolsterOffset2_;
+		const float mirror = facingRight ? 1.0f : -1.0f; // 基底と同じく、左向きはy/zを反転
+		holsterTranslation = {(h2.translation.x - h1.translation.x) * stow, (h2.translation.y - h1.translation.y) * stow, (h2.translation.z - h1.translation.z) * stow};
+		holsterRotation = {(h2.rotation.x - h1.rotation.x) * stow, (h2.rotation.y - h1.rotation.y) * stow * mirror, (h2.rotation.z - h1.rotation.z) * stow * mirror};
+		holsterScale = {(h2.scale.x - h1.scale.x) * stow, (h2.scale.y - h1.scale.y) * stow, (h2.scale.z - h1.scale.z) * stow};
+	}
+
+	Vector3 delta = TransformNormal(
+	    Vector3{kSecondDelta.x * equipFactor_ + holsterTranslation.x, kSecondDelta.y * equipFactor_ + holsterTranslation.y, kSecondDelta.z * equipFactor_ + holsterTranslation.z}, rotMatrix);
 
 	worldTransformSecond_.translation_ = worldTransform_.translation_ + delta;
-	worldTransformSecond_.rotation_ = worldTransform_.rotation_;
-	worldTransformSecond_.scale_ = worldTransform_.scale_;
+	worldTransformSecond_.rotation_ = {worldTransform_.rotation_.x + holsterRotation.x, worldTransform_.rotation_.y + holsterRotation.y, worldTransform_.rotation_.z + holsterRotation.z};
+	worldTransformSecond_.scale_ = {worldTransform_.scale_.x + holsterScale.x, worldTransform_.scale_.y + holsterScale.y, worldTransform_.scale_.z + holsterScale.z};
 
 	// Cycling kick: when a pistol finishes loading its muzzle flicks up and eases back (like pumping a shotgun).
 	// Applied after the second pistol was derived, so each pistol kicks on its own.

@@ -22,7 +22,7 @@ void TitleScene::Initialize(bool withScreenFadeIn) {
 	buttonBackTex_ = TextureManager::Load("./Resources/UserInterface/buttonBack.png");
 	/*creditsTex_ = TextureManager::Load("./Resources/UserInterface/credits.png");*/
 	creditsTex_ = TextureManager::Load("./Resources/UserInterface/buttonLevel3.png");
-	cursorTex_ = TextureManager::Load("./Resources/UserInterface/directionArrow.png");
+	cursorTex_ = TextureManager::Load("./Resources/UserInterface/iconCursor.png");
 
 	menuInput_.Initialize(buttonTex_, 4, &camera_);
 	menuInput_.SetButtonGroupAlpha(0.0f); // 画面フェードイン完了後にボタンをフェードインさせる

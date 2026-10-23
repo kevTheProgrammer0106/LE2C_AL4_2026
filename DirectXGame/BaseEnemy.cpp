@@ -42,6 +42,9 @@ void BaseEnemy::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "AttackEffectScale", kAttackEffectScale);
 	gv->AddItem(kGroupName, "AuraInterval", kAuraInterval);
 	gv->AddItem(kGroupName, "BulletKnockbackScale", kBulletKnockbackScale);
+	gv->AddItem(kGroupName, "BlastSmokeInterval", kBlastSmokeInterval);
+	gv->AddItem(kGroupName, "BlastSmokeDepthOffset", kBlastSmokeDepthOffset);
+	gv->AddItem(kGroupName, "AuraDepthOffset", kAuraDepthOffset);
 	BaseEnemyBehavior::RegisterGlobalVariables();
 }
 
@@ -73,6 +76,9 @@ void BaseEnemy::ApplyGlobalVariables() {
 	kAttackEffectScale = gv->GetFloatValue(kGroupName, "AttackEffectScale");
 	kAuraInterval = gv->GetFloatValue(kGroupName, "AuraInterval");
 	kBulletKnockbackScale = gv->GetFloatValue(kGroupName, "BulletKnockbackScale");
+	kBlastSmokeInterval = std::max(gv->GetFloatValue(kGroupName, "BlastSmokeInterval"), 0.02f);
+	kBlastSmokeDepthOffset = gv->GetFloatValue(kGroupName, "BlastSmokeDepthOffset");
+	kAuraDepthOffset = gv->GetFloatValue(kGroupName, "AuraDepthOffset");
 	BaseEnemyBehavior::ApplyGlobalVariables();
 }
 
@@ -174,6 +180,7 @@ void BaseEnemy::Update() {
 		UpdateModelCollision(); // 死亡中は物理更新を通らないのでここでモデルを追従させる
 	UpdateBodyParts();
 	UpdateBuffAura();
+	UpdateBlastSmoke();
 }
 void BaseEnemy::UpdateBuffAura() {
 	if (!OfficerBuff::gActive || !gameScene_ || isDead_ || behavior_->IsDeathBehavior()) {
@@ -187,6 +194,7 @@ void BaseEnemy::UpdateBuffAura() {
 
 	// under the body: the model's feet, nudged up so the motes start inside the ground contact
 	Vector3 feet = GetModelWorldPosition() + Vector3(0.0f, -kHeight * 0.5f + 0.05f, 0.0f);
+	feet.z += kAuraDepthOffset;
 	gameScene_->CreateBurstEffect(BurstType::kAura, feet, {0.0f, 1.0f});
 }
 void BaseEnemy::Draw() {
@@ -706,4 +714,21 @@ bool BaseEnemy::FireAtObstacle(BaseFirearm* firearm, const Vector3& cellPos) {
 	firearm->TriggerRecoil(isRight());
 	BaseFirearm::PlayFireSound();
 	return true;
+}
+void BaseEnemy::UpdateBlastSmoke() {
+	if (blastSmokeTimer_ <= 0.0f || !gameScene_)
+		return;
+	constexpr float kDt = 1.0f / 60.0f;
+	blastSmokeTimer_ -= kDt;
+	blastSmokeEmitTimer_ -= kDt;
+
+	// 死亡中・ノックバック中・空中(=跳ねている間)だけ出す
+	const bool bouncing = behavior_->IsDeathBehavior() || behavior_->IsKnockedBack() || !onGround_;
+	if (!bouncing || blastSmokeEmitTimer_ > 0.0f)
+		return;
+	blastSmokeEmitTimer_ = kBlastSmokeInterval;
+
+	Vector3 pos = GetModelWorldPosition();
+	pos.z += kBlastSmokeDepthOffset;
+	gameScene_->CreateBurstEffect(BurstType::kBlastSmoke, pos, {0.0f, 1.0f});
 }

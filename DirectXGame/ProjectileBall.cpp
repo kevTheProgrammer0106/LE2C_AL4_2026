@@ -30,6 +30,7 @@ void ProjectileBall::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "DamageToPlayer", kDamageToPlayer);
 	gv->AddItem(kGroupName, "ImpactPowerToEnemy", kImpactPowerToEnemy);
 	gv->AddItem(kGroupName, "ImpactPowerToPlayer", kImpactPowerToPlayer);
+	gv->AddItem(kGroupName, "TrailInterval", kTrailInterval);
 }
 
 void ProjectileBall::ApplyGlobalVariables() {
@@ -41,4 +42,17 @@ void ProjectileBall::ApplyGlobalVariables() {
 	kDamageToPlayer = gv->GetIntValue(kGroupName, "DamageToPlayer");
 	kImpactPowerToEnemy = gv->GetFloatValue(kGroupName, "ImpactPowerToEnemy");
 	kImpactPowerToPlayer = gv->GetFloatValue(kGroupName, "ImpactPowerToPlayer");
+	kTrailInterval = std::max(gv->GetFloatValue(kGroupName, "TrailInterval"), 0.01f);
+}
+AABB ProjectileBall::GetSweepAABB() const {
+	AABB box = GetAABB();
+	if (hasSweep_ && age_ <= 1) {
+		const float hw = kWidth * 0.5f;
+		const float hh = kHeight * 0.5f;
+		box.min.x = std::min(box.min.x, sweepFrom_.x - hw);
+		box.max.x = std::max(box.max.x, sweepFrom_.x + hw);
+		box.min.y = std::min(box.min.y, sweepFrom_.y - hh);
+		box.max.y = std::max(box.max.y, sweepFrom_.y + hh);
+	}
+	return box;
 }

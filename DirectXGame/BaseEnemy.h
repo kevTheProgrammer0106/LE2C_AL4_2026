@@ -186,6 +186,12 @@ public:
 	// 銃弾に当たった時の小さなノックバック(スタンは付かない)。プレイヤーの攻撃でノックバックしない敵(Sapper)はoverrideして無効化する
 	virtual void RequestBulletKnockback(const KamataEngine::Vector3& direction, float power) { behavior_->RequestKnockback(direction, power, false); }
 
+	// 樽/グレネードの爆風を受けた時に呼ぶ。吹き飛んで跳ねている間だけ煙を出す
+	void StartBlastSmoke(float duration) {
+		blastSmokeTimer_ = duration;
+		blastSmokeEmitTimer_ = 0.0f;
+	}
+
 protected:
 	friend class DebugMenu;
 
@@ -408,4 +414,11 @@ protected:
 	int obstacleSwingFrame_ = -1;
 	float obstacleCooldown_ = 0.0f;
 	static inline float kObstacleCooldown = 0.4f;
+
+	void UpdateBlastSmoke();
+	float blastSmokeTimer_ = 0.0f;
+	float blastSmokeEmitTimer_ = 0.0f;
+	static inline float kBlastSmokeInterval = 0.08f;
+	static inline float kBlastSmokeDepthOffset = -0.5f;
+	static inline float kAuraDepthOffset = -0.8f; // バフオーラのz。カメラ側(負)へ寄せて体に隠れないようにする
 };

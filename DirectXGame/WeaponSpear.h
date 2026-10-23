@@ -18,6 +18,8 @@ public:
 	const SRTOffset& GetStunOffset() const override { return kStunOffset; }
 	const SRTOffset& GetBlockOffset() const override { return kBlockOffset; }
 
+	KamataEngine::Vector3 GetTrailTipLocalOffset() const override { return {0.0f, 0.0f, 3.0f}; }
+
 protected:
 	const std::array<ComboAttackPattern, 3>& GetComboPatterns() const override { return comboPatterns_; }
 	const std::array<float, 3>& GetComboReach() const override { return kComboReach; }
