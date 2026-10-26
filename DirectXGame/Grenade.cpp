@@ -31,6 +31,9 @@ void Grenade::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "NormalDamage", kNormalDamage);
 	gv->AddItem(kGroupName, "Impact", kImpact);
 	gv->AddItem(kGroupName, "TrailIntervalStart", kTrailIntervalStart);
+	gv->AddItem(kGroupName, "PreBlastFlashTime", kPreBlastFlashTime);
+	gv->AddItem(kGroupName, "PreBlastFlashSizeStart", kPreBlastFlashSizeStart);
+	gv->AddItem(kGroupName, "PreBlastFlashSizeEnd", kPreBlastFlashSizeEnd);
 }
 
 void Grenade::ApplyGlobalVariables() {
@@ -52,11 +55,15 @@ void Grenade::ApplyGlobalVariables() {
 	kNormalDamage = gv->GetIntValue(kGroupName, "NormalDamage");
 	kImpact = gv->GetFloatValue(kGroupName, "Impact");
 	kTrailIntervalStart = gv->GetFloatValue(kGroupName, "TrailIntervalStart");
+	kPreBlastFlashTime = gv->GetFloatValue(kGroupName, "PreBlastFlashTime");
+	kPreBlastFlashSizeStart = gv->GetFloatValue(kGroupName, "PreBlastFlashSizeStart");
+	kPreBlastFlashSizeEnd = gv->GetFloatValue(kGroupName, "PreBlastFlashSizeEnd");
 }
 
 Vector3 Grenade::MakeThrowVelocity(bool facingRight) { return {facingRight ? kThrowSpeedX : -kThrowSpeedX, kThrowSpeedY, 0.0f}; }
 
-void Grenade::Initialize(Model* model, uint32_t textureHandle, Camera* camera, MapChipField* field, const Vector3& position, const Vector3& velocity, Owner owner) {
+void Grenade::Initialize(
+    Model* model, uint32_t textureHandle, Camera* camera, MapChipField* field, const Vector3& position, const Vector3& velocity, Owner owner, Model* flashModel, uint32_t flashTexture) {
 #ifdef _DEBUG
 	assert(model);
 	assert(camera);
@@ -81,6 +88,13 @@ void Grenade::Initialize(Model* model, uint32_t textureHandle, Camera* camera, M
 	worldTransform_.Initialize();
 	worldTransform_.translation_ = position;
 	worldTransform_.scale_ = {kBaseScale, kBaseScale, kBaseScale};
+
+	flashModel_ = flashModel;
+	flashTexture_ = flashTexture;
+	flashAlpha_ = 0.0f;
+	flashTransform_.Initialize();
+	flashColor_.Initialize();
+	flashColor_.SetColor(Vector4{1.0f, 1.0f, 1.0f, 0.0f});
 }
 
 void Grenade::Update() {
@@ -144,8 +158,21 @@ void Grenade::Update() {
 	objectColor_.SetColor((flashOn || enlarging) ? Vector4{1.0f, 0.15f, 0.1f, 1.0f} : Vector4{1.0f, 1.0f, 1.0f, 1.0f});
 
 	WorldTransformUpdate(worldTransform_);
+	UpdateFlash();
 }
-
+void Grenade::UpdateFlash() {
+	flashAlpha_ = 0.0f;
+	if (!flashModel_ || fuseTimer_ > kPreBlastFlashTime) {
+		return;
+	}
+	const float t = std::clamp(1.0f - fuseTimer_ / std::max(kPreBlastFlashTime, 0.001f), 0.0f, 1.0f);
+	const float size = Lerp(kPreBlastFlashSizeStart, kPreBlastFlashSizeEnd, t);
+	flashAlpha_ = 1.0f - t; // same swell-and-fade as the burst flash
+	flashTransform_.translation_ = worldTransform_.translation_ + Vector3(0.0f, 0.0f, kPreBlastFlashDepthOffset);
+	flashTransform_.scale_ = {size, size, size};
+	WorldTransformUpdate(flashTransform_);
+	flashColor_.SetColor(Vector4{1.0f, 1.0f, 1.0f, flashAlpha_});
+}
 void Grenade::Draw() {
 	if (isDead_ || !model_ || !camera_) {
 		return;
@@ -153,4 +180,10 @@ void Grenade::Draw() {
 	Model::PreDraw();
 	model_->Draw(worldTransform_, *camera_, textureHandle_, &objectColor_);
 	Model::PostDraw();
+
+	if (flashModel_ && flashAlpha_ > 0.0f) {
+		Model::PreDraw(Model::CullingMode::kNone, Model::BlendMode::kAdd, Model::DepthTestMode::kReadOnly);
+		flashModel_->Draw(flashTransform_, *camera_, flashTexture_, &flashColor_);
+		Model::PostDraw();
+	}
 }

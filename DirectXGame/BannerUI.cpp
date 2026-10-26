@@ -39,13 +39,31 @@ void BannerUI::ApplyGlobalVariables() {
 }
 
 float BannerUI::GetBannerWidth() const { return static_cast<float>(WinApp::kWindowWidth) * kWidthRatio; }
-
+void BannerUI::ApplyLayout(Kind kind, float y) {
+	Sprite* sprite = sprites_[static_cast<size_t>(kind)].get();
+	if (!sprite) {
+		return;
+	}
+	const float w = GetBannerWidth();
+	sprite->SetSize({w, GetBannerHeight()});
+	sprite->SetPosition({(static_cast<float>(WinApp::kWindowWidth) - w) * 0.5f, y});
+}
 void BannerUI::Initialize(uint32_t whiteTexture, const uint32_t* textures) {
 	whiteTex_ = whiteTexture;
 	for (size_t i = 0; i < static_cast<size_t>(Kind::kCount); ++i) {
 		textures_[i] = textures ? textures[i] : 0;
+
+		// 種類ごとに、最初から正しいテクスチャでスプライトを生成する(白で作って後から差し替えない)
+		const uint32_t tex = textures_[i] != 0 ? textures_[i] : whiteTex_;
+		sprites_[i].reset(Sprite::Create(tex, {0.0f, 0.0f}));
+		if (textures_[i] != 0) {
+			sprites_[i]->SetColor({1.0f, 1.0f, 1.0f, 1.0f});
+		} else {
+			sprites_[i]->SetColor({kPlaceholder[i][0], kPlaceholder[i][1], kPlaceholder[i][2], kPlaceholder[i][3]});
+		}
+		sprites_[i]->SetSize({GetBannerWidth(), GetBannerHeight()});
+		sprites_[i]->SetPosition({(static_cast<float>(WinApp::kWindowWidth) - GetBannerWidth()) * 0.5f, GetHiddenY()}); // 最初は画面の外(上)
 	}
-	sprite_.reset(Sprite::Create(whiteTex_, {0.0f, 0.0f}));
 	state_ = State::kIdle;
 	currentY_ = GetHiddenY();
 }
@@ -67,15 +85,7 @@ void BannerUI::Show(Kind kind, float holdSeconds, float startDelay) {
 	timer_ = 0.0f;
 	fromY_ = visible ? currentY_ : GetHiddenY(); // 出ている最中なら今の位置から落とし直す
 	state_ = (startDelay_ > 0.0f) ? State::kWaiting : State::kDropping;
-
-	const size_t index = static_cast<size_t>(kind_);
-	const uint32_t tex = textures_[index] != 0 ? textures_[index] : whiteTex_;
-	sprite_->SetTextureHandle(tex);
-	if (textures_[index] != 0) {
-		sprite_->SetColor({1.0f, 1.0f, 1.0f, 1.0f});
-	} else {
-		sprite_->SetColor({kPlaceholder[index][0], kPlaceholder[index][1], kPlaceholder[index][2], kPlaceholder[index][3]});
-	}
+	ApplyLayout(kind_, fromY_); // 描画される前に、新しいバナーを正しいサイズ/開始位置へ(画面の外から落ちる)
 }
 
 void BannerUI::Hide() {
@@ -137,16 +147,19 @@ void BannerUI::Update() {
 	}
 	}
 
-	const float w = GetBannerWidth();
-	sprite_->SetSize({w, GetBannerHeight()});
-	sprite_->SetPosition({(static_cast<float>(WinApp::kWindowWidth) - w) * 0.5f, currentY_});
+	// 現在の種類のスプライトだけ位置/サイズを更新する
+	ApplyLayout(kind_, currentY_);
 }
 
 void BannerUI::Draw() {
 	if (state_ == State::kIdle || state_ == State::kWaiting) {
 		return;
 	}
+	Sprite* sprite = sprites_[static_cast<size_t>(kind_)].get();
+	if (!sprite) {
+		return;
+	}
 	Sprite::PreDraw();
-	sprite_->Draw();
+	sprite->Draw();
 	Sprite::PostDraw();
 }

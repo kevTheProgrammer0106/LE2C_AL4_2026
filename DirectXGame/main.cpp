@@ -88,6 +88,7 @@ void ChangeScene() {
 		if (gameScene->isFinished() || gameScene->isReturnToMenuRequested()) {
 			bool cleared = gameScene->isLevelCleared();
 			bool wentToMenu = gameScene->isReturnToMenuRequested();
+			bool toCredits = gameScene->isCreditsRequested();
 			delete gameScene;
 			gameScene = nullptr;
 
@@ -95,7 +96,11 @@ void ChangeScene() {
 				stageManager->ClearCheckpoint();
 			}
 
-			if (cleared) {
+			if (toCredits) { // last stage cleared -> credits
+				scene = Scene::kTitle;
+				titleScene = new TitleScene();
+				titleScene->Initialize(true, true);
+			} else if (cleared) {
 				scene = Scene::kLevelSelect;
 				levelSelectScene = new LevelSelectScene();
 				levelSelectScene->Initialize(stageManager);
@@ -104,7 +109,7 @@ void ChangeScene() {
 				titleScene = new TitleScene();
 				titleScene->Initialize();
 			}
-		} else if (gameScene->isRestartRequested()) { // [NEW] Restart — wipes checkpoint
+		} else if (gameScene->isRestartRequested()) {
 			stageManager->ClearCheckpoint();
 			delete gameScene;
 			gameScene = nullptr;

@@ -87,23 +87,24 @@ void EffectMuzzleFlash::SetPlayerAnchor(const Vector3& pos) {
 	sHasAnchor_ = true;
 }
 
-EffectMuzzleFlash* EffectMuzzleFlash::Create(uint32_t textureHandle, const Vector3& muzzlePos, const Vector2& aimDir, bool followPlayer) {
+EffectMuzzleFlash* EffectMuzzleFlash::Create(uint32_t fireTexture, uint32_t smokeTexture, const Vector3& muzzlePos, const Vector2& aimDir, bool followPlayer) {
 	EffectMuzzleFlash* instance = new EffectMuzzleFlash();
 	assert(instance);
-	instance->Initialize(textureHandle, muzzlePos, aimDir, followPlayer);
+	instance->Initialize(fireTexture, smokeTexture, muzzlePos, aimDir, followPlayer);
 	return instance;
 }
 
-void EffectMuzzleFlash::Initialize(uint32_t textureHandle, const Vector3& muzzlePos, const Vector2& aimDir, bool followPlayer) {
+
+void EffectMuzzleFlash::Initialize(uint32_t fireTexture, uint32_t smokeTexture, const Vector3& muzzlePos, const Vector2& aimDir, bool followPlayer) {
+	smokeTextureHandle_ = smokeTexture != 0 ? smokeTexture : fireTexture;
 	random_.Initialize();
 	follow_ = followPlayer;
 	firstFrame_ = true;
 
-	// kExpand = 火花の時間 / kFadeOut = 残りの煙の時間(全パーティクルが消えるまで)
 	const float total = std::max(kFireLifeMax, kSmokeDelayMax + kSmokeLifeMax);
 	const float expand = kFireLifeMax;
 	const float fade = std::max(total - expand, 0.01f);
-	BaseInitialize(textureHandle, expand, fade);
+	BaseInitialize(fireTexture, expand, fade);
 
 	// 発射方向を正規化(0なら右向き)
 	Vector2 dir = aimDir;
@@ -223,7 +224,7 @@ void EffectMuzzleFlash::Draw() {
 	for (size_t i = 0; i < smokeCount_; ++i) {
 		const Particle& p = smoke_[i];
 		if (p.active && p.age >= 0.0f)
-			model_->Draw(const_cast<WorldTransform&>(p.worldTransform), *camera_, textureHandle_, const_cast<ObjectColor*>(&p.objectColor));
+			model_->Draw(const_cast<WorldTransform&>(p.worldTransform), *camera_, smokeTextureHandle_, const_cast<ObjectColor*>(&p.objectColor));
 	}
 	Model::PostDraw();
 

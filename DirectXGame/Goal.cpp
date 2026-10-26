@@ -24,6 +24,7 @@ void Goal::Initialize(Model* model, uint32_t textureHandle, Camera* camera, cons
 	baseScale_ = worldTransform_.scale_;
 
 	isCleared_ = false;
+	held_ = false;
 	animTimer_ = 0.0f;
 }
 
@@ -40,6 +41,9 @@ void Goal::RegisterGlobalVariables() {
 
 	gv->AddItem(kGroupName, "ClearPulseScale", kClearPulseScale);
 	gv->AddItem(kGroupName, "ClearPulseDuration", kClearPulseDuration);
+
+	gv->AddItem(kGroupName, "HeldOffsetY", kHeldOffsetY);
+	gv->AddItem(kGroupName, "HeldScale", kHeldScale);
 }
 
 void Goal::ApplyGlobalVariables() {
@@ -54,18 +58,27 @@ void Goal::ApplyGlobalVariables() {
 
 	kClearPulseScale = gv->GetFloatValue(kGroupName, "ClearPulseScale");
 	kClearPulseDuration = gv->GetFloatValue(kGroupName, "ClearPulseDuration");
+
+	kHeldOffsetY = gv->GetFloatValue(kGroupName, "HeldOffsetY");
+	kHeldScale = gv->GetFloatValue(kGroupName, "HeldScale");
 }
 
 void Goal::Update() {
 	animTimer_ += 1.0f / 60.0f;
 
-	if (isCleared_) {
+	if (held_) {
+		UpdateHeldAnimation();
+	} else if (isCleared_) {
 		UpdateClearedAnimation();
 	} else {
 		UpdateIdleAnimation();
 	}
-
 	WorldTransformUpdate(worldTransform_);
+}
+void Goal::UpdateHeldAnimation() {
+	worldTransform_.translation_ = heldPosition_ + Vector3(0.0f, kHeldOffsetY, 0.0f);
+	worldTransform_.rotation_.y = heldRotationY_; // プレイヤーと一緒に回る
+	worldTransform_.scale_ = {baseScale_.x * kHeldScale, baseScale_.y * kHeldScale, baseScale_.z * kHeldScale};
 }
 
 void Goal::UpdateIdleAnimation() {
@@ -105,7 +118,7 @@ AABB Goal::GetAABB() const {
 }
 
 void Goal::Draw() {
-	if (!model_ || isCleared_) { 
+	if (!model_) {
 		return;
 	}
 	Model::PreDraw();

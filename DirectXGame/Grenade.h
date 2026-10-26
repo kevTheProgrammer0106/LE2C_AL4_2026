@@ -17,7 +17,7 @@ public:
 
 	void Initialize(
 	    KamataEngine::Model* model, uint32_t textureHandle, KamataEngine::Camera* camera, MapChipField* field, const KamataEngine::Vector3& position, const KamataEngine::Vector3& velocity,
-	    Owner owner);
+	    Owner owner, KamataEngine::Model* flashModel = nullptr, uint32_t flashTexture = 0);
 	void Update();
 	void Draw();
 
@@ -89,4 +89,18 @@ private:
 	bool trailTick_ = false;
 	static inline float kTrailIntervalStart = 0.20f;
 	static inline float kTrailIntervalEnd = 0.04f;
+
+		void UpdateFlash();
+
+	KamataEngine::Model* flashModel_ = nullptr;
+	uint32_t flashTexture_ = 0;
+	KamataEngine::WorldTransform flashTransform_;
+	KamataEngine::ObjectColor flashColor_;
+	float flashAlpha_ = 0.0f;
+
+	// ---- pre-blast flash ----
+	static inline float kPreBlastFlashTime = 0.3f; // flash length == time left on the fuse
+	static inline float kPreBlastFlashSizeStart = 0.6f;
+	static inline float kPreBlastFlashSizeEnd = 1.6f;
+	static inline float kPreBlastFlashDepthOffset = -0.3f; // toward the camera
 };

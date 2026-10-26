@@ -26,6 +26,12 @@ public:
 
 	KamataEngine::Vector3 GetWorldPosition() const { return worldTransform_.translation_; }
 
+	// ゴール演出中: プレイヤーの頭上で持ち上げる(毎フレーム呼ぶ)
+	void SetHeld(const KamataEngine::Vector3& holderPosition, float holderRotationY) {
+		held_ = true;
+		heldPosition_ = holderPosition;
+		heldRotationY_ = holderRotationY;
+	}
 private:
 	void UpdateIdleAnimation();
 	void UpdateClearedAnimation();
@@ -51,4 +57,11 @@ private:
 
 	static inline float kClearPulseScale = 1.3f;
 	static inline float kClearPulseDuration = 0.3f;
+
+	void UpdateHeldAnimation();
+	bool held_ = false;
+	KamataEngine::Vector3 heldPosition_{};
+	float heldRotationY_ = 0.0f;
+	static inline float kHeldOffsetY = 1.8f; // 持ち主の中心からの高さ
+	static inline float kHeldScale = 0.8f;
 };

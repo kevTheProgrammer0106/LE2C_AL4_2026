@@ -40,6 +40,21 @@ struct CollisionInfo {
 
 enum class PartSlot { kBody, kHead, kHat, kCount };
 
+// ---- Attack effect textures (slash / thrust / smash) ----
+enum class AttackEffectType { kSlash, kSlashOpposite, kSlashDownward, kSlashAlt, kThrust, kSmash, kCount };
+
+struct AttackEffectTextures {
+	std::array<uint32_t, static_cast<size_t>(AttackEffectType::kCount)> tex{};
+	void Set(AttackEffectType type, uint32_t handle) { tex[static_cast<size_t>(type)] = handle; }
+	uint32_t Get(AttackEffectType type) const {
+		const uint32_t handle = tex[static_cast<size_t>(type)];
+		return handle != 0 ? handle : tex[static_cast<size_t>(AttackEffectType::kSlash)]; // missing art falls back to the plain slash
+	}
+};
+
+inline constexpr float kFacingRotationYRight = 1.570796f;
+inline constexpr float kFacingRotationYLeft = 4.712389f;
+
 struct SRTOffset {
 	KamataEngine::Vector3 scale{1.0f, 1.0f, 1.0f};
 	KamataEngine::Vector3 rotation{0.0f, 0.0f, 0.0f};
@@ -130,6 +145,8 @@ struct AimFacing {
 };
 
 KamataEngine::Vector3 WorldToScreen(const KamataEngine::Camera& camera, const KamataEngine::Vector3& world);
+// ワールド座標からスクリーン座標へ変換（Vector2）
+KamataEngine::Vector2 WorldToScreen(const KamataEngine::Camera& camera, const KamataEngine::Vector2& world);
 
 AimFacing ComputeAimFacing(const KamataEngine::Vector2& aimDir, bool currentFacingRight);
 
@@ -162,6 +179,10 @@ KamataEngine::Matrix4x4 MakeAffineMatrix(KamataEngine::Vector3 scale, KamataEngi
 KamataEngine::Matrix4x4 MakeViewportMatrix(float left, float top, float width, float height, float minDepth, float maxDepth);
 
 KamataEngine::Vector3 TransformCoordinate(const KamataEngine::Vector3& vector, const KamataEngine::Matrix4x4& m);
+// 座標変換（Vector2）
+KamataEngine::Vector2 TransformCoordinate(const KamataEngine::Vector2& vector, const KamataEngine::Matrix4x4& m);
+
+
 KamataEngine::Vector3 TransformNormal(const KamataEngine::Vector3& vector, const KamataEngine::Matrix4x4& m);
 
 float Lerp(float start, float end, float t);

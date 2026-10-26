@@ -7,7 +7,8 @@ using namespace KamataEngine;
 
 TitleScene::~TitleScene() { delete fade_; }
 
-void TitleScene::Initialize(bool withScreenFadeIn) {
+void TitleScene::Initialize(bool withScreenFadeIn, bool openCredits) {
+	openCreditsOnStart_ = openCredits;
 	fade_ = new Fade();
 	fade_->Initialize();
 	camera_.Initialize();
@@ -27,18 +28,17 @@ void TitleScene::Initialize(bool withScreenFadeIn) {
 	menuInput_.Initialize(buttonTex_, 4, &camera_);
 	menuInput_.SetButtonGroupAlpha(0.0f); // 画面フェードイン完了後にボタンをフェードインさせる
 
+	// 縦に4つ並べる(ゲーム内ポーズメニューと同じ配置)。全体が画面中央に来るようにずらす
 	constexpr float kButtonWidth = 220.0f;
-	constexpr float kButtonHeight = 140.0f;
-	constexpr float kSmallButtonWidth = 200.0f;
-	constexpr float kSmallButtonHeight = 140.0f;
-	constexpr float kColumnGap = 20.0f;
-	float centerX = static_cast<float>(WinApp::kWindowWidth) / 2.0f;
+	constexpr float kButtonHeight = 160.0f;
+	constexpr float kSpacing = 100.0f;
+	const float buttonX = static_cast<float>(WinApp::kWindowWidth) / 2.0f - kButtonWidth / 2.0f;
+	const float startY = static_cast<float>(WinApp::kWindowHeight) / 2.0f - kSpacing * 1.5f;
 
-	// Tune these to your art: two stacked buttons, then Settings / Credits side by side.
-	startButton_ = menuInput_.AddButton(buttonTex_[0], centerX - kButtonWidth / 2.0f, 220.0f, kButtonWidth, kButtonHeight, "Start");
-	levelSelectButton_ = menuInput_.AddButton(buttonTex_[1], centerX - kButtonWidth / 2.0f, 370.0f, kButtonWidth, kButtonHeight, "Level Select");
-	settingsButton_ = menuInput_.AddButton(buttonTex_[2], centerX - kSmallButtonWidth - kColumnGap / 2.0f, 530.0f, kSmallButtonWidth, kSmallButtonHeight, "Settings");
-	creditsButton_ = menuInput_.AddButton(buttonTex_[3], centerX + kColumnGap / 2.0f, 530.0f, kSmallButtonWidth, kSmallButtonHeight, "Credits");
+	startButton_ = menuInput_.AddButton(buttonTex_[0], buttonX, startY, kButtonWidth, kButtonHeight, "Start");
+	levelSelectButton_ = menuInput_.AddButton(buttonTex_[1], buttonX, startY + kSpacing, kButtonWidth, kButtonHeight, "Level Select");
+	settingsButton_ = menuInput_.AddButton(buttonTex_[2], buttonX, startY + kSpacing * 2.0f, kButtonWidth, kButtonHeight, "Settings");
+	creditsButton_ = menuInput_.AddButton(buttonTex_[3], buttonX, startY + kSpacing * 3.0f, kButtonWidth, kButtonHeight, "Credits");
 
 	menuInput_.SetButtonOnClick(startButton_, [this]() { BeginExit(NextDestination::kGamePlay, true); });
 	menuInput_.SetButtonOnClick(levelSelectButton_, [this]() { BeginExit(NextDestination::kLevelSelect, false); });
@@ -111,6 +111,12 @@ void TitleScene::Update() {
 	menuInput_.UpdateCursor();
 	panelMenu_.UpdateCursor();
 	musicManager_.Update();
+
+	if (openCreditsOnStart_ && phase_ == Phase::kMain) {
+		openCreditsOnStart_ = false;
+		OpenPanel(Panel::kCredits);
+	}
+
 
 	switch (phase_) {
 	case Phase::kFadeIn:

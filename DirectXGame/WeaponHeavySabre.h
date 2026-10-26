@@ -68,8 +68,8 @@ private:
 
 	static inline SRTOffset holsterOffset_{
 	    {1.0f, 1.0f,  1.0f },
-        {0.0f, 3.0f,  0.6f },
-        {0.2f, -0.1f, 0.45f}
+        {0.0f, 3.0f, 0.170f},
+        {0.490f, -0.270f, 0.450f}
     };
 	static inline SRTOffset readyStanceOffset_{
 	    {1.0f,  1.0f, 1.0f },

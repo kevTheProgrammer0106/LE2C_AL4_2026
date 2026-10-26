@@ -168,6 +168,12 @@ public:
 	virtual int GetDamage(int comboIndex) const { return kComboDamageEnemy[comboIndex]; }
 	virtual int GetDamage(int comboIndex, Owner owner) const { return (owner == Owner::kPlayer) ? kComboDamagePlayer[comboIndex] : kComboDamageEnemy[comboIndex]; }
 
+		// Which slash/thrust texture the swing effect uses for this combo step. Weapons override this.
+	virtual AttackEffectType GetComboEffectType(int comboIndex) const {
+		static constexpr AttackEffectType kTable[3] = {AttackEffectType::kSlash, AttackEffectType::kSlashOpposite, AttackEffectType::kSlashDownward};
+		return kTable[std::clamp(comboIndex, 0, 2)];
+	}
+
 	static void RegisterGlobalVariables();
 	static void ApplyGlobalVariables();
 

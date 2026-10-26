@@ -1,9 +1,0 @@
-{
-    "BaseFirearm": {
-        "AimLeanAmount": 0.11999999731779099,
-        "EquipLerpSpeed": 0.15000000596046448,
-        "ImpactPower": 1.2000000476837158,
-        "RecoilDuration": 6,
-        "RecoilKick": 0.07999999821186066
-    }
-}

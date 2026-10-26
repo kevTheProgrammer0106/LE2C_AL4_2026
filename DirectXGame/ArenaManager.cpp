@@ -170,3 +170,13 @@ int32_t ArenaManager::GetRemainingEnemyCount(GameScene* gameScene) const {
 	}
 	return remaining;
 }
+std::vector<ArenaManager::PendingSpawn> ArenaManager::GetPendingSpawns() {
+	BuildWaveOrderIfNeeded();
+	std::vector<PendingSpawn> result;
+	for (size_t i = currentWaveIndex_; i < waveOrder_.size(); ++i) {
+		EnemySpawner* s = waveOrder_[i];
+		if (s && s->GetRemainingSpawnCount() > 0)
+			result.push_back({s->GetResolvedEnemyType(), s->GetRemainingSpawnCount()});
+	}
+	return result;
+}

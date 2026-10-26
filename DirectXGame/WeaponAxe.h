@@ -47,8 +47,8 @@ private:
 	// WeaponHeavySabreと同じ構え/コンボ(斧のモデルに合わせて後から調整する想定)
 	static inline SRTOffset holsterOffset_{
 	    {1.0f, 1.0f,  1.0f },
-        {0.0f, 3.0f,  0.6f },
-        {0.2f, -0.1f, 0.45f}
+        {-4.650f, 0.0f,  0.0f },
+        {-0.190f,  1.060f, 0.250f}
     };
 	static inline SRTOffset readyStanceOffset_{
 	    {1.0f,  1.0f, 1.0f },

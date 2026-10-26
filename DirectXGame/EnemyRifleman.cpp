@@ -73,7 +73,7 @@ void EnemyRifleman::Draw() {
 	BaseEnemy::Draw();
 	if (!isDead_ && !GetBehaviorModule().IsDeathBehavior() && currentFirearm_) {
 		currentFirearm_->Draw();
-		DrawAttackEffect(IsBayonetActive(), GetBayonetLungeAABB()); // 銃剣突進の斬撃
+		DrawAttackEffect(IsBayonetActive(), GetBayonetLungeAABB(), AttackEffectType::kThrust);
 	}
 }
 

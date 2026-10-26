@@ -115,4 +115,7 @@ private:
 	float smashActiveTimer_ = 0.0f;
 	static inline float kSmashActiveDuration = 0.12f; // 着地後に叩きつけ判定が出ている時間(秒)
 	static inline float kSmashLandingTimeout = 3.0f;  // 着地しないまま待ち続けた時の安全弁
+
+		static inline float kSmashEffectScale = 3.0f;                      // multiplier on kAttackEffectScale
+	static inline float kSmashEffectRotationY = kFacingRotationYRight; // fixed: no left/right mirroring (set 0 to remove rotation completely)
 };

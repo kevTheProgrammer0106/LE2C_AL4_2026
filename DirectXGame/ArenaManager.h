@@ -45,6 +45,13 @@ public:
 	static void SetArenaClearSoundHandle(uint32_t h) { sArenaClearSoundHandle_ = h; }
 	static void SetSfxVolume(float v) { sSfxVolume_ = v; }
 
+	struct PendingSpawn {
+		uint8_t enemyType;
+		int32_t count;
+	};
+	// enemies that have NOT spawned yet (rest of the current wave + all later waves)
+	std::vector<PendingSpawn> GetPendingSpawns();
+
 private:
 	bool AnyEnemiesAliveFromThisArena(GameScene* gameScene) const;
 	void BuildWaveOrderIfNeeded();

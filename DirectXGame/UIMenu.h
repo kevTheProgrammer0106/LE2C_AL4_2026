@@ -8,9 +8,10 @@
 
 /// <summary>
 /// UIボタン群とマウスカーソルの表示・当たり判定・スライド演出だけを扱うクラス。
-/// 各ボタンは「バー(端側へ長く伸びた無地の帯)」と「ボタン本体(文字入りテクスチャ、元のサイズのまま)」を別スプライトで持つ。
+/// 各ボタンは「バー(画面端から伸びる無地の帯)」と「ボタン本体(文字入りテクスチャ、元のサイズのまま)」を別スプライトで持つ。
+/// バーは画面の端(x=0)からボタンの元の位置の右端まで伸び、ボタンの並び順が後ろになるほど短くなる。
+/// ホバーするとバーが伸びる(これも並び順が後ろほど小さい)。
 /// 両者は一緒に画面の端からスライドして登場し(イージング)、退場時は素早く端へ戻る。
-/// 判定矩形はバー全体で、スライド位置に追従する。ボタン本体はバーの上に元の位置・元のサイズで描かれる。
 /// ゲームプレイ入力(移動/ジャンプ/攻撃等)は一切扱わない — それはInputManagerの役目。
 /// マウス座標・クリック状態はInputManager経由で取得する(KamataEngine::Inputへは直接触らない)。
 /// </summary>
@@ -37,7 +38,7 @@ public:
 	using ButtonID = int32_t;
 	static constexpr ButtonID kInvalidButton = -1;
 
-	// どちらの端からスライドするか。kAutoはボタンの中心が画面の左半分なら左、右半分なら右
+	// どちらの端からスライドするか。kAutoはボタンの中心が画面の中央より左(中央ちょうど含む)なら左、右なら右
 	enum class SlideSide { kAuto, kLeft, kRight };
 
 	// 既存の単一テクスチャ用
@@ -87,9 +88,10 @@ public:
 private:
 	struct Button {
 		ButtonID id = kInvalidButton;
+		size_t index = 0;                                // 追加順(バーの長さ/ホバーの伸びを決める)
 		ButtonAABB aabb{};                               // ボタン本体の本来の位置(スライドが完了した時の位置)
 		std::unique_ptr<KamataEngine::Sprite> sprite;    // ボタン本体(文字入りテクスチャ。サイズは元のまま)
-		std::unique_ptr<KamataEngine::Sprite> barSprite; // 端側へ伸びる無地のバー(判定矩形と同じ大きさ)
+		std::unique_ptr<KamataEngine::Sprite> barSprite; // 画面端から伸びる無地のバー
 		std::string label;
 		bool visible = true;
 		bool enabled = true;
@@ -101,6 +103,7 @@ private:
 		float holdTimer = 0.0f;
 		bool pressStartedInside = false;
 		float scale = 1.0f;
+		float hoverExtend = 0.0f; // ホバーでバーが伸びている現在の長さ(px)
 
 		std::function<void()> onClick;
 	};
@@ -114,9 +117,15 @@ private:
 	SlideSide ResolveSide(const Button& button) const;
 	// 現在のスライドによる横方向のずれ(0=本来の位置)
 	float ComputeSlideOffset(const Button& button) const;
-	// 現在のスライド位置での「バー」矩形。バーの表示と当たり判定に使う
+	// 並び順に応じたバーの基本の長さ(ホバーの伸びを含まない)の端の位置。左なら右端のx、右なら左端のx(スライド前)
+	float ComputeBaseBarEdge(const Button& button) const;
+	// 並び順に応じたホバー時の最大の伸び(px)
+	float ComputeMaxHoverExtend(const Button& button) const;
+	// 当たり判定の矩形(スライド位置込み)。ホバーの伸びは含まない
+	ButtonAABB ComputeHitRect(const Button& button) const;
+	// バーの表示矩形(スライド位置込み)。ホバーの伸びを含む
 	ButtonAABB ComputeBarRect(const Button& button) const;
-	// 現在のスライド位置での「ボタン本体」矩形(元のサイズ)
+	// ボタン本体の矩形(スライド位置込み、元のサイズ)
 	ButtonAABB ComputeFaceRect(const Button& button) const;
 
 	std::vector<Button> buttons_;
@@ -140,18 +149,20 @@ private:
 	float buttonSlide_ = 1.0f; // 0=画面外 / 1=本来の位置
 
 	// スライド演出の調整値
-	static inline float kSliderExtend = 160.0f;   // 本来のボタンから端側へバーを伸ばす長さ(px)。0でバー無し(従来と同じ判定)
 	static inline float kSlideInDuration = 0.5f;  // 登場にかける最短時間(秒)
 	static inline float kSlideOutDuration = 0.2f; // 退場にかける最長時間(秒。素早く戻る)
-	static inline KamataEngine::Vector4 kBarColor = {0.08f, 0.08f, 0.10f, 0.85f};
-	static inline KamataEngine::Vector4 kBarHoverColor = {0.20f, 0.20f, 0.26f, 0.90f};
 
-	// バーとボタン本体のスプライトを更新する。ホバー/押下のscaleは各矩形の中心を保って適用
+	// バーの調整値
+	static inline float kLengthStep = 40.0f;      // ボタンが1つ後ろになるごとにバーが短くなる量(px)
+	static inline float kHoverExtend = 120.0f;    // ホバー時にバーが伸びる最大長(px。1つ目のボタン)
+	static inline float kHoverExtendStep = 20.0f; // ボタンが1つ後ろになるごとにホバーの伸びが減る量(px)
+	static inline float kHoverExtendLerp = 0.25f; // 毎フレームの伸び縮みの補間率
+	static inline float kBarHeightRatio = 0.55f;  // バーの高さ(ボタンの高さに対する割合。縦中央)
+	static inline KamataEngine::Vector4 kBarColor = {0.12f, 0.14f, 0.22f, 0.90f};
+	static inline KamataEngine::Vector4 kBarHoverColor = {0.30f, 0.36f, 0.55f, 0.95f};
+
+	// バーとボタン本体のスプライトを更新する。ホバー/押下のscaleはボタン本体の中心を保って適用
 	void ApplyButtonVisual(Button& button) const;
-
-	// Draws the hovered button's label in a small box above the cursor (ImGui foreground draw list).
-	// Must be called while the ImGui frame is open, i.e. from Update(), not Draw().
-	void DrawHoverLabel(float mouseX, float mouseY) const;
 
 	static inline float kLabelCursorGap = 22.0f; // space between the cursor and the bottom of the label box
 	static inline float kLabelFontSize = 24.0f;

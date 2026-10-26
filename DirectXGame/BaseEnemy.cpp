@@ -294,8 +294,10 @@ void BaseEnemy::OnCollision(const Player* player) {
 		return;
 	}
 	if (player->isAttack()) {
-		if (TryBlockAttack(player->GetWorldPosition()))
+		if (TryBlockAttack(player->GetWorldPosition())) {
+			PlayBlockImpactSound();
 			return; 
+		}
 		Vector3 dir = GetWorldPosition() - player->GetWorldPosition();
 		float len = std::sqrtf(dir.x * dir.x + dir.y * dir.y);
 		if (len > 0.0001f) {
@@ -324,8 +326,12 @@ void BaseEnemy::OnCollision(const BaseProjectile* bullet) {
 		isCollisionDisabled_ = true;
 		return;
 	}
-	if (TryBlockAttack(bullet->GetWorldPosition()))
+	if ( TryBlockAttack(bullet->GetWorldPosition()) )
+	{
+		PlayBlockImpactSound();
 		return;
+	}
+		
 	Vector3 dir = GetWorldPosition() - bullet->GetWorldPosition();
 	float len = std::sqrtf(dir.x * dir.x + dir.y * dir.y);
 	if (len > 0.0001f) {
@@ -611,25 +617,33 @@ bool BaseEnemy::TryBlockAttack(const Vector3& attackerPos) {
 	wasBlocked_ = true;
 	Vector3 sparkPos = GetModelWorldPosition();
 	sparkPos.x += (isRight() ? 1.0f : -1.0f) * (kWidth * 0.5f);
-	if (gameScene_)
+	if (gameScene_) {
 		gameScene_->CreateBlockSparkEffect(sparkPos);
+		Vector3 blockerPos = GetModelWorldPosition();
+		gameScene_->TriggerCameraFx(GameScene::CameraFx::kBlock, 0.8f, &blockerPos); // zoom in on the enemy that blocked
+	}
 	return true;
 }
-void BaseEnemy::DrawAttackEffect(bool active, const AABB& swingBox) {
-	if (!active || !modelAttack_ || !camera_ || isDead_)
+void BaseEnemy::DrawAttackEffect(bool active, const AABB& swingBox, AttackEffectType type) {
+	if (!active) {
 		return;
+	}
+	// centre of the hitbox, so reach / height changes stay inside the effect
+	const Vector3 center = {(swingBox.min.x + swingBox.max.x) * 0.5f, (swingBox.min.y + swingBox.max.y) * 0.5f, worldTransform_.translation_.z};
+	DrawAttackEffectAt(type, center, isRight() ? kFacingRotationYRight : kFacingRotationYLeft, kAttackEffectScale);
+}
 
-	// 向きは lrDirection_ から直接決める(ルートの回転はターン補間中にずれる)
-	const bool facingRight = isRight();
-
-	// 斬撃は当たり判定(スイングAABB)の中心に置く。リーチや高さが変わっても判定の中に収まる
-	worldTransformAttack_.translation_ = {(swingBox.min.x + swingBox.max.x) * 0.5f, (swingBox.min.y + swingBox.max.y) * 0.5f, worldTransform_.translation_.z};
-	worldTransformAttack_.rotation_ = {0.0f, facingRight ? 1.570796f : 4.712389f, 0.0f};
-	worldTransformAttack_.scale_ = {kAttackEffectScale, kAttackEffectScale, kAttackEffectScale};
+void BaseEnemy::DrawAttackEffectAt(AttackEffectType type, const Vector3& position, float rotationY, float scale) {
+	if (!modelAttack_ || !camera_ || isDead_) {
+		return;
+	}
+	worldTransformAttack_.translation_ = position;
+	worldTransformAttack_.rotation_ = {0.0f, rotationY, 0.0f};
+	worldTransformAttack_.scale_ = {scale, scale, scale};
 	WorldTransformUpdate(worldTransformAttack_);
 
 	Model::PreDraw();
-	modelAttack_->Draw(worldTransformAttack_, *camera_, modelAttackTex_);
+	modelAttack_->Draw(worldTransformAttack_, *camera_, attackEffectTextures_.Get(type));
 	Model::PostDraw();
 }
 bool BaseEnemy::AttackObstacle(const Vector3& cellPos) {

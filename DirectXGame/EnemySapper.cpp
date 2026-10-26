@@ -15,6 +15,7 @@ void EnemySapper::RegisterGlobalVariables() {
 	gv->CreateGroup(kGroupName);
 	gv->AddItem(kGroupName, "MaxHP", kSapperHP);
 	gv->AddItem(kGroupName, "SmashActiveDuration", kSmashActiveDuration);
+	gv->AddItem(kGroupName, "SmashEffectScale", kSmashEffectScale);
 	RegisterBodyComboPoseSet(kGroupName, "BodyCombo", kBodyCombo);
 	RegisterBodyLungePoseSet(kGroupName, "BodySmash", kBodySmash);
 	WeaponAxe::RegisterGlobalVariables();
@@ -25,6 +26,7 @@ void EnemySapper::ApplyGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
 	kSapperHP = gv->GetIntValue(kGroupName, "MaxHP");
 	kSmashActiveDuration = gv->GetFloatValue(kGroupName, "SmashActiveDuration");
+	kSmashEffectScale = gv->GetFloatValue(kGroupName, "SmashEffectScale");
 	ApplyBodyComboPoseSet(kGroupName, "BodyCombo", kBodyCombo);
 	ApplyBodyLungePoseSet(kGroupName, "BodySmash", kBodySmash);
 	WeaponAxe::ApplyGlobalVariables();
@@ -63,9 +65,18 @@ void EnemySapper::Update() {
 
 void EnemySapper::Draw() {
 	BaseEnemy::Draw();
-	if (!isDead_ && !GetBehaviorModule().IsDeathBehavior() && currentMelee_) {
-		currentMelee_->Draw();
-		DrawAttackEffect(isSwingActive_ || IsSmashActive(), IsSmashActive() ? GetSmashAABB() : GetSwingAABB());
+	if (isDead_ || GetBehaviorModule().IsDeathBehavior() || !currentMelee_) {
+		return;
+	}
+	currentMelee_->Draw();
+
+	if (IsSmashActive()) {
+		// smash: drawn where the axe is, enlarged, not mirrored
+		Vector3 axePos = currentMelee_->GetWorldPosition();
+		axePos.z = worldTransform_.translation_.z;
+		DrawAttackEffectAt(AttackEffectType::kSmash, axePos, kSmashEffectRotationY, kAttackEffectScale * kSmashEffectScale);
+	} else {
+		DrawAttackEffect(isSwingActive_, GetSwingAABB(), currentMelee_->GetComboEffectType(currentComboIndex_));
 	}
 }
 

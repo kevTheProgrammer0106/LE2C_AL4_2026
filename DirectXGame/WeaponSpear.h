@@ -20,6 +20,9 @@ public:
 
 	KamataEngine::Vector3 GetTrailTipLocalOffset() const override { return {0.0f, 0.0f, 3.0f}; }
 
+	// thrust, thrust, slashAlt
+	AttackEffectType GetComboEffectType(int comboIndex) const override { return (comboIndex >= 2) ? AttackEffectType::kSlashAlt : AttackEffectType::kThrust; }
+
 protected:
 	const std::array<ComboAttackPattern, 3>& GetComboPatterns() const override { return comboPatterns_; }
 	const std::array<float, 3>& GetComboReach() const override { return kComboReach; }
@@ -32,34 +35,34 @@ private:
 	// WeaponSabreと同じコンボ(槍のモデルに合わせて後から調整する想定)
 	static inline std::array<ComboAttackPattern, 3> comboPatterns_ = {
 	    ComboAttackPattern{
-	                       {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.5f}, {0.650f, -0.1f, 0.90f}},
-	                       {{1.0f, 1.0f, 1.0f}, {-0.2f, -1.0f, 1.9f}, {0.350f, 0.3f, 0.6f}},
-	                       {{1.0f, 1.0f, 1.0f}, {2.4f, -1.1f, 1.4f}, {0.350f, -0.2f, -0.6f}},
-	                       {{1.0f, 1.0f, 1.0f}, {2.4f, -1.1f, 1.4f}, {0.350f, -0.2f, -0.6f}},
+	                       {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.5f}, {0.2f, 0.15f, -0.6f}},
+	                       {{1.0f, 1.0f, 1.0f}, {0.23f, 0.0f, 0.0f}, {-1.485f, 0.3f, 0.6f}},
+	                       {{1.0f, 1.0f, 1.0f}, {0.04f, 0.0f, 0.0f}, {1.4f, -0.25f, -0.6f}},
+	                       {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {-1.250f, -0.2f, -0.6f}},
 	                       },
 	    ComboAttackPattern{
-	                       {{1.0f, 1.0f, 1.0f}, {2.4f, -1.1f, 1.4f}, {0.350f, -0.2f, -0.6f}},
-	                       {{1.0f, 1.0f, 1.0f}, {1.3f, -2.1f, 4.5f}, {0.2f, 0.4f, -0.35f}},
-	                       {{1.0f, 1.0f, 1.0f}, {5.6f, -1.1f, 4.6f}, {0.2f, -0.3f, 0.6f}},
-	                       {{1.0f, 1.0f, 1.0f}, {5.6f, -1.1f, 4.6f}, {0.2f, -0.3f, 0.6f}},
+	                       {{1.0f, 1.0f, 1.0f}, {-0.04f, 0.0f, 0.0f}, {-1.25f, -0.2f, -0.6f}},
+	                       {{1.0f, 1.0f, 1.0f}, {0.23f, 0.0f, 0.0f}, {-1.485f, 0.3f, -0.6f}},
+	                       {{1.0f, 1.0f, 1.0f}, {0.04f, 0.0f, 0.0f}, {1.4f, 0.130f, -0.6f}},
+	                       {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.2f, -0.3f, -0.6f}},
 	                       },
 	    ComboAttackPattern{
-	                       {{1.0f, 1.0f, 1.0f}, {5.6f, -1.1f, 4.6f}, {0.2f, -0.3f, 0.6f}},
-	                       {{1.0f, 1.0f, 1.0f}, {4.8f, -1.5f, 0.8f}, {-0.6f, 0.6f, 0.7f}},
-	                       {{1.0f, 1.0f, 1.0f}, {6.2f, -0.1f, -0.5f}, {0.9f, -0.2f, 0.0f}},
-	                       {{1.0f, 1.0f, 1.0f}, {6.2f, -0.1f, -0.5f}, {0.9f, -0.2f, 0.0f}},
+	                       {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.2f, -0.3f, -0.6f}},
+	                       {{1.0f, 1.0f, 1.0f}, {0.16f, 0.0f, 0.0f}, {-0.91f, 0.8f, 0.7f}},
+	                       {{1.0f, 1.0f, 1.0f}, {0.16f, 0.0f, 0.0f}, {0.9f, -0.2f, 0.0f}},
+	                       {{1.0f, 1.0f, 1.0f}, {-0.260f, 0.0f, 0.0f}, {-0.250f, -0.120f, 0.630f}},
 	                       },
 	};
 
 	static inline SRTOffset holsterOffset_{
 	    {1.0f,   1.0f,   1.0f  },
-        {0.0f,   3.140f, 0.5f  },
-        {0.250f, -0.1f,  0.490f}
+        {-2.08f, 3.140f, 0.5f   },
+        {-0.430f, -0.580f, 0.250f}
     };
 	static inline SRTOffset readyStanceOffset_{
 	    {1.0f,  1.0f, 1.0f  },
-        {-0.6f, 0.0f, 0.0f  },
-        {0.5f,  0.0f, 0.490f}
+        {-0.260f, 0.0f, 0.0f  },
+        {-0.250f,  -0.120f, 0.630f}
     };
 	static inline SRTOffset kKnockbackOffset{
 	    {1.0f,  1.0f, 1.0f },
@@ -73,8 +76,8 @@ private:
     };
 	static inline SRTOffset kBlockOffset{
 	    {1.0f,  1.0f,  1.0f },
-        {-0.6f, 0.0f,  1.2f },
-        {0.55f, 0.15f, 0.49f}
+        {-0.2f, 1.57f,  0.0f },
+        {0.48f, 0.23f, 1.45f}
     };
 	static inline SRTOffset kDownAttackOffset{
 	    {1.0f, 1.0f,  1.0f},

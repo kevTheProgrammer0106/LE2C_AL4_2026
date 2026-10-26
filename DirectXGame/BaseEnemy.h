@@ -131,9 +131,9 @@ public:
 	static float GetBodyHeight() { return kHeight; }
 
 	// 近接攻撃(スイング)中に出す斬撃エフェクトのモデル/テクスチャ(プレイヤーと同じものを渡す)
-	void SetAttackEffect(KamataEngine::Model* model, uint32_t textureHandle) {
+	void SetAttackEffect(KamataEngine::Model* model, const AttackEffectTextures& textures) {
 		modelAttack_ = model;
-		modelAttackTex_ = textureHandle;
+		attackEffectTextures_ = textures;
 		worldTransformAttack_.Initialize();
 	}
 
@@ -150,6 +150,7 @@ public:
 	static void SetDefaultFootstepSoundHandle(uint32_t handle) { sDefaultFootstepSoundHandle_ = handle; }
 	static void SetDefaultJumpSoundHandle(uint32_t handle) { sDefaultJumpSoundHandle_ = handle; }
 	static void SetDefaultLandSoundHandle(uint32_t handle) { sDefaultLandSoundHandle_ = handle; }
+	static void SetBlockImpactSoundHandle(uint32_t handle) { sBlockImpactSoundHandle_ = handle; }
 
 	// Light = equips while still moving. Heavy = enemy stops while equipping/unequipping.
 	enum class EquipStyle { kLight, kHeavy };
@@ -332,6 +333,7 @@ protected:
 	static inline uint32_t sDefaultFootstepSoundHandle_ = 0;
 	static inline uint32_t sDefaultJumpSoundHandle_ = 0;
 	static inline uint32_t sDefaultLandSoundHandle_ = 0;
+	static inline uint32_t sBlockImpactSoundHandle_ = 0;
 	static inline float kMovementSfxVolume = 0.4f; 
 
 	// virtual: 派生クラス(EnemyCuirassier)が独自のSFXを鳴らしたければoverrideする
@@ -376,6 +378,11 @@ protected:
 			AudioSettings::PlaySfx(sDefaultLandSoundHandle_, false, kMovementSfxVolume);
 		}
 	}
+	virtual void PlayBlockImpactSound() {
+		if (sBlockImpactSoundHandle_ != 0) {
+			AudioSettings::PlaySfx(sBlockImpactSoundHandle_, false, sSfxVolume_);
+		}
+	}
 
 	// Called every frame while stunned/knocked back: drops stale attack hitboxes and keeps the held weapon attached.
 	virtual void RefreshWeaponVisual() {}
@@ -394,12 +401,14 @@ protected:
 	// Written each frame by melee enemies' UpdateMeleeVisual / UpdateLungeVisual from their own pose set.
 	SRTOffset attackBodyPose_{};
 
-	// 斬撃エフェクトを描画する。active=スイングの攻撃フェーズ中。向きと位置は描画時の最新状態から決める
-	void DrawAttackEffect(bool active, const AABB& swingBox);
+	// swing box based (slash / thrust): centred on the hitbox, mirrored by facing
+	void DrawAttackEffect(bool active, const AABB& swingBox, AttackEffectType type);
+	// explicit placement (Sapper smash)
+	void DrawAttackEffectAt(AttackEffectType type, const KamataEngine::Vector3& position, float rotationY, float scale);
 
 	KamataEngine::Model* modelAttack_ = nullptr;
 	KamataEngine::WorldTransform worldTransformAttack_;
-	uint32_t modelAttackTex_ = 0;
+	AttackEffectTextures attackEffectTextures_;    // replaces modelAttackTex_
 	static inline float kAttackEffectScale = 1.0f;  // 斬撃モデルの大きさ(判定の中心に置いたまま拡縮)
 
 	// true の間は PhysicsAndCollisionUpdate がマップ判定・重力・分離を行わず、速度をそのまま位置へ反映する(Sapperのジャンプ用)

@@ -13,13 +13,22 @@ namespace {
 constexpr float kDeltaTime = 1.0f / 60.0f; // same fixed 60FPS as BaseEffect
 
 constexpr const char* kGroupNames[] = {"ParticleBurstHit",         "ParticleBurstJump",         "ParticleBurstLand",  "ParticleBurstExplosion", "ParticleBurstSmoke",       "ParticleBurstAura",
-                                       "ParticleBurstBulletBlock", "ParticleBurstBulletEntity", "ParticleBurstSpawn", "ParticleBurstSmash",     "ParticleBurstGrenadeFuse", "ParticleBurstBlockDamage",
-                                       "ParticleBurstBulletTrail", "ParticleBurstSwingTrail",   "ParticleBurstSpike", "ParticleBurstBlastSmoke"};
+                                       "ParticleBurstBulletBlock", "ParticleBurstBulletEntity", "ParticleBurstSpawn", "ParticleBurstSmash",     "ParticleBurstGrenadeFuse", "ParticleBurstBlockDamage", "ParticleBurstBulletTrail",  "ParticleBurstSwingTrail", "ParticleBurstSpike",
+                                       "ParticleBurstBlastSmoke",  "ParticleBurstFlash",  "ParticleBurstSparkler",   "ParticleBurstSparklerAggressive",
+                                       "ParticleBurstConfetti"};
 static_assert(std::size(kGroupNames) == static_cast<size_t>(BurstType::kCount), "kGroupNames must have one entry per BurstType");
 
 const char* GroupName(size_t i) { return kGroupNames[i]; }
 } // namespace
-
+// 匿名namespace内に追加(紙吹雪のパレット)
+constexpr float kConfettiPalette[6][3] = {
+    {1.0f, 0.3f, 0.3f},
+    {1.0f, 0.8f, 0.2f},
+    {0.3f, 0.9f, 0.4f},
+    {0.3f, 0.7f, 1.0f},
+    {0.8f, 0.4f, 1.0f},
+    {1.0f, 0.5f, 0.8f},
+};
 Camera* EffectParticleBurst::camera_ = nullptr;
 Model* EffectParticleBurst::model_ = nullptr;
 
@@ -45,6 +54,8 @@ void EffectParticleBurst::RegisterGlobalVariables() {
 		gv->AddItem(g, "SpawnRadius", p.spawnRadius);
 		gv->AddItem(g, "Additive", p.additive);
 		gv->AddItem(g, "LoopDuration", p.loopDuration); // 粒子を再生成し続ける秒数(0=ループなし)
+		gv->AddItem(g, "Rainbow", p.rainbow);
+		gv->AddItem(g, "ZSpeed", p.zSpeed);
 	}
 }
 
@@ -69,6 +80,8 @@ void EffectParticleBurst::ApplyGlobalVariables() {
 		p.spawnRadius = gv->GetFloatValue(g, "SpawnRadius");
 		p.additive = gv->GetIntValue(g, "Additive");
 		p.loopDuration = std::max(gv->GetFloatValue(g, "LoopDuration"), 0.0f);
+		p.rainbow = gv->GetIntValue(g, "Rainbow");
+		p.zSpeed = gv->GetFloatValue(g, "ZSpeed");
 	}
 }
 
@@ -122,7 +135,21 @@ void EffectParticleBurst::SpawnParticle(Particle& particle, float alphaScale, fl
 
 	const float angle = baseAngle_ + random_.GetRandValue(-p.spread, p.spread);
 	const float speed = random_.GetRandValue(p.speedMin, p.speedMax);
-	particle.velocity = {std::cos(angle) * speed, std::sin(angle) * speed, random_.GetRandValue(-0.3f, 0.3f)};
+	const float z = (p.zSpeed != 0.0f) ? -p.zSpeed * random_.GetRandValue(0.5f, 1.0f) : random_.GetRandValue(-0.3f, 0.3f);
+	particle.velocity = {std::cos(angle) * speed, std::sin(angle) * speed, z};
+
+		// 紙吹雪: 粒子ごとにランダムな色と回転を持たせる
+	Vector3 startColor = p.colorStart;
+	if (p.rainbow) {
+		const int idx = std::min(static_cast<int>(random_.GetRandValue(0.0f, 6.0f)), 5);
+		particle.tint = {kConfettiPalette[idx][0], kConfettiPalette[idx][1], kConfettiPalette[idx][2]};
+		particle.spin = random_.GetRandValue(-0.4f, 0.4f);
+		particle.worldTransform.rotation_.z = random_.GetRandValue(0.0f, 6.28f);
+		startColor = particle.tint;
+	} else {
+		particle.worldTransform.rotation_.z = 0.0f;
+	}
+
 
 	particle.worldTransform.translation_ = {origin_.x + random_.GetRandValue(-p.spawnRadius, p.spawnRadius), origin_.y + random_.GetRandValue(-p.spawnRadius, p.spawnRadius), origin_.z};
 	particle.worldTransform.scale_ = {p.sizeStart, p.sizeStart, p.sizeStart};
@@ -170,10 +197,12 @@ void EffectParticleBurst::OnCommonUpdate() {
 
 		const float size = Lerp(p.sizeStart, p.sizeEnd, t);
 		particle.worldTransform.scale_ = {size, size, size};
+		if (p.rainbow) {
+			particle.worldTransform.rotation_.z += particle.spin; // ひらひら回転
+		}
 
-		particle.objectColor.SetColor(
-		    {Lerp(p.colorStart.x, p.colorEnd.x, t), Lerp(p.colorStart.y, p.colorEnd.y, t), Lerp(p.colorStart.z, p.colorEnd.z, t), Lerp(p.alphaStart, 0.0f, t) * particle.alphaScale});
-
+		const Vector3 rgb = p.rainbow ? particle.tint : Vector3{Lerp(p.colorStart.x, p.colorEnd.x, t), Lerp(p.colorStart.y, p.colorEnd.y, t), Lerp(p.colorStart.z, p.colorEnd.z, t)};
+		particle.objectColor.SetColor({rgb.x, rgb.y, rgb.z, Lerp(p.alphaStart, 0.0f, t) * particle.alphaScale});
 		WorldTransformUpdate(particle.worldTransform);
 	}
 }

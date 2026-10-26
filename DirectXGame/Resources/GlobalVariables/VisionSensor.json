@@ -1,7 +1,0 @@
-{
-    "VisionSensor": {
-        "RaySampleStep": 0.20000000298023224,
-        "VisionHalfAngle": 35.0,
-        "VisionRadius": 30.0
-    }
-}

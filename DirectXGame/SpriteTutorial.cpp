@@ -38,8 +38,10 @@ void SpriteTutorial::LoadSharedTextures() {
 		return;
 	// Order must match TutorialTextureType
 	static constexpr const char* kFiles[] = {
-	    "./Resources/Explanation/left.png",   "./Resources/Explanation/right.png", "./Resources/Explanation/Bottom.png",
-	    "./Resources/Explanation/Attack.png", "./Resources/Explanation/Throw.png", "./Resources/Explanation/LeftArrow.png",
+	    "./Resources/UserInterface/tutorialMove.png",         "./Resources/UserInterface/tutorialJump.png",          "./Resources/UserInterface/tutorialPlatform.png",      "./Resources/UserInterface/tutorialCheckpointExplain.png",
+	    "./Resources/UserInterface/tutorialAttack.png",       "./Resources/UserInterface/tutorialBlock.png",         "./Resources/UserInterface/tutorialBlockExplain.png",  "./Resources/UserInterface/tutorialPickup.png",
+	    "./Resources/UserInterface/tutorialWeaponSwitch.png", "./Resources/UserInterface/tutorialAttackSpecial.png", "./Resources/UserInterface/tutorialPickupExplain.png", "./Resources/UserInterface/tutorialGate.png",
+	    "./Resources/UserInterface/tutorialObjective.png",
 	};
 	static_assert(std::size(kFiles) == static_cast<size_t>(TutorialTextureType::kCount), "one file per TutorialTextureType");
 	for (size_t i = 0; i < std::size(kFiles); ++i)
@@ -55,7 +57,7 @@ void SpriteTutorial::Initialize(Model* blockModel, uint32_t blockTexture, Camera
 	model_ = blockModel;
 	blockTexture_ = blockTexture;
 	camera_ = camera;
-	type_ = (type < TutorialTextureType::kCount) ? type : TutorialTextureType::kLeft;
+	type_ = (type < TutorialTextureType::kCount) ? type : TutorialTextureType::kMove;
 	currentAlpha_ = 0.0f;
 
 	worldTransform_.Initialize();

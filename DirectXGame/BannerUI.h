@@ -10,6 +10,7 @@
 /// 画面上部中央に出るバナー文字(2048x512の画像)。上から落ちてきて(イージング)、一定時間表示し、上へ戻る。
 /// 同時に出るのは1枚だけ。別のバナーを出すと、今の位置から新しいバナーへ切り替わる。
 /// holdSeconds < 0 の時は Hide() が呼ばれるまで出しっぱなし(ポーズ/敗北/勝利用)。
+/// スプライトは種類ごとに正しいテクスチャで生成しておく(後からSetTextureHandleで差し替えるとテクスチャ範囲が合わず何も映らない)。
 /// </summary>
 class BannerUI {
 public:
@@ -19,7 +20,7 @@ public:
 	static void ApplyGlobalVariables();
 
 	// whiteTexture: 画像が無い(ハンドル0)バナーの代用に使う白テクスチャ
-	// textures: Kindの順(kStart, kArena, kPaused, kDefeat, kVictory)に kCount 個
+	// textures: Kindの順(kStart, kArena, kPaused, kDefeat, kVictory, kOfficer)に kCount 個
 	void Initialize(uint32_t whiteTexture, const uint32_t* textures);
 
 	// startDelay: 出し始めるまでの待ち時間(秒)
@@ -33,13 +34,16 @@ public:
 	bool IsShowing(Kind kind) const { return state_ != State::kIdle && state_ != State::kRising && kind_ == kind; }
 
 private:
+	// 種類ごとのスプライトに、サイズと位置(Y)を反映する。Show/Initializeでも呼んで「初期位置のまま1フレーム映る」のを防ぐ
+	void ApplyLayout(Kind kind, float y);
 	enum class State { kIdle, kWaiting, kDropping, kHolding, kRising };
 
 	float GetBannerWidth() const;
 	float GetBannerHeight() const { return GetBannerWidth() * (512.0f / 2048.0f); }
 	float GetHiddenY() const { return -GetBannerHeight() - 8.0f; }
 
-	std::unique_ptr<KamataEngine::Sprite> sprite_;
+	// 種類ごとに1枚ずつ(それぞれ生成時に正しいテクスチャを渡す)
+	std::unique_ptr<KamataEngine::Sprite> sprites_[static_cast<size_t>(Kind::kCount)];
 	uint32_t whiteTex_ = 0;
 	uint32_t textures_[static_cast<size_t>(Kind::kCount)] = {};
 

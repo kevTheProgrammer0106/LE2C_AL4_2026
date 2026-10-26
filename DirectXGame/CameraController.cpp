@@ -34,6 +34,13 @@ void CameraController::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "CatchUpPx", kCatchUpPx);
 	gv->AddItem(kGroupName, "HardTopMargin", kHardTopMargin);
 	gv->AddItem(kGroupName, "HardBottomMargin", kHardBottomMargin);
+	gv->AddItem(kGroupName, "SpeedZoomOut", kSpeedZoomOut);
+	gv->AddItem(kGroupName, "SpeedZoomRef", kSpeedZoomRef);
+	gv->AddItem(kGroupName, "SpeedZoomTime", kSpeedZoomTime);
+	gv->AddItem(kGroupName, "DeathZoomOut", kDeathZoomOut);
+	gv->AddItem(kGroupName, "DeathZoomOutTime", kDeathZoomOutTime);
+	gv->AddItem(kGroupName, "DeathCloseUp", kDeathCloseUp);
+	gv->AddItem(kGroupName, "DeathCloseUpTime", kDeathCloseUpTime);
 }
 void CameraController::ApplyGlobalVariables() {
 	GlobalVariables* gv = GlobalVariables::GetInstance();
@@ -56,6 +63,13 @@ void CameraController::ApplyGlobalVariables() {
 	kCatchUpPx = gv->GetFloatValue(kGroupName, "CatchUpPx");
 	kHardTopMargin = gv->GetFloatValue(kGroupName, "HardTopMargin");
 	kHardBottomMargin = gv->GetFloatValue(kGroupName, "HardBottomMargin");
+	kSpeedZoomOut = gv->GetFloatValue(kGroupName, "SpeedZoomOut");
+	kSpeedZoomRef = gv->GetFloatValue(kGroupName, "SpeedZoomRef");
+	kSpeedZoomTime = gv->GetFloatValue(kGroupName, "SpeedZoomTime");
+	kDeathZoomOut = gv->GetFloatValue(kGroupName, "DeathZoomOut");
+	kDeathZoomOutTime = gv->GetFloatValue(kGroupName, "DeathZoomOutTime");
+	kDeathCloseUp = gv->GetFloatValue(kGroupName, "DeathCloseUp");
+	kDeathCloseUpTime = gv->GetFloatValue(kGroupName, "DeathCloseUpTime");
 }
 
 void CameraController::Initialize(Camera* camera) {
@@ -84,7 +98,7 @@ Vector3 CameraController::ComputeFollowTarget() const {
 	return {
 	    wt.translation_.x + targetOffset_.x + smoothedVelocity_.x * kVelocityBias,
 	    wt.translation_.y + targetOffset_.y + smoothedVelocity_.y * kVelocityBias,
-	    wt.translation_.z + targetOffset_.z + smoothedVelocity_.z * kVelocityBias,
+	    wt.translation_.z + targetOffset_.z + smoothedVelocity_.z * kVelocityBias - speedZoom_,
 	};
 }
 
@@ -104,6 +118,11 @@ void CameraController::UpdateCore() {
 
 	const WorldTransform& targetWT = target_->GetWorldTransform();
 	smoothedVelocity_ = Lerp(smoothedVelocity_, measuredVelocity_, 1.0f - std::exp(-kLeadSmoothing * (1.0f / 60.0f)));
+	{
+		const float speed = std::hypot(smoothedVelocity_.x, smoothedVelocity_.y);
+		const float wantZoomOut = kSpeedZoomOut * std::clamp(speed / std::max(kSpeedZoomRef, 0.001f), 0.0f, 1.0f);
+		speedZoom_ = SmoothDamp(speedZoom_, wantZoomOut, speedZoomVel_, kSpeedZoomTime, 1.0f / 60.0f);
+	}
 	targetPos = ComputeFollowTarget();
 
 	switch (mode_) {
@@ -154,56 +173,129 @@ void CameraController::Shake(float amplitude, float duration, float frequency) {
 	shakeFrequency_ = frequency;
 }
 
-void CameraController::ZoomPulse(float zoomRatio, float inDuration, float outDuration) {
-	pulsePeak_ = zoomRatio; // fraction of the current camera distance
-	pulseIn_ = std::max(inDuration, 0.0001f);
-	pulseOut_ = std::max(outDuration, 0.0001f);
-	pulseTimer_ = 0.0f;
-	pulseActive_ = true;
+// ---------------- Focus zoom ----------------
+void CameraController::PunchZoom(const Vector3& point, float amount, float inTime, float holdTime, float outTime) {
+	if (fzLocked_)
+		return; // the death sequence owns the zoom
+	// a weaker punch never cuts a stronger one short
+	if ((fzStage_ == FocusZoomStage::kIn || fzStage_ == FocusZoomStage::kHold) && fzPeak_ >= amount)
+		return;
+	fzPoint_ = point;
+	fzFollowsTarget_ = false;
+	fzPeak_ = amount;
+	fzTarget_ = amount;
+	fzInTime_ = std::max(inTime, 0.01f);
+	fzHoldTime_ = std::max(holdTime, 0.0f);
+	fzOutTime_ = std::max(outTime, 0.01f);
+	fzSmooth_ = std::max(fzInTime_ * kZoomSettleFactor, 0.02f); // ~95% there by inTime: snappy
+	fzTimer_ = 0.0f;
+	fzStage_ = FocusZoomStage::kIn; // keeps fzVel_, so a punch during the release never snaps
+}
+
+void CameraController::BeginDeathZoom() {
+	fzLocked_ = true;
+	fzFollowsTarget_ = true;
+	fzTarget_ = kDeathZoomOut;
+	fzSmooth_ = std::max(kDeathZoomOutTime * kZoomSettleFactor, 0.02f);
+	fzStage_ = FocusZoomStage::kLatched;
+}
+
+void CameraController::BeginDeathCloseUp() {
+	fzLocked_ = true;
+	fzFollowsTarget_ = true;
+	fzTarget_ = kDeathCloseUp;
+	fzSmooth_ = std::max(kDeathCloseUpTime * kZoomSettleFactor, 0.02f);
+	fzStage_ = FocusZoomStage::kLatched;
+}
+
+void CameraController::ClearFocusZoom(float settleTime) {
+	fzLocked_ = false;
+	fzTarget_ = 0.0f;
+	fzSmooth_ = std::max(settleTime * kZoomSettleFactor, 0.02f);
+	fzOutTime_ = settleTime;
+	fzTimer_ = 0.0f;
+	fzStage_ = (fzStage_ == FocusZoomStage::kIdle) ? FocusZoomStage::kIdle : FocusZoomStage::kOut;
+}
+
+void CameraController::UpdateFocusZoom() {
+	constexpr float kDt = 1.0f / 60.0f;
+	if (fzStage_ == FocusZoomStage::kIdle) {
+		fzAmount_ = 0.0f;
+		fzVel_ = 0.0f;
+		return;
+	}
+	fzAmount_ = SmoothDamp(fzAmount_, fzTarget_, fzVel_, fzSmooth_, kDt);
+	fzTimer_ += kDt;
+
+	switch (fzStage_) {
+	case FocusZoomStage::kIn:
+		if (fzTimer_ >= fzInTime_) {
+			fzStage_ = FocusZoomStage::kHold;
+			fzTimer_ = 0.0f;
+		}
+		break;
+	case FocusZoomStage::kHold:
+		if (fzTimer_ >= fzHoldTime_) {
+			fzStage_ = FocusZoomStage::kOut;
+			fzTimer_ = 0.0f;
+			fzTarget_ = 0.0f;
+			fzSmooth_ = std::max(fzOutTime_ * kZoomSettleFactor, 0.02f); // slow release
+		}
+		break;
+	case FocusZoomStage::kOut:
+		if (std::abs(fzAmount_) < 0.002f && std::abs(fzVel_) < 0.01f) {
+			fzStage_ = FocusZoomStage::kIdle;
+			fzAmount_ = 0.0f;
+			fzVel_ = 0.0f;
+		}
+		break;
+	default:
+		break;
+	}
 }
 
 void CameraController::UpdateFx() {
 	constexpr float kDt = 1.0f / 60.0f;
+	UpdateFocusZoom();
+
 	Vector3 offset{};
 	float roll = 0.0f;
 
-	// Camera distance: zone/arena cameras sit much farther back, so shake and zoom scale with it to look the same on screen
+	// Camera distance: zone/arena cameras sit much farther back, so every effect scales with it to look the same on screen
 	const float targetZ = target_ ? target_->GetWorldTransform().translation_.z : 0.0f;
 	const float distance = std::max(std::abs(camera_->translation_.z - targetZ), 1.0f);
 	const float distScale = distance / kShakeReferenceDistance;
 
-		// ---- zoom: a fraction of the CURRENT camera distance, added after every camera mode (follow / arena focus / forced scroll) ----
+	// ---- persistent ZoomTo(): a fraction of the current distance, added after every camera mode ----
 	const float followDist = std::max(std::abs(targetOffset_.z), 1.0f);
 	const float zoomRatio = std::clamp(zoomDelta_ / followDist, -kMaxZoomOutRatio, 0.95f);
 	float zoomOffset = zoomRatio * distance;
 	zoomOffset = std::min(zoomOffset, std::max(distance - kMinCameraDistance, 0.0f)); // never zoom through the player
+	offset.z += zoomOffset;
 
+	// ---- focus zoom: move toward the point by a fraction of the distance, so the point stays where it is on screen ----
+	if (fzStage_ != FocusZoomStage::kIdle) {
+		const Vector3 point = (fzFollowsTarget_ && target_) ? target_->GetWorldTransform().translation_ : fzPoint_;
+		const Vector3 cam = {camera_->translation_.x, camera_->translation_.y, camera_->translation_.z + offset.z};
+		const float distNow = std::max(std::abs(point.z - cam.z), kMinCameraDistance + 0.01f);
+		const float maxIn = 1.0f - kMinCameraDistance / distNow; // never closer than kMinCameraDistance
+		const float f = std::clamp(fzAmount_, -kMaxZoomOutRatio, maxIn);
+		offset.x += (point.x - cam.x) * f;
+		offset.y += (point.y - cam.y) * f;
+		offset.z += (point.z - cam.z) * f;
+	}
+
+	// ---- shake ----
 	if (shakeTimer_ > 0.0f) {
 		shakeTimer_ = std::max(0.0f, shakeTimer_ - kDt);
 		shakeTime_ += kDt;
 		const float f = shakeTimer_ / shakeDuration_;
 		const float amp = shakeAmplitude_ * f * f; // quadratic falloff: violent first, then settles
 		const float p = shakeTime_ * shakeFrequency_;
-		offset.x = amp * (std::sin(p) * 0.6f + std::sin(p * 2.3f + 1.7f) * 0.4f) * distScale;
-		offset.y = amp * (std::sin(p * 1.3f + 0.9f) * 0.6f + std::sin(p * 2.9f + 0.4f) * 0.4f) * 0.8f * distScale;
+		offset.x += amp * (std::sin(p) * 0.6f + std::sin(p * 2.3f + 1.7f) * 0.4f) * distScale;
+		offset.y += amp * (std::sin(p * 1.3f + 0.9f) * 0.6f + std::sin(p * 2.9f + 0.4f) * 0.4f) * 0.8f * distScale;
 		roll = amp * 0.03f * std::sin(p * 1.1f + 2.1f);
 	}
-
-	if (pulseActive_) {
-		pulseTimer_ += kDt;
-		float ratio = 0.0f;
-		if (pulseTimer_ >= pulseIn_ + pulseOut_) {
-			pulseActive_ = false;
-		} else if (pulseTimer_ < pulseIn_) {
-			ratio = pulsePeak_ * ApplyEase(Ease::kOut, pulseTimer_ / pulseIn_);
-		} else {
-			ratio = pulsePeak_ * (1.0f - ApplyEase(Ease::kInOut, (pulseTimer_ - pulseIn_) / pulseOut_));
-		}
-		pulseDelta_ = ratio * distance;
-	} else {
-		pulseDelta_ = 0.0f;
-	}
-	offset.z = zoomOffset + pulseDelta_; // +z = toward the scene
 
 	fxOffset_ = offset;
 	fxRoll_ = roll;
@@ -309,6 +401,12 @@ void CameraController::UpdateFocusCamera() {
 }
 
 void CameraController::Reset() {
+	fzStage_ = FocusZoomStage::kIdle;
+	fzAmount_ = fzTarget_ = fzVel_ = 0.0f;
+	fzLocked_ = false;
+	fzFollowsTarget_ = false;
+	speedZoom_ = speedZoomVel_ = 0.0f;
+
 	if (mode_ == Mode::kFocus) {
 		mode_ = modeBeforeFocus_;
 	}
@@ -377,6 +475,24 @@ void CameraController::DrawDebugControls() {
 	ImGui::Text("Focus active: %s", IsFocusActive() ? "yes" : "no");
 	if (ImGui::Button("Release Focus"))
 		ReleaseFocus();
+
+		ImGui::Separator();
+	ImGui::BulletText("Focus zoom (block / death)");
+	ImGui::Text("amount %.3f  speedZoom %.2f", fzAmount_, speedZoom_);
+	if (target_) {
+		if (ImGui::Button("Test block zoom"))
+			PunchZoom(target_->GetWorldTransform().translation_, 0.22f, 0.07f, 0.12f, 0.45f);
+		ImGui::SameLine();
+	}
+	if (ImGui::Button("Death zoom out"))
+		BeginDeathZoom();
+	ImGui::SameLine();
+	if (ImGui::Button("Death close-up"))
+		BeginDeathCloseUp();
+	ImGui::SameLine();
+	if (ImGui::Button("Clear"))
+		ClearFocusZoom();
+
 
 	ImGui::Separator();
 	ImGui::BulletText("Camera Zones");

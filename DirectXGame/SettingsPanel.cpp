@@ -77,9 +77,9 @@ void SettingsPanel::Initialize(uint32_t whiteTexture, bool showDifficulty) {
 		Vector4 color;
 	};
 	const SliderDef defs[3] = {
-	    {&AudioSettings::GetMasterVolume, &AudioSettings::SetMasterVolume, "iconButtonMaster.png", "iconTipMaster.png", {1.0f, 0.85f, 0.3f, 1.0f}},
-	    {&AudioSettings::GetMusicSetting, &AudioSettings::SetMusicVolume,  "iconButtonMusic.png",  "iconTipMusic.png",  {0.4f, 0.8f, 1.0f, 1.0f} },
-	    {&AudioSettings::GetSfxSetting,   &AudioSettings::SetSfxVolume,    "iconButtonSfx.png",    "iconTipSFX.png",    {1.0f, 0.5f, 0.4f, 1.0f} },
+	    {&AudioSettings::GetMasterVolume, &AudioSettings::SetMasterVolume, "iconButtonMaster.png", "tipMaster.png", {1.0f, 0.85f, 0.3f, 1.0f}},
+	    {&AudioSettings::GetMusicSetting, &AudioSettings::SetMusicVolume,  "iconButtonMusic.png",  "tipMusic.png",  {0.4f, 0.8f, 1.0f, 1.0f} },
+	    {&AudioSettings::GetSfxSetting,   &AudioSettings::SetSfxVolume,    "iconButtonSfx.png",    "tipSFX.png",    {1.0f, 0.5f, 0.4f, 1.0f} },
 	};
 	for (int i = 0; i < 3; ++i) {
 		Slider& s = sliders_[i];
@@ -111,8 +111,8 @@ void SettingsPanel::Initialize(uint32_t whiteTexture, bool showDifficulty) {
 		Vector4 color;
 	};
 	const CheckDef checks[2] = {
-	    {&GameSettings::IsScreenShakeEnabled, &GameSettings::SetScreenShakeEnabled, "iconButtonShake.png", kTipShake, "iconTipShake.png", {0.8f, 0.6f, 1.0f, 1.0f}},
-	    {&GameSettings::IsScreenFlashEnabled, &GameSettings::SetScreenFlashEnabled, "iconButtonFlash.png", kTipFlash, "iconTipFlash.png", {1.0f, 1.0f, 0.6f, 1.0f}},
+	    {&GameSettings::IsScreenShakeEnabled, &GameSettings::SetScreenShakeEnabled, "iconButtonShake.png", kTipShake, "tipShake.png", {0.8f, 0.6f, 1.0f, 1.0f}},
+	    {&GameSettings::IsScreenFlashEnabled, &GameSettings::SetScreenFlashEnabled, "iconButtonFlash.png", kTipFlash, "tipFlash.png", {1.0f, 1.0f, 0.6f, 1.0f}},
 	};
 	const float groupW = kIconSize + kIconGap + kBoxSize;
 	const float rowStartX = centerX - (groupW * 2.0f + kGroupGap) * 0.5f;
@@ -141,19 +141,19 @@ void SettingsPanel::Initialize(uint32_t whiteTexture, bool showDifficulty) {
 		MakeElement(difficultyIcon_, "iconDifficulty.png", {startX, centerY - kIconSize * 0.5f, kIconSize, kIconSize}, {0.9f, 0.9f, 0.5f, 1.0f});
 
 		const float bx = startX + kIconSize + kIconGap;
-		const char* files[3] = {"buttonDifficultyEasy.png", "buttonDifficultyNormal.png", "buttonDifficultyHard.png"};
+		const char* files[3] = {"iconButtonEasy.png", "iconButtonNormal.png", "iconButtonHard.png"};
 		const Vector4 colors[3] = {
-		    {0.3f, 0.7f,  0.35f, 1.0f}, // Easy: 緑
-		    {0.9f, 0.8f,  0.3f,  1.0f}, // Normal: 黄
-		    {0.8f, 0.25f, 0.25f, 1.0f}, // Hard: 赤
+		    {1.0f, 1.0f,  1.0f,  1.0f}, // Easy: 緑
+		    {1.0f, 1.0f,  1.0f,  1.0f}, // Normal: 黄
+		    {1.0f, 1.0f, 1.0f, 1.0f}, // Hard: 赤
 		};
 		for (int i = 0; i < 3; ++i)
 			MakeElement(difficultyButtons_[i], files[i], {bx + static_cast<float>(i) * (kDiffButtonW + kDiffButtonGap), kDiffRowY, kDiffButtonW, kDiffButtonH}, colors[i]);
 
 		LoadTip(kTipDifficulty, "tipDifficulty.png");
-		LoadTip(kTipEasy, "tipDifficultyEasy.png");
-		LoadTip(kTipNormal, "tipDifficultyNormal.png");
-		LoadTip(kTipHard, "tipDifficultyHard.png");
+		LoadTip(kTipEasy, "tipEasy.png");
+		LoadTip(kTipNormal, "tipNormal.png");
+		LoadTip(kTipHard, "tipHard.png");
 	}
 }
 

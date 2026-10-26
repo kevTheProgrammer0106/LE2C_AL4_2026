@@ -33,7 +33,6 @@
 
 
 #include "CameraController.h"
-#include "DeathParticles.h"
 #include "Fade.h"
 #include "Global.h"
 #include "GuardEffect.h"
@@ -101,8 +100,12 @@ public:
 	void CreateHitEffect(KamataEngine::Vector3& spawnLocation, float rotationZ = 0.0f);
 	void CreateGuardEffect(KamataEngine::Vector3& spawnLocation);
 	void CreateBlockSparkEffect(KamataEngine::Vector3& spawnLocation);
+	// エンティティ(敵/プレイヤー)の死亡: 控えめな紙吹雪
 	void CreateEnemyDeathParticles(const KamataEngine::Vector3& position);
-
+	// public(CreateObjectConfetti を差し替え)
+	void CreateObjectSparkler(const KamataEngine::Vector3& position);
+	// ゴール到達の紙吹雪(カラフル)
+	void CreateGoalConfetti(const KamataEngine::Vector3& position, float loopDuration);
 	void CreateMuzzleFlash(const KamataEngine::Vector3& muzzlePos, const KamataEngine::Vector2& aimDir, bool followPlayer);
 	// 爆発(煙 + 火の玉 + 火花)を position に出す。smokeLoopDuration >= 0 なら煙のループ継続秒数を上書きする(負=プリセットのまま)
 	void CreateExplosion(const KamataEngine::Vector3& position, float smokeLoopDuration = -1.0f);
@@ -111,6 +114,8 @@ public:
 	void CreateFirearmProjectile(
 	    Owner owner, const KamataEngine::Vector3& position, const KamataEngine::Vector2& aimDirection, int damage = -1, int32_t lifeFrames = 0, const KamataEngine::Vector3* sweepFrom = nullptr);
 	void CreateGrenade(const KamataEngine::Vector3& position, const KamataEngine::Vector3& velocity, Owner owner);
+
+
 
 	DroppableItem* CreateDroppableItem(const KamataEngine::Vector3& position, DropItemCategory category, DropWeaponKind kind, DropItemState state = DropItemState::kReady);
 	void ApplyItemPickup(const DroppableItem& item);
@@ -123,6 +128,7 @@ public:
 	bool isFinished() const { return finished_; }
 	bool isReloadRequested() const { return reloadRequested_; }   // Retry (checkpoint-aware)
 	bool isRestartRequested() const { return restartRequested_; } // Restart (from scratch)
+	bool isCreditsRequested() const { return creditsRequested_; } // last stage cleared -> credits
 
 	void debugMenu();
 
@@ -209,7 +215,7 @@ public:
 	bool HitObstaclesInAABB(const AABB& box, BaseMelee* weapon);
 	// One entry point for every camera reaction. intensity scales the preset (e.g. explosion distance falloff, damage size).
 	enum class CameraFx { kDamage, kDeath, kExplosion, kBlock, kSwing, kSpecial, kHitEnemy, kShoot, kShootHeavy };
-	void TriggerCameraFx(CameraFx fx, float intensity = 1.0f);
+	void TriggerCameraFx(CameraFx fx, float intensity = 1.0f, const KamataEngine::Vector3* focus = nullptr);
 
 private:
 	friend class DebugMenu;
@@ -250,8 +256,9 @@ private:
 	std::unique_ptr<Player> player_ = nullptr;
 
 	std::vector<std::unique_ptr<BaseEffect>> visualEffects_;
-	std::unique_ptr<DeathParticles> deathParticles_ = nullptr;
-	std::vector<std::unique_ptr<DeathParticles>> enemyDeathParticles_;
+
+	float deathSceneTimer_ = 0.0f;
+	static inline float kDeathSceneDuration = 2.0f; // 旧DeathParticlesのkDuration_と同じ
 
 	std::unique_ptr<MapChipField> mapChipField_ = nullptr;
 	std::vector<std::vector<BlockInstance>> worldTransformBlocks_;
@@ -285,7 +292,12 @@ private:
 	UIMenu::ButtonID restartButton_ = UIMenu::kInvalidButton;
 	UIMenu::ButtonID retryMainMenuButton_ = UIMenu::kInvalidButton;
 
+	bool creditsRequested_ = false;
+	bool HasNextStage() const;
+	void BeginFadeToMenu(); // pendingReturnToMenu_ + fade out (shared by pause / retry / victory)
+
 	UIMenu victoryMenuInput_;
+	UIMenu::ButtonID victoryNextButton_ = UIMenu::kInvalidButton;
 	UIMenu::ButtonID victoryRestartButton_ = UIMenu::kInvalidButton;
 	UIMenu::ButtonID victoryMainMenuButton_ = UIMenu::kInvalidButton;
 	std::unique_ptr<KamataEngine::Sprite> victoryOverlay_;
@@ -463,6 +475,7 @@ private:
 	struct PendingExplosion {
 		uint32_t x, y;
 		float timer;
+		bool flashed = false;
 	};
 	std::vector<PendingExplosion> pendingExplosions_;
 	void QueueExplosion(uint32_t xIndex, uint32_t yIndex, float delay);
@@ -556,6 +569,12 @@ private:
 	static inline float kGoalZoomDelta = 10.0f;       // camera moves 10 closer (z offset -10 nearer). Flip the sign to zoom out.
 	static inline float kGoalZoomDuration = 0.8f;
 
+	// kGoalZoomDelta / kGoalZoomDuration を削除して、以下に差し替え
+	static inline KamataEngine::Vector3 kGoalCameraOffset = {0.0f, 0.8f, -9.0f}; // ゴール位置からのカメラ位置(zがズーム距離)
+	static inline float kGoalCameraEnter = 0.6f;
+	static inline float kGoalConfettiDuration = 3.0f; // 勝利画面でも降り続ける
+	bool goalConfettiSpawned_ = false;
+
 	BaseEnemy* buffOfficer_ = nullptr; // the officer whose life the buff depends on
 	void UpdateOfficerBuff();
 
@@ -593,7 +612,10 @@ private:
 	static inline float kShakeShootDuration = 0.10f;
 	static inline float kShakeHeavyShootAmp = 0.60f; // blunderbuss
 	static inline float kShakeHeavyShootDuration = 0.40f;
-	static inline float kBlockZoomRatio = 0.11f; // fraction of the current camera distance
+
+	static inline float kBlockZoomAmount = 0.22f; // fraction of the camera distance moved toward the blocker
+	static inline float kBlockZoomHold = 0.12f;
+	static inline float kBlockZoomMaxDistance = 18.0f; // blocks this far from the player (snipers etc.) don't zoom
 
 	std::vector<std::unique_ptr<SpriteTutorial>> tutorials_;
 
@@ -614,4 +636,35 @@ private:
 	std::unordered_map<const BaseMelee*, KamataEngine::Vector3> meleeTrailPrev_;
 	static inline float kFxDepthOffset = -0.2f;     // 新しいエフェクトをカメラ側へ寄せる量
 	static inline float kBlastSmokeDuration = 2.5f; // 爆風を受けた体が煙を出す最大秒数
+
+	// includes: already has UserInterfaceGameplayHUD.h
+	// members (next to playerHealthUI_):
+	BossHealthBar bossHealthBar_;
+	SwitchPointer switchPointer_;
+	float bossBarMaxHP_ = 0.0f;
+	std::array<int32_t, 16> enemyTypeMaxHP_{}; // learned from the first spawn of each type
+	// methods:
+	void UpdateBossHealthBar();
+
+	uint32_t BurstTexture(BurstType type) const;
+	// Dust/fragments for a destructible block. broke=true also spawns the shard particles.
+	void CreateBlockDebris(const KamataEngine::Vector3& cellPos, bool broke);
+	template<typename T> T* SpawnEnemyOfType(const KamataEngine::Vector3& position, const std::array<PartResources, 3>& parts, uint32_t hudIcon);
+
+	// time between a barrel being triggered and exploding; the flash plays during it
+	static inline float kExplosionFuseTime = 0.3f;
+
+	// private に追加
+	// ---- スポーン演出(レベル開始 / チェックポイント復帰) ----
+	void BeginSpawnSequence();
+	void UpdateSpawnSequence();
+	bool spawnSequenceActive_ = false;
+	float spawnSequenceTimer_ = 0.0f;
+	static inline KamataEngine::Vector3 kSpawnCameraOffset = {0.0f, 0.8f, -9.0f}; // プレイヤー位置からのカメラ位置(zがズーム距離)
+	static inline float kSpawnCameraEnter = 0.25f;                                // 寄る時間
+	static inline float kSpawnCameraHold = 0.35f;                                 // 寄ったまま止まる時間
+	static inline float kSpawnCameraReturn = 0.40f;                               // 元のカメラへ戻る時間(合計1秒)
+
+	// private に追加(kSpawnCameraReturn の下)
+	static inline float kSpawnInvulnerability = 5.0f; // スポーン直後の無敵時間(秒)
 };

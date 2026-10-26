@@ -22,9 +22,9 @@ public:
 	static void SetPlayerAnchor(const KamataEngine::Vector3& pos);
 
 	// muzzlePos から aimDir 方向へ発砲エフェクトを出す。followPlayer=true なら銃口の移動に追従する
-	static EffectMuzzleFlash* Create(uint32_t textureHandle, const KamataEngine::Vector3& muzzlePos, const KamataEngine::Vector2& aimDir, bool followPlayer);
-
-	void Initialize(uint32_t textureHandle, const KamataEngine::Vector3& muzzlePos, const KamataEngine::Vector2& aimDir, bool followPlayer);
+	static EffectMuzzleFlash* Create(uint32_t fireTexture, uint32_t smokeTexture, const KamataEngine::Vector3& muzzlePos, const KamataEngine::Vector2& aimDir, bool followPlayer);
+	void Initialize(uint32_t fireTexture, uint32_t smokeTexture, const KamataEngine::Vector3& muzzlePos, const KamataEngine::Vector2& aimDir, bool followPlayer);
+	
 	void Draw() override;
 
 protected:
@@ -48,6 +48,7 @@ private:
 
 	std::array<Particle, kMaxFire> fire_;
 	std::array<Particle, kMaxSmoke> smoke_;
+	uint32_t smokeTextureHandle_ = 0;
 	size_t fireCount_ = 0;
 	size_t smokeCount_ = 0;
 

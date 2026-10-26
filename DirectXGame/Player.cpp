@@ -220,7 +220,7 @@ bool Player::HasAnyDebuff() const {
 Player::~Player() {}
 
 void Player::Initialize(
-    const std::array<PartResources, static_cast<size_t>(PartSlot::kCount)>& partResources, KamataEngine::Model* modelAttack, uint32_t textureHandleAttack, KamataEngine::Camera* camera,
+    const std::array<PartResources, static_cast<size_t>(PartSlot::kCount)>& partResources, KamataEngine::Model* modelAttack, const AttackEffectTextures& attackTextures, KamataEngine::Camera* camera,
     const KamataEngine::Vector3& position) {
 #ifdef _DEBUG
 	assert(camera);
@@ -232,7 +232,7 @@ void Player::Initialize(
 		parts_[i].transform.Initialize();
 	}
 	modelAttack_ = modelAttack;
-	modelAttackTex_ = textureHandleAttack;
+	attackEffectTextures_ = attackTextures;   
 	camera_ = camera;
 	velocity_ = {0, 0, 0};
 
@@ -603,7 +603,9 @@ void Player::Draw() {
 		WorldTransformUpdate(worldTransformAttack_);
 	}
 	if (comboSlash || lungeSlash) {
-		modelAttack_->Draw(worldTransformAttack_, *camera_, modelAttackTex_);
+		// every lunge (heavy sabre / bayonet) is a thrust; combos pick their texture from the weapon
+		const AttackEffectType type = lungeSlash ? AttackEffectType::kThrust : (currentMelee_ ? currentMelee_->GetComboEffectType(GetComboIndex()) : AttackEffectType::kSlash);
+		modelAttack_->Draw(worldTransformAttack_, *camera_, attackEffectTextures_.Get(type));
 	}
 	Model::PostDraw();
 
@@ -798,6 +800,8 @@ void Player::OnBlocked(const KamataEngine::Vector3& hitDirection, float impactPo
 	effectPos.x += (isRight() ? 1.0f : -1.0f) * (kWidth * 0.5f);
 	if (gameScene_) {
 		gameScene_->CreateBlockSparkEffect(effectPos);
+		Vector3 blockerPos = GetModelWorldPosition();
+		gameScene_->TriggerCameraFx(GameScene::CameraFx::kBlock, 1.0f, &blockerPos);
 		gameScene_->TriggerScreenFlash(ScreenFlash::Type::kBlock); // ブロック成功: 白
 	}
 

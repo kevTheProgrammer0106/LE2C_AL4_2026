@@ -30,7 +30,7 @@ float EaseOutCubic(float t) {
 constexpr float kStandardTint[5][3] = {
     {1.0f, 1.0f,  1.0f}, // none
     {0.4f, 0.6f,  1.0f}, // slowed: 青
-    {0.3f, 0.9f,  0.4f}, // buffed: 緑
+    {1.0f, 0.8f,  0.2f}, // buffed: 緑
     {1.0f, 0.6f,  0.2f}, // knockback: オレンジ
     {1.0f, 0.95f, 0.2f}, // stunned: 黄
 };
@@ -242,7 +242,7 @@ void StatusIndicator::InitializeStatus(uint32_t whiteTextureHandle) {
 		standardHasTex_[i] = LoadIfExists(standardFiles[i], standardTex_[i]);
 	}
 	// reactive(バフ / リロード / ブロック)
-	const char* reactiveFiles[kReactiveCount] = {"statusBuffed.png", "statusReload.png", "statusBlocked.png", "statusAlert.png", "statusMissing.png", "statusCheckpoint.png", "statusHealed.png"};
+	const char* reactiveFiles[kReactiveCount] = {"statusBuffing.png", "statusReload.png", "statusBlocked.png", "statusAlert.png", "statusMissing.png", "statusCheckpoint.png", "statusHealed.png"};
 	pendingCheckpoint_ = false;
 	lastPlayerHp_ = -1;
 	for (int i = 0; i < kReactiveCount; ++i) {
@@ -312,7 +312,7 @@ void StatusIndicator::UpdateEntity(const void* key, const Flags& flags, const AA
 	int desired = kStatusNone;
 	if (flags.slowed)
 		desired = kStatusSlowed;
-	if (flags.buffed)
+	if (flags.buffed && !v.reactive[kReactiveBuff].active) // was: if (flags.buffed)
 		desired = kStatusBuffed;
 	if (flags.knockback)
 		desired = kStatusKnockback;

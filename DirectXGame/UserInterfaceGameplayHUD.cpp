@@ -2,6 +2,16 @@
 
 using namespace KamataEngine;
 
+namespace {
+// Shared by every flat-colour bar (player health, block gauge, boss bar).
+std::unique_ptr<Sprite> MakeFlatSprite(uint32_t texture, const Vector2& pos, const Vector2& size, const Vector4& color) {
+	std::unique_ptr<Sprite> s(Sprite::Create(texture, pos));
+	s->SetSize(size);
+	s->SetColor(color);
+	return s;
+}
+} // namespace
+
 void InteractionPrompt::Initialize(uint32_t iconTextureHandle) {
 	BaseSprite::Initialize(iconTextureHandle, {kScreenAnchorX, kScreenAnchorY});
 	SetSize({200.0f, 200.0f});
@@ -35,17 +45,10 @@ void InteractionPrompt::Draw() {
 
 // --- PlayerHealthUI ---
 void PlayerHealthUI::Initialize(uint32_t backgroundTextureHandle, uint32_t fillTextureHandle) {
-	border_.reset(Sprite::Create(backgroundTextureHandle, {kBarX - kBorderThickness, kBarY - kBorderThickness}));
-	border_->SetSize({kBarWidth + kBorderThickness * 2.0f, kBarHeight + kBorderThickness * 2.0f});
-	border_->SetColor({0.0f, 0.0f, 0.0f, 0.9f});
-
-	background_.reset(Sprite::Create(backgroundTextureHandle, {kBarX, kBarY}));
-	background_->SetSize({kBarWidth, kBarHeight});
-	background_->SetColor({0.2f, 0.05f, 0.05f, 0.9f});
-
-	fill_.reset(Sprite::Create(fillTextureHandle, {kBarX, kBarY}));
-	fill_->SetSize({kBarWidth, kBarHeight});
-	fill_->SetColor({0.2f, 0.8f, 0.2f, 1.0f});
+	border_ = MakeFlatSprite(
+	    backgroundTextureHandle, {kBarX - kBorderThickness, kBarY - kBorderThickness}, {kBarWidth + kBorderThickness * 2.0f, kBarHeight + kBorderThickness * 2.0f}, {0.0f, 0.0f, 0.0f, 0.9f});
+	background_ = MakeFlatSprite(backgroundTextureHandle, {kBarX, kBarY}, {kBarWidth, kBarHeight}, {0.2f, 0.05f, 0.05f, 0.9f});
+	fill_ = MakeFlatSprite(fillTextureHandle, {kBarX, kBarY}, {kBarWidth, kBarHeight}, {0.2f, 0.8f, 0.2f, 1.0f});
 }
 
 void PlayerHealthUI::Update(int hp, int maxHp) {
@@ -78,27 +81,16 @@ void PlayerHealthUI::Draw() {
 	Sprite::PostDraw();
 }
 
-// --- WeaponStatusUI ---
 // --- PlayerBlockUI ---
 void PlayerBlockUI::Initialize(uint32_t backgroundTextureHandle, uint32_t fillTextureHandle) {
 	barX_ = (static_cast<float>(WinApp::kWindowWidth) - kBarWidth) * 0.5f;
 	barY_ = static_cast<float>(WinApp::kWindowHeight) - kBottomMargin - kBarHeight;
 
-	border_.reset(Sprite::Create(backgroundTextureHandle, {barX_ - kBorderThickness, barY_ - kBorderThickness}));
-	border_->SetSize({kBarWidth + kBorderThickness * 2.0f, kBarHeight + kBorderThickness * 2.0f});
-	border_->SetColor({0.0f, 0.0f, 0.0f, 0.9f});
-
-	background_.reset(Sprite::Create(backgroundTextureHandle, {barX_, barY_}));
-	background_->SetSize({kBarWidth, kBarHeight});
-	background_->SetColor({0.05f, 0.07f, 0.15f, 0.9f});
-
-	fill_.reset(Sprite::Create(fillTextureHandle, {barX_, barY_}));
-	fill_->SetSize({kBarWidth, kBarHeight});
-	fill_->SetColor({0.25f, 0.55f, 0.95f, 1.0f});
-
-	marker_.reset(Sprite::Create(fillTextureHandle, {barX_, barY_ - 4.0f}));
-	marker_->SetSize({3.0f, kBarHeight + 8.0f});
-	marker_->SetColor({1.0f, 1.0f, 1.0f, 0.9f});
+	border_ = MakeFlatSprite(
+	    backgroundTextureHandle, {barX_ - kBorderThickness, barY_ - kBorderThickness}, {kBarWidth + kBorderThickness * 2.0f, kBarHeight + kBorderThickness * 2.0f}, {0.0f, 0.0f, 0.0f, 0.9f});
+	background_ = MakeFlatSprite(backgroundTextureHandle, {barX_, barY_}, {kBarWidth, kBarHeight}, {0.05f, 0.07f, 0.15f, 0.9f});
+	fill_ = MakeFlatSprite(fillTextureHandle, {barX_, barY_}, {kBarWidth, kBarHeight}, {0.25f, 0.55f, 0.95f, 1.0f});
+	marker_ = MakeFlatSprite(fillTextureHandle, {barX_, barY_ - 4.0f}, {3.0f, kBarHeight + 8.0f}, {1.0f, 1.0f, 1.0f, 0.9f});
 }
 
 void PlayerBlockUI::Update(float gauge, float maxGauge, bool broken, float recoverThreshold) {
@@ -124,6 +116,157 @@ void PlayerBlockUI::Draw() {
 	fill_->Draw();
 	if (broken_) {
 		marker_->Draw();
+	}
+	Sprite::PostDraw();
+}
+
+// --- BossHealthBar ---
+void BossHealthBar::Initialize(uint32_t backgroundTextureHandle, uint32_t fillTextureHandle) {
+	barX_ = static_cast<float>(WinApp::kWindowWidth) - kMarginRight - kBarWidth;
+	const Vector2 size{kBarWidth, kBarHeight};
+
+	border_ = MakeFlatSprite(
+	    backgroundTextureHandle, {barX_ - kBorderThickness, kBarY - kBorderThickness}, {kBarWidth + kBorderThickness * 2.0f, kBarHeight + kBorderThickness * 2.0f}, {0.0f, 0.0f, 0.0f, 0.9f});
+	background_ = MakeFlatSprite(backgroundTextureHandle, {barX_, kBarY}, size, {0.15f, 0.04f, 0.04f, 0.9f});
+	chip_ = MakeFlatSprite(fillTextureHandle, {barX_, kBarY}, size, {0.95f, 0.85f, 0.75f, 1.0f});
+	fill_ = MakeFlatSprite(fillTextureHandle, {barX_, kBarY}, size, {0.8f, 0.12f, 0.12f, 1.0f});
+	alpha_ = 0.0f;
+}
+
+void BossHealthBar::Update(float currentHP, float maxHP, bool visible) {
+	if (!fill_ || !chip_ || !background_ || !border_) {
+		return;
+	}
+	constexpr float dt = 1.0f / 60.0f;
+
+	// while hidden keep the last values so the bar fades out where it was
+	if (visible) {
+		targetFill_ = maxHP > 0.0f ? std::clamp(currentHP / maxHP, 0.0f, 1.0f) : 0.0f;
+	}
+	alpha_ += ((visible ? 1.0f : 0.0f) - alpha_) * kFadeRate;
+	if (!visible && alpha_ < 0.002f) {
+		alpha_ = 0.0f;
+	}
+
+	shownFill_ += (targetFill_ - shownFill_) * kFillRate;
+	if (std::fabs(targetFill_ - shownFill_) < 0.0005f) {
+		shownFill_ = targetFill_;
+	}
+	// chip: snaps up with healing, trails down at a fixed speed after damage
+	if (chipFill_ < shownFill_) {
+		chipFill_ = shownFill_;
+	} else {
+		chipFill_ = std::max(shownFill_, chipFill_ - kChipDropPerSecond * dt);
+	}
+
+	fill_->SetSize({kBarWidth * shownFill_, kBarHeight});
+	chip_->SetSize({kBarWidth * chipFill_, kBarHeight});
+
+	border_->SetColor({0.0f, 0.0f, 0.0f, 0.9f * alpha_});
+	background_->SetColor({0.15f, 0.04f, 0.04f, 0.9f * alpha_});
+	chip_->SetColor({0.95f, 0.85f, 0.75f, alpha_});
+	fill_->SetColor({0.8f, 0.12f, 0.12f, alpha_});
+}
+
+void BossHealthBar::Draw() {
+	if (!IsVisible() || !fill_) {
+		return;
+	}
+	Sprite::PreDraw();
+	border_->Draw();
+	background_->Draw();
+	chip_->Draw();
+	fill_->Draw();
+	Sprite::PostDraw();
+}
+
+// --- SwitchPointer ---
+void SwitchPointer::Initialize(uint32_t arrowTextureHandle) {
+	arrowTexture_ = arrowTextureHandle;
+	targets_.clear();
+	active_ = false;
+}
+
+void SwitchPointer::Start(const Vector3& switchWorldPos, const std::vector<Vector3>& gateWorldPositions) {
+	switchPos_ = switchWorldPos;
+	targets_.clear();
+	for (const Vector3& gate : gateWorldPositions) {
+		Target t;
+		t.gatePos = gate;
+		t.sprite.reset(Sprite::Create(arrowTexture_, {0.0f, 0.0f}));
+		t.sprite->SetSize({kIconSize, kIconSize});
+		t.sprite->SetAnchorPoint({0.5f, 0.5f});
+		targets_.push_back(std::move(t));
+	}
+	timer_ = 0.0f;
+	active_ = !targets_.empty();
+}
+
+void SwitchPointer::Update(const Camera& camera) {
+	if (!active_) {
+		return;
+	}
+	timer_ += 1.0f / 60.0f;
+	if (timer_ >= kDuration) {
+		active_ = false;
+		targets_.clear();
+		return;
+	}
+
+	float alpha = 1.0f;
+	if (timer_ < kFadeIn) {
+		alpha = timer_ / kFadeIn;
+	} else if (timer_ > kDuration - kFadeOut) {
+		alpha = (kDuration - timer_) / kFadeOut;
+	}
+	alpha = std::clamp(alpha, 0.0f, 1.0f);
+
+	const float w = static_cast<float>(WinApp::kWindowWidth);
+	const float h = static_cast<float>(WinApp::kWindowHeight);
+	const float bob = std::sin(timer_ * kBobSpeed) * kBobAmplitude;
+	// same projection StatusIndicator uses for the enemy icons
+	const Matrix4x4 matViewport = MakeViewportMatrix(0.0f, 0.0f, w, h, 0.0f, 1.0f);
+	const Matrix4x4 matVPV = Multiply(camera.matView, Multiply(camera.matProjection, matViewport));
+	auto toScreen = [&](const Vector3& world) {
+		const Vector3 p = TransformCoordinate(world, matVPV);
+		return Vector2{p.x, p.y};
+	};
+	const Vector2 switchScreen = toScreen(switchPos_);
+
+	for (Target& t : targets_) {
+		const Vector2 gateScreen = toScreen(t.gatePos);
+		const bool onScreen = gateScreen.x >= 0.0f && gateScreen.x <= w && gateScreen.y >= 0.0f && gateScreen.y <= h;
+
+		Vector2 pos;
+		float rotation;
+		if (onScreen) {
+			// float above the gate, pointing down at it
+			pos = {gateScreen.x, gateScreen.y - kAboveGatePx + bob};
+			rotation = std::numbers::pi_v<float> * 0.5f;
+		} else {
+			// midpoint between switch and gate, kept inside the screen, pointing at the gate
+			pos = {(switchScreen.x + gateScreen.x) * 0.5f, (switchScreen.y + gateScreen.y) * 0.5f};
+			pos.x = std::clamp(pos.x, kEdgeMargin, w - kEdgeMargin);
+			pos.y = std::clamp(pos.y, kEdgeMargin, h - kEdgeMargin);
+			rotation = std::atan2(gateScreen.y - pos.y, gateScreen.x - pos.x);
+			const float dx = std::cos(rotation) * bob;
+			const float dy = std::sin(rotation) * bob;
+			pos.x += dx;
+			pos.y += dy;
+		}
+		t.sprite->SetPosition(pos);
+		t.sprite->SetRotation(rotation);
+		t.sprite->SetColor({1.0f, 0.9f, 0.3f, alpha});
+	}
+}
+
+void SwitchPointer::Draw() {
+	if (!active_) {
+		return;
+	}
+	Sprite::PreDraw();
+	for (Target& t : targets_) {
+		t.sprite->Draw();
 	}
 	Sprite::PostDraw();
 }
@@ -222,23 +365,20 @@ void WeaponStatusUI::Update(const State& s) {
 
 	const bool heavy = (s.meleeKind == DropWeaponKind::kSabreHeavy);
 	const bool bayonet = (s.firearmKind == DropWeaponKind::kMusketBayonet);
+	const bool dual = (s.firearmKind == DropWeaponKind::kDualPistols);
 	const Vector4& meleeBase = s.isFirearmMode ? kInactiveColor : kActiveColor;
 	const Vector4& firearmBase = s.isFirearmMode ? kActiveColor : kInactiveColor;
 
 	// only the held weapon's icon gets the live cooldown
 	meleeLight_.Update(meleeBase, false, 1.0f);
 	meleeHeavy_.Update(meleeBase, heavy && s.isMeleeCooling, s.meleeCooldownProgress01);
-
-	const bool dual = (s.firearmKind == DropWeaponKind::kDualPistols);
-	firearmLong_.Update(firearmBase, !bayonet && !dual && s.isReloading, s.reloadProgress01);
-	firearmPistols_.Update(firearmBase, dual && s.isReloading, s.reloadProgress01);
-
-
-
-	firearmBayonet_.Update(firearmBase, bayonet && s.isReloading, s.reloadProgress01);
-	bayonetLunge_.Update(firearmBase, bayonet && s.isLungeCooling, s.lungeCooldownProgress01);
 	meleeAxe_.Update(meleeBase, false, 1.0f);
 	meleeSpear_.Update(meleeBase, false, 1.0f);
+
+	firearmLong_.Update(firearmBase, !bayonet && !dual && s.isReloading, s.reloadProgress01);
+	firearmPistols_.Update(firearmBase, dual && s.isReloading, s.reloadProgress01);
+	firearmBayonet_.Update(firearmBase, bayonet && s.isReloading, s.reloadProgress01);
+	bayonetLunge_.Update(firearmBase, bayonet && s.isLungeCooling, s.lungeCooldownProgress01);
 	firearmShotgun_.Update(firearmBase, !bayonet && s.isReloading, s.reloadProgress01);
 }
 

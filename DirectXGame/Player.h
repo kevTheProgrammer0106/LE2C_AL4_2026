@@ -31,8 +31,8 @@ public:
 	static void ApplyGlobalVariables();
 
 	void Initialize(
-	    const std::array<PartResources, static_cast<size_t>(PartSlot::kCount)>& partResources, KamataEngine::Model* modelAttack, uint32_t textureHandleAttack, KamataEngine::Camera* camera,
-	    const KamataEngine::Vector3& position);
+	    const std::array<PartResources, static_cast<size_t>(PartSlot::kCount)>& partResources, KamataEngine::Model* modelAttack, const AttackEffectTextures& attackTextures,
+	    KamataEngine::Camera* camera, const KamataEngine::Vector3& position);
 	void Update();
 	void Draw();
 
@@ -254,6 +254,11 @@ public:
 		blastSmokeEmitTimer_ = 0.0f;
 	}
 
+	// public に追加(ゴール位置に着いたか)
+	bool IsGoalSequenceArrived() const { return goalSeqActive_ && goalSeqTimer_ >= kGoalMoveDuration; }
+	// public に追加(GrantInvulnerability は private なので公開ラッパーを用意)
+	void GrantSpawnInvulnerability(float seconds) { GrantInvulnerability(seconds); }
+
 private:
 	bool controlLocked_ = false;
 
@@ -297,13 +302,13 @@ private:
     };
 	static inline SRTOffset headOffset_ = {
 	    {1.0f,    1.0f,   1.0f},
-        {0.15f,   0.0f,   0.0f},
+        {0.0f,   0.0f,   0.0f},
         {-0.050f, 0.720f, 0.0f}
     };
 	static inline SRTOffset hatOffset_ = {
 	    {1.0f, 1.0f, 1.0f},
         {0.0f, 0.0f, 0.0f},
-        {0.0f, 0.0f, 0.0f}
+        {0.0f, 0.1f, -0.11f}
     };
 	static inline SRTOffset firearmOffset_ = {
 	    {1.0f, 1.0f, 1.0f},
@@ -320,7 +325,7 @@ private:
 
 	KamataEngine::Model* modelAttack_ = nullptr;
 	KamataEngine::WorldTransform worldTransformAttack_;
-	uint32_t modelAttackTex_ = 0;
+	AttackEffectTextures attackEffectTextures_; 
 
 	std::unique_ptr<BaseMelee> currentMelee_;
 	std::unique_ptr<BaseFirearm> currentFirearm_;

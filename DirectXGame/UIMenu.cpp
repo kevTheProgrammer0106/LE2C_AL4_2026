@@ -75,7 +75,6 @@ void UIMenu::Update() {
 	bool mouseDown = input->IsPrimaryHeld();
 	bool mouseTriggeredDown = input->IsPrimaryTriggered();
 	UpdateButtons(mouseX, mouseY, mouseDown, mouseTriggeredDown);
-	DrawHoverLabel(mouseX, mouseY);
 
 #ifdef _DEBUG
 	ImGui::Begin("Cursor");
@@ -86,15 +85,15 @@ void UIMenu::Update() {
 
 void UIMenu::Draw() {
 	Sprite::PreDraw();
+	// 全てのバー(奥) -> 全てのボタン本体(手前)の順。隣のボタンのバーが本体を隠さないようにする
 	for (Button& button : buttons_) {
-		if (!button.visible) {
-			continue;
-		}
-		// バー(奥) -> ボタン本体(手前)。登場/退場はスライドで表現するので、アルファは常に固定
-		if (button.barSprite) {
+		if (button.visible && button.barSprite) {
 			button.barSprite->Draw();
 		}
-		if (button.sprite) {
+	}
+	for (Button& button : buttons_) {
+		if (button.visible && button.sprite) {
+			// 登場/退場はスライドで表現するので、アルファは常に固定
 			button.sprite->SetColor({1.0f, 1.0f, 1.0f, 1.0f});
 			button.sprite->Draw();
 		}
@@ -132,48 +131,6 @@ void UIMenu::UpdateButtonFade() {
 	buttonSlide_ = fadeIn ? EaseOut(0.0f, 1.0f, t) : (1.0f - EaseIn(0.0f, 1.0f, t));
 }
 
-void UIMenu::DrawHoverLabel(float mouseX, float mouseY) const {
-	if (buttonFadeAlpha_ <= 0.01f) {
-		return;
-	}
-
-	const Button* hovered = nullptr;
-	for (const Button& button : buttons_) {
-		if (button.visible && button.enabled && button.isHovered && !button.label.empty()) {
-			hovered = &button;
-			break;
-		}
-	}
-	if (!hovered) {
-		return;
-	}
-
-	ImDrawList* drawList = ImGui::GetForegroundDrawList();
-	ImFont* font = ImGui::GetFont();
-
-	// CalcTextSize measures at the default font size, so scale it to kLabelFontSize.
-	const float scale = kLabelFontSize / ImGui::GetFontSize();
-	ImVec2 textSize = ImGui::CalcTextSize(hovered->label.c_str());
-	textSize.x *= scale;
-	textSize.y *= scale;
-
-	const float boxWidth = textSize.x + kLabelPadX * 2.0f;
-	const float boxHeight = textSize.y + kLabelPadY * 2.0f;
-
-	// centered above the cursor, kept inside the screen
-	const float screenW = static_cast<float>(WinApp::kWindowWidth);
-	float left = std::clamp(mouseX - boxWidth * 0.5f, 4.0f, std::max(4.0f, screenW - boxWidth - 4.0f));
-	float top = std::max(4.0f, mouseY - kLabelCursorGap - boxHeight);
-
-	const float a = std::clamp(buttonFadeAlpha_, 0.0f, 1.0f);
-	const ImVec2 p0 = {left, top};
-	const ImVec2 p1 = {left + boxWidth, top + boxHeight};
-
-	drawList->AddRectFilled(p0, p1, IM_COL32(0, 0, 0, static_cast<int>(200 * a)), 6.0f);
-	drawList->AddRect(p0, p1, IM_COL32(255, 255, 255, static_cast<int>(180 * a)), 6.0f, 0, 1.5f);
-	drawList->AddText(font, kLabelFontSize, {left + kLabelPadX, top + kLabelPadY}, IM_COL32(255, 255, 255, static_cast<int>(255 * a)), hovered->label.c_str());
-}
-
 #pragma region UIボタン(AABB)
 
 bool UIMenu::IsInsideAABB(const ButtonAABB& aabb, float x, float y) { return x >= aabb.left && x <= aabb.right && y >= aabb.top && y <= aabb.bottom; }
@@ -182,25 +139,68 @@ UIMenu::SlideSide UIMenu::ResolveSide(const Button& button) const {
 	if (button.side != SlideSide::kAuto) {
 		return button.side;
 	}
+	// 画面中央ちょうどのボタンも左扱い(浮動小数の誤差ぶん1pxの余裕を持たせる)
 	const float centerX = (button.aabb.left + button.aabb.right) * 0.5f;
-	return (centerX < static_cast<float>(WinApp::kWindowWidth) * 0.5f) ? SlideSide::kLeft : SlideSide::kRight;
+	return (centerX <= static_cast<float>(WinApp::kWindowWidth) * 0.5f + 1.0f) ? SlideSide::kLeft : SlideSide::kRight;
 }
 
 // 完全に画面外へ出るぶんのずれ(hidden)に、(1 - スライド進行度)を掛ける。
-// 左: バーの右端が画面の左端(x=0)に来る位置 / 右: ボタン本体の左端が画面の右端に来る位置
+// 左: ホバーで最大まで伸びたバーの右端が画面の左端(x=0)に来る位置
+// 右: ホバーで最大まで伸びたバーの左端が画面の右端に来る位置
 float UIMenu::ComputeSlideOffset(const Button& button) const {
 	const float screenW = static_cast<float>(WinApp::kWindowWidth);
-	const float hidden = (ResolveSide(button) == SlideSide::kLeft) ? -button.aabb.right : (screenW - button.aabb.left);
+	const float maxExtend = ComputeMaxHoverExtend(button);
+	const float hidden = (ResolveSide(button) == SlideSide::kLeft) ? -(button.aabb.right + maxExtend) : (screenW - (button.aabb.left - maxExtend));
 	return hidden * (1.0f - buttonSlide_);
 }
 
-// バー = 本来のボタン矩形を端側へ kSliderExtend だけ伸ばしたもの(スライド位置込み)
-UIMenu::ButtonAABB UIMenu::ComputeBarRect(const Button& button) const {
-	ButtonAABB rect = button.aabb;
+// バーの基本の長さ: 並び順が1つ後ろになるごとに kLengthStep だけ短くなる。ボタン本体の端より内側には入らない
+float UIMenu::ComputeBaseBarEdge(const Button& button) const {
+	const float shorten = static_cast<float>(button.index) * kLengthStep;
 	if (ResolveSide(button) == SlideSide::kLeft) {
-		rect.left -= kSliderExtend;
+		return std::clamp(button.aabb.right - shorten, button.aabb.left, button.aabb.right);
+	}
+	return std::clamp(button.aabb.left + shorten, button.aabb.left, button.aabb.right);
+}
+
+float UIMenu::ComputeMaxHoverExtend(const Button& button) const { return std::max(kHoverExtend - static_cast<float>(button.index) * kHoverExtendStep, 0.0f); }
+
+// 当たり判定: ボタン本来の高さのまま、画面端からバー(またはボタン本体の遠い端の長い方)まで。スライド位置に追従する
+UIMenu::ButtonAABB UIMenu::ComputeHitRect(const Button& button) const {
+	const float screenW = static_cast<float>(WinApp::kWindowWidth);
+	ButtonAABB rect = button.aabb;
+	const float edge = ComputeBaseBarEdge(button);
+	if (ResolveSide(button) == SlideSide::kLeft) {
+		rect.left = 0.0f;
+		rect.right = std::max(edge, button.aabb.right);
 	} else {
-		rect.right += kSliderExtend;
+		rect.left = std::min(edge, button.aabb.left);
+		rect.right = screenW;
+	}
+	const float offset = ComputeSlideOffset(button);
+	rect.left += offset;
+	rect.right += offset;
+	return rect;
+}
+
+// バーの表示矩形: 画面端から基本の長さ+ホバーの伸びまで。高さはボタンの kBarHeightRatio で縦中央
+UIMenu::ButtonAABB UIMenu::ComputeBarRect(const Button& button) const {
+	const float screenW = static_cast<float>(WinApp::kWindowWidth);
+	const float height = button.aabb.bottom - button.aabb.top;
+	const float barHeight = height * kBarHeightRatio;
+	const float centerY = (button.aabb.top + button.aabb.bottom) * 0.5f;
+
+	ButtonAABB rect;
+	rect.top = centerY - barHeight * 0.5f;
+	rect.bottom = centerY + barHeight * 0.5f;
+
+	const float edge = ComputeBaseBarEdge(button);
+	if (ResolveSide(button) == SlideSide::kLeft) {
+		rect.left = 0.0f;
+		rect.right = edge + button.hoverExtend;
+	} else {
+		rect.left = edge - button.hoverExtend;
+		rect.right = screenW;
 	}
 	const float offset = ComputeSlideOffset(button);
 	rect.left += offset;
@@ -220,6 +220,7 @@ UIMenu::ButtonAABB UIMenu::ComputeFaceRect(const Button& button) const {
 UIMenu::ButtonID UIMenu::AddButton(uint32_t textureHandle, float x, float y, float width, float height, const std::string& label) {
 	Button button;
 	button.id = nextButtonID_++;
+	button.index = buttons_.size();
 	button.aabb = {x, y, x + width, y + height};
 	button.label = label;
 
@@ -331,7 +332,31 @@ bool UIMenu::IsButtonHovered(ButtonID id) const {
 }
 
 void UIMenu::UpdateButtons(float mouseX, float mouseY, bool mouseDown, bool mouseTriggeredDown) {
-	for (Button& button : buttons_) {
+	// ---- 1) ホバーの素の判定。判定矩形が縦に重なるので、一番手前(並び順が最後)の1つだけをホバー扱いにする ----
+	// 押し込み中のボタンがあれば、そのボタンが優先(他のボタンに奪われない)
+	std::vector<char> rawHover(buttons_.size(), 0);
+	int owner = -1;
+	for (size_t i = 0; i < buttons_.size(); ++i) {
+		const Button& button = buttons_[i];
+		if (!button.visible || !button.enabled) {
+			continue;
+		}
+		rawHover[i] = IsInsideAABB(ComputeHitRect(button), mouseX, mouseY) ? 1 : 0;
+		if (button.isHeld) {
+			owner = static_cast<int>(i);
+		}
+	}
+	if (owner < 0) {
+		for (size_t i = 0; i < buttons_.size(); ++i) {
+			if (rawHover[i]) {
+				owner = static_cast<int>(i);
+			}
+		}
+	}
+
+	// ---- 2) 状態の更新 ----
+	for (size_t i = 0; i < buttons_.size(); ++i) {
+		Button& button = buttons_[i];
 		button.wasClickedThisFrame = false;
 
 		if (!button.visible || !button.enabled) {
@@ -340,12 +365,13 @@ void UIMenu::UpdateButtons(float mouseX, float mouseY, bool mouseDown, bool mous
 			button.holdTimer = 0.0f;
 			button.pressStartedInside = false;
 			button.scale = 1.0f;
+			button.hoverExtend = 0.0f;
 			ApplyButtonVisual(button);
 			continue;
 		}
 
 		// 判定は現在のスライド位置にあるバー全体(画面外にいる間はマウスが届かないので自然に無効)
-		button.isHovered = IsInsideAABB(ComputeBarRect(button), mouseX, mouseY);
+		button.isHovered = (static_cast<int>(i) == owner) && rawHover[i];
 
 		if (button.isHeld) {
 			if (mouseDown) {
@@ -372,30 +398,32 @@ void UIMenu::UpdateButtons(float mouseX, float mouseY, bool mouseDown, bool mous
 		}
 		float targetScale = button.isHeld ? kPressScale : (button.isHovered ? kHoverScale : 1.0f);
 		button.scale += (targetScale - button.scale) * kScaleLerp;
+
+		// ホバー中はバーが伸び、外れると縮む(並び順が後ろほど伸びが小さい)
+		const float targetExtend = button.isHovered ? ComputeMaxHoverExtend(button) : 0.0f;
+		button.hoverExtend += (targetExtend - button.hoverExtend) * kHoverExtendLerp;
+
 		ApplyButtonVisual(button);
 	}
 }
 
-// バーとボタン本体を、それぞれの矩形の中心を保ったままscaleで拡縮してスプライトへ反映する。
-// 判定矩形(ComputeBarRect)自体はscaleの影響を受けない
+// バー(画面端から伸びる帯)とボタン本体をスプライトへ反映する。
+// scaleはボタン本体だけに、中心を保って掛ける。判定矩形(ComputeHitRect)はscaleの影響を受けない
 void UIMenu::ApplyButtonVisual(Button& button) const {
-	auto apply = [&](Sprite* sprite, const ButtonAABB& rect) {
-		if (!sprite) {
-			return;
-		}
-		const float w = rect.right - rect.left;
-		const float h = rect.bottom - rect.top;
+	if (button.barSprite) {
+		const ButtonAABB bar = ComputeBarRect(button);
+		button.barSprite->SetSize({bar.right - bar.left, bar.bottom - bar.top});
+		button.barSprite->SetPosition({bar.left, bar.top});
+		button.barSprite->SetColor(button.isHovered ? kBarHoverColor : kBarColor);
+	}
+	if (button.sprite) {
+		const ButtonAABB face = ComputeFaceRect(button);
+		const float w = face.right - face.left;
+		const float h = face.bottom - face.top;
 		const float sw = w * button.scale;
 		const float sh = h * button.scale;
-		sprite->SetSize({sw, sh});
-		sprite->SetPosition({rect.left - (sw - w) * 0.5f, rect.top - (sh - h) * 0.5f});
-	};
-
-	apply(button.barSprite.get(), ComputeBarRect(button));
-	apply(button.sprite.get(), ComputeFaceRect(button));
-
-	if (button.barSprite) {
-		button.barSprite->SetColor(button.isHovered ? kBarHoverColor : kBarColor);
+		button.sprite->SetSize({sw, sh});
+		button.sprite->SetPosition({face.left - (sw - w) * 0.5f, face.top - (sh - h) * 0.5f});
 	}
 }
 #pragma endregion

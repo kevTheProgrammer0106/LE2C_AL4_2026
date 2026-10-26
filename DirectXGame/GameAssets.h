@@ -2,6 +2,7 @@
 
 #include "KamataEngine.h"
 #include "MapChipField.h"
+#include "Global.h"
 #include <cstdint>
 #include <memory>
 
@@ -115,13 +116,16 @@ public:
 	uint32_t officerHeadTex = 0;
 	uint32_t officerHatTex = 0;
 
-	// --- Effects ---
-	std::unique_ptr<KamataEngine::Model> modelSlashEffect;
-	uint32_t slashEffectTex = 0;
-	std::unique_ptr<KamataEngine::Model> hitEffectModel;
-	uint32_t hitEffectTex = 0;
-	std::unique_ptr<KamataEngine::Model> guardEffectModel;
-	uint32_t guardEffectTex = 0;
+	// --- Effects (Resources/spriteIngame) ---
+	std::unique_ptr<KamataEngine::Model> modelSlashEffect; // quad used by every attack effect
+	AttackEffectTextures attackEffectTextures;
+	std::unique_ptr<KamataEngine::Model> hitEffectModel;   // "particle" quad (bursts / flash / muzzle flash / hit)
+	std::unique_ptr<KamataEngine::Model> guardEffectModel; // ring
+	uint32_t effectExplosionTex = 0;
+	uint32_t effectFlashTex = 0;
+	uint32_t effectFragmentsTex = 0;
+	uint32_t effectSmokeTex = 0;
+	uint32_t effectSparkTex = 0;
 	std::unique_ptr<KamataEngine::Model> deathParticleModel;
 	uint32_t deathParticleTex = 0;
 
@@ -206,11 +210,12 @@ public:
 	// --- Menus / cursor ---
 	uint32_t pauseButtonTex[3] = {0, 0, 0}; // play, retry, back
 	uint32_t retryButtonTex[3] = {0, 0, 0}; // retry, restart, back
-	uint32_t victoryButtonTex[2] = {0, 0};  // restart, back
+	uint32_t victoryButtonTex[3] = {0, 0, 0}; // next, restart, back
 	uint32_t inGamePauseButtonTex = 0;
 	uint32_t cursorTex[2] = {0, 0}; // [0] aim (play), [1] arrow (menus)
 	// --- Banner(画面上部の文字)。順番は BannerUI::Kind: start, arena, paused, defeat, victory ---
 	uint32_t bannerTex[6] = {0, 0, 0, 0, 0, 0};
+	uint32_t screenFlashTex = 0;
 
 	// --- Audio: music ---
 	uint32_t musicIngame = 0;

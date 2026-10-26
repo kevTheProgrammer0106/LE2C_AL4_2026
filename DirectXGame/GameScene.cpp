@@ -56,6 +56,24 @@ bool ResolveWeaponVisual(const GameAssets& a, DropWeaponKind kind, Model*& outMo
 		return false;
 	}
 }
+constexpr float kMenuButtonW = 220.0f;
+constexpr float kMenuButtonH = 160.0f;
+constexpr float kMenuSpacing = 100.0f;
+
+// Vertically centered column of `count` buttons.
+struct MenuLayout {
+	float x;
+	float startY;
+	float Y(int row) const { return startY + kMenuSpacing * static_cast<float>(row); }
+};
+MenuLayout MakeMenuLayout(int count) {
+	return {static_cast<float>(WinApp::kWindowWidth) / 2.0f - kMenuButtonW / 2.0f, static_cast<float>(WinApp::kWindowHeight) / 2.0f - kMenuSpacing * static_cast<float>(count - 1) * 0.5f};
+}
+UIMenu::ButtonID AddMenuButton(UIMenu& menu, uint32_t tex, const MenuLayout& layout, int row, const std::string& label, std::function<void()> onClick) {
+	UIMenu::ButtonID id = menu.AddButton(tex, layout.x, layout.Y(row), kMenuButtonW, kMenuButtonH, label);
+	menu.SetButtonOnClick(id, std::move(onClick));
+	return id;
+}
 }
 
 void GameScene::RegisterGlobalVariables() {
@@ -94,7 +112,9 @@ void GameScene::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "ShakeExplosionRange", kShakeExplosionRange);
 	gv->AddItem(kGroupName, "BlockZoomIn", kBlockZoomIn);
 	gv->AddItem(kGroupName, "BlockZoomOut", kBlockZoomOut);
-	gv->AddItem(kGroupName, "BlockZoomRatio", kBlockZoomRatio);
+	gv->AddItem(kGroupName, "BlockZoomAmount", kBlockZoomAmount);
+	gv->AddItem(kGroupName, "BlockZoomHold", kBlockZoomHold);
+	gv->AddItem(kGroupName, "BlockZoomMaxDistance", kBlockZoomMaxDistance);
 	gv->AddItem(kGroupName, "ShakeSwingAmp", kShakeSwingAmp);
 	gv->AddItem(kGroupName, "ShakeSwingDuration", kShakeSwingDuration);
 	gv->AddItem(kGroupName, "ShakeSpecialAmp", kShakeSpecialAmp);
@@ -109,6 +129,14 @@ void GameScene::RegisterGlobalVariables() {
 	gv->AddItem(kGroupName, "DeathOverlayFadeDuration", kDeathOverlayFadeDuration);
 	gv->AddItem(kGroupName, "FxDepthOffset", kFxDepthOffset);
 	gv->AddItem(kGroupName, "BlastSmokeDuration", kBlastSmokeDuration);
+	gv->AddItem(kGroupName, "ExplosionFuseTime", kExplosionFuseTime);
+	gv->AddItem(kGroupName, "GoalCameraOffset", kGoalCameraOffset);
+	gv->AddItem(kGroupName, "GoalCameraEnter", kGoalCameraEnter);
+	gv->AddItem(kGroupName, "GoalConfettiDuration", kGoalConfettiDuration);
+	gv->AddItem(kGroupName, "SpawnCameraOffset", kSpawnCameraOffset);
+	gv->AddItem(kGroupName, "SpawnCameraEnter", kSpawnCameraEnter);
+	gv->AddItem(kGroupName, "SpawnCameraHold", kSpawnCameraHold);
+	gv->AddItem(kGroupName, "SpawnCameraReturn", kSpawnCameraReturn);
 }
 
 void GameScene::ApplyGlobalVariables() {
@@ -146,7 +174,9 @@ void GameScene::ApplyGlobalVariables() {
 	kShakeExplosionRange = gv->GetFloatValue(kGroupName, "ShakeExplosionRange");
 	kBlockZoomIn = gv->GetFloatValue(kGroupName, "BlockZoomIn");
 	kBlockZoomOut = gv->GetFloatValue(kGroupName, "BlockZoomOut");
-	kBlockZoomRatio = gv->GetFloatValue(kGroupName, "BlockZoomRatio");
+	kBlockZoomAmount = gv->GetFloatValue(kGroupName, "BlockZoomAmount");
+	kBlockZoomHold = gv->GetFloatValue(kGroupName, "BlockZoomHold");
+	kBlockZoomMaxDistance = gv->GetFloatValue(kGroupName, "BlockZoomMaxDistance");
 	kShakeSwingAmp = gv->GetFloatValue(kGroupName, "ShakeSwingAmp");
 	kShakeSwingDuration = gv->GetFloatValue(kGroupName, "ShakeSwingDuration");
 	kShakeSpecialAmp = gv->GetFloatValue(kGroupName, "ShakeSpecialAmp");
@@ -161,6 +191,14 @@ void GameScene::ApplyGlobalVariables() {
 	kDeathOverlayFadeDuration = gv->GetFloatValue(kGroupName, "DeathOverlayFadeDuration");
 	kFxDepthOffset = gv->GetFloatValue(kGroupName, "FxDepthOffset");
 	kBlastSmokeDuration = gv->GetFloatValue(kGroupName, "BlastSmokeDuration");
+	kExplosionFuseTime = gv->GetFloatValue(kGroupName, "ExplosionFuseTime");
+	kGoalCameraOffset = gv->GetVector3Value(kGroupName, "GoalCameraOffset");
+	kGoalCameraEnter = gv->GetFloatValue(kGroupName, "GoalCameraEnter");
+	kGoalConfettiDuration = gv->GetFloatValue(kGroupName, "GoalConfettiDuration");
+	kSpawnCameraOffset = gv->GetVector3Value(kGroupName, "SpawnCameraOffset");
+	kSpawnCameraEnter = gv->GetFloatValue(kGroupName, "SpawnCameraEnter");
+	kSpawnCameraHold = gv->GetFloatValue(kGroupName, "SpawnCameraHold");
+	kSpawnCameraReturn = gv->GetFloatValue(kGroupName, "SpawnCameraReturn");
 }
 void GameScene::debugMenu() {
 #ifdef _DEBUG
@@ -176,11 +214,15 @@ void GameScene::BindAssets() {
 	BaseMelee::SetSwingSoundHandle(1, assets_.sfxSwingLeft);
 	BaseMelee::SetSwingSoundHandle(2, assets_.sfxSwingDownward);
 
-	for (int i = 0; i < 3; ++i)
+	for (int i = 0; i < 3; ++i) {
 		BaseEnemy::SetDefaultDeathSoundHandle(i, assets_.sfxEnemyDeath[i]);
+	}
+	
 	BaseEnemy::SetDefaultFootstepSoundHandle(assets_.sfxFootstep);
 	BaseEnemy::SetDefaultJumpSoundHandle(assets_.sfxJump);
 	BaseEnemy::SetDefaultLandSoundHandle(assets_.sfxLand);
+	BaseEnemy::SetBlockImpactSoundHandle(assets_.sfxPlayerBlockImpact);
+
 
 	PlayerBehavior::SetHurtSoundHandle(assets_.sfxPlayerHurt);
 	PlayerBehavior::SetDeathSoundHandle(assets_.sfxPlayerDeath);
@@ -240,7 +282,6 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	Player::RegisterGlobalVariables();
 	HitEffect::RegisterGlobalVariables();
 	GuardEffect::RegisterGlobalVariables();
-	DeathParticles::RegisterGlobalVariables();
 	WeaponSabre::RegisterGlobalVariables();
 	FirearmMusket::RegisterGlobalVariables();
 	DroppableItem::RegisterGlobalVariables();
@@ -324,9 +365,6 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	skyDome_ = std::make_unique<Skydome>();
 	skyDome_->Initialize(assets_.modelSkyDome.get(), assets_.skyDomeTex, &camera_);
 
-	deathParticles_ = std::make_unique<DeathParticles>();
-	deathParticles_->Initialize(assets_.deathParticleModel.get(), assets_.deathParticleTex, &camera_, {0.0f, 0.0f, 0.0f});
-
 	HitEffect::SetModel(assets_.hitEffectModel.get());
 	HitEffect::SetCamera(&camera_);
 	EffectMuzzleFlash::SetModel(assets_.hitEffectModel.get());
@@ -335,7 +373,7 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	GuardEffect::SetCamera(&camera_);
 	EffectParticleBurst::SetModel(assets_.hitEffectModel.get());
 	EffectParticleBurst::SetCamera(&camera_);
-	aimGuide_.Initialize(assets_.hitEffectModel.get(), assets_.hitEffectTex, &camera_);
+	aimGuide_.Initialize(assets_.hitEffectModel.get(), assets_.effectSparkTex, &camera_);
 
 	interactionPrompt_.Initialize(assets_.interactionPromptTex);
 
@@ -345,7 +383,7 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	cursor_.Initialize(assets_.cursorTex, 2, &camera_);
 	playerHealthUI_.Initialize(assets_.healthBarBackgroundTex, assets_.healthBarFillTex);
 
-	screenFlash_.Initialize(assets_.healthBarBackgroundTex);
+	screenFlash_.Initialize(assets_.screenFlashTex);
 
 	statusIndicator_.Initialize(assets_.enemyIconArrowTex, assets_.enemyIconFighterTex);
 	statusIndicator_.InitializeStatus(assets_.healthBarBackgroundTex); // 状態アイコン(画像が無い間は白の代用色)
@@ -363,6 +401,8 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 		weaponStatusUI_.Initialize(icons);
 	}
 	playerBlockUI_.Initialize(assets_.healthBarBackgroundTex, assets_.healthBarFillTex);
+	bossHealthBar_.Initialize(assets_.healthBarBackgroundTex, assets_.healthBarFillTex);
+	switchPointer_.Initialize(assets_.enemyIconArrowTex); // arrow art points +X, same as the enemy off-screen arrow
 
 	cameraController_ = std::make_unique<CameraController>();
 	cameraController_->Initialize(&camera_);
@@ -429,8 +469,59 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	}
 
 	loadingCover_->Start(Fade::Status::FadeOut, kLoadingCoverFadeOutDuration);
+	// スポーン演出(寄り+紙吹雪)は新規スタートの時だけ。チェックポイント復帰では出さない
+	if ( !stageManager_->HasCheckpoint() )
+	{
+		BeginSpawnSequence();
+	}
+	// 無敵はどちらの場合も付ける
+	if (player_) 
+	{
+		player_->GrantSpawnInvulnerability(kSpawnInvulnerability);
+	}
+	
+}
+// 追加
+void GameScene::BeginSpawnSequence() {
+	if (!player_ || !cameraController_)
+		return;
+	spawnSequenceActive_ = true;
+	spawnSequenceTimer_ = 0.0f;
+	player_->SetControlLocked(true); // 演出中は操作できない
+
+	// プレイヤーへ寄って、少し止まって、元のフォローカメラへ戻る
+	CameraController::FocusShot shot;
+	shot.position = player_->GetWorldPosition() + kSpawnCameraOffset;
+	shot.enterDuration = kSpawnCameraEnter;
+	shot.holdDuration = kSpawnCameraHold;
+	shot.returnDuration = kSpawnCameraReturn;
+	shot.enterEase = CameraController::Ease::kOut;
+	shot.returnEase = CameraController::Ease::kInOut;
+	shot.holdUntilReleased = false;
+	cameraController_->StartFocus(shot);
+
+	// プレイヤーから紙吹雪(画面側へ飛ぶ)
+	Vector3 p = player_->GetWorldPosition();
+	p.z += kFxDepthOffset;
+	CreateBurstEffect(BurstType::kConfetti, p, {0.0f, 1.0f});
 }
 
+void GameScene::UpdateSpawnSequence() {
+	if (!spawnSequenceActive_)
+		return;
+	if (!player_ || player_->isDead()) {
+		spawnSequenceActive_ = false;
+		return;
+	}
+	if (phase_ != Phase::kPlay)
+		return; // ポーズ中は進めない
+
+	spawnSequenceTimer_ += 1.0f / 60.0f;
+	if (spawnSequenceTimer_ >= kSpawnCameraEnter + kSpawnCameraHold + kSpawnCameraReturn) {
+		spawnSequenceActive_ = false;
+		player_->SetControlLocked(false); // 操作を返す
+	}
+}
 void GameScene::InitializePauseMenu() {
 	pauseMenuInput_.Initialize(assets_.pauseButtonTex, 3, &camera_);
 	pauseMenuInput_.SetCursorVisible(false); // カーソルは GameScene::cursor_ が描く
@@ -438,27 +529,11 @@ void GameScene::InitializePauseMenu() {
 	// 設定ボタンはタイトルと同じ画像を流用(専用画像ができたらGameAssetsへ移す)
 	settingsButtonTex_ = TextureManager::Load("./Resources/UserInterface/buttonLevel2.png");
 
-	constexpr float kButtonWidth = 220.0f;
-	constexpr float kButtonHeight = 160.0f;
-	constexpr float kSpacing = 100.0f;
-	float centerX = static_cast<float>(WinApp::kWindowWidth) / 2.0f - kButtonWidth / 2.0f;
-	// 4つ並べるので全体が画面中央に来るようにずらす
-	float startY = static_cast<float>(WinApp::kWindowHeight) / 2.0f - kSpacing * 1.5f;
-
-	pauseResumeButton_ = pauseMenuInput_.AddButton(assets_.pauseButtonTex[0], centerX, startY, kButtonWidth, kButtonHeight, "Resume");
-	pauseMenuInput_.SetButtonOnClick(pauseResumeButton_, [this]() { phase_ = phaseBeforePause_; });
-
-	pauseSettingsButton_ = pauseMenuInput_.AddButton(settingsButtonTex_, centerX, startY + kSpacing, kButtonWidth, kButtonHeight, "Settings");
-	pauseMenuInput_.SetButtonOnClick(pauseSettingsButton_, [this]() { OpenSettingsPanel(); });
-
-	pauseRetryButton_ = pauseMenuInput_.AddButton(assets_.pauseButtonTex[1], centerX, startY + kSpacing * 2.0f, kButtonWidth, kButtonHeight, "Retry");
-	pauseMenuInput_.SetButtonOnClick(pauseRetryButton_, [this]() { reloadRequested_ = true; });
-
-	pauseMainMenuButton_ = pauseMenuInput_.AddButton(assets_.pauseButtonTex[2], centerX, startY + kSpacing * 3.0f, kButtonWidth, kButtonHeight, "Main Menu");
-	pauseMenuInput_.SetButtonOnClick(pauseMainMenuButton_, [this]() {
-		pendingReturnToMenu_ = true;
-		fade_->Start(Fade::Status::FadeOut, 1.0f);
-	});
+	const MenuLayout L = MakeMenuLayout(4);
+	pauseResumeButton_ = AddMenuButton(pauseMenuInput_, assets_.pauseButtonTex[0], L, 0, "Resume", [this]() { phase_ = phaseBeforePause_; });
+	pauseSettingsButton_ = AddMenuButton(pauseMenuInput_, settingsButtonTex_, L, 1, "Settings", [this]() { OpenSettingsPanel(); });
+	pauseRetryButton_ = AddMenuButton(pauseMenuInput_, assets_.pauseButtonTex[1], L, 2, "Retry", [this]() { reloadRequested_ = true; });
+	pauseMainMenuButton_ = AddMenuButton(pauseMenuInput_, assets_.pauseButtonTex[2], L, 3, "Main Menu", [this]() { BeginFadeToMenu(); });
 }
 // ============================================================
 // 暗転オーバーレイ
@@ -522,28 +597,15 @@ void GameScene::DrawSettingsPanel() {
 }
 
 void GameScene::InitializeRetryMenu() {
-	retryMenuInput_.Initialize(assets_.pauseButtonTex, 3, &camera_);
-	retryMenuInput_.SetCursorVisible(false); // カーソルは GameScene::cursor_ が描く
+	retryMenuInput_.Initialize(assets_.retryButtonTex, 3, &camera_);
+	retryMenuInput_.SetCursorVisible(false);
 	retryMenuInput_.SetButtonGroupAlpha(0.0f);
 
-	constexpr float kButtonWidth = 220.0f;
-	constexpr float kButtonHeight = 160.0f;
-	constexpr float kSpacing = 100.0f;
-	float centerX = static_cast<float>(WinApp::kWindowWidth) / 2.0f - kButtonWidth / 2.0f;
-	float startY = static_cast<float>(WinApp::kWindowHeight) / 2.0f - kSpacing * 0.5f;
-
-	std::string retryLabel = stageManager_->HasCheckpoint() ? "Retry (Checkpoint)" : "Retry";
-	retryButton_ = retryMenuInput_.AddButton(assets_.retryButtonTex[0], centerX, startY, kButtonWidth, kButtonHeight, retryLabel);
-	retryMenuInput_.SetButtonOnClick(retryButton_, [this]() { reloadRequested_ = true; });
-
-	restartButton_ = retryMenuInput_.AddButton(assets_.retryButtonTex[1], centerX, startY + kSpacing, kButtonWidth, kButtonHeight, "Restart");
-	retryMenuInput_.SetButtonOnClick(restartButton_, [this]() { restartRequested_ = true; });
-
-	retryMainMenuButton_ = retryMenuInput_.AddButton(assets_.retryButtonTex[2], centerX, startY + kSpacing * 2.0f, kButtonWidth, kButtonHeight, "Main Menu");
-	retryMenuInput_.SetButtonOnClick(retryMainMenuButton_, [this]() {
-		pendingReturnToMenu_ = true;
-		fade_->Start(Fade::Status::FadeOut, 1.0f);
-	});
+	const MenuLayout L = MakeMenuLayout(3);
+	const std::string retryLabel = stageManager_->HasCheckpoint() ? "Retry (Checkpoint)" : "Retry";
+	retryButton_ = AddMenuButton(retryMenuInput_, assets_.retryButtonTex[0], L, 0, retryLabel, [this]() { reloadRequested_ = true; });
+	restartButton_ = AddMenuButton(retryMenuInput_, assets_.retryButtonTex[1], L, 1, "Restart", [this]() { restartRequested_ = true; });
+	retryMainMenuButton_ = AddMenuButton(retryMenuInput_, assets_.retryButtonTex[2], L, 2, "Main Menu", [this]() { BeginFadeToMenu(); });
 }
 
 void GameScene::InitializeInGamePauseButton() {
@@ -568,28 +630,28 @@ void GameScene::InitializeInGamePauseButton() {
 }
 
 void GameScene::InitializeVictoryMenu() {
-	victoryMenuInput_.Initialize(assets_.victoryButtonTex, 2, &camera_);
-	victoryMenuInput_.SetCursorVisible(false); // カーソルは GameScene::cursor_ が描く
+	victoryMenuInput_.Initialize(assets_.victoryButtonTex, 3, &camera_);
+	victoryMenuInput_.SetCursorVisible(false);
 	victoryMenuInput_.SetButtonGroupAlpha(0.0f);
 
 	victoryOverlay_.reset(Sprite::Create(assets_.healthBarBackgroundTex, {0.0f, 0.0f}));
 	victoryOverlay_->SetSize({static_cast<float>(WinApp::kWindowWidth), static_cast<float>(WinApp::kWindowHeight)});
 	victoryOverlay_->SetColor({0.0f, 0.0f, 0.0f, 0.0f});
 
-	constexpr float kButtonWidth = 220.0f;
-	constexpr float kButtonHeight = 160.0f;
-	constexpr float kSpacing = 100.0f;
-	float centerX = static_cast<float>(WinApp::kWindowWidth) / 2.0f - kButtonWidth / 2.0f;
-	float startY = static_cast<float>(WinApp::kWindowHeight) / 2.0f - kSpacing * 0.5f;
+	const MenuLayout L = MakeMenuLayout(3);
 
-	victoryRestartButton_ = victoryMenuInput_.AddButton(assets_.victoryButtonTex[0], centerX, startY, kButtonWidth, kButtonHeight, "Play Again");
-	victoryMenuInput_.SetButtonOnClick(victoryRestartButton_, [this]() { restartRequested_ = true; });
-
-	victoryMainMenuButton_ = victoryMenuInput_.AddButton(assets_.victoryButtonTex[1], centerX, startY + kSpacing, kButtonWidth, kButtonHeight, "Back to Menu");
-	victoryMenuInput_.SetButtonOnClick(victoryMainMenuButton_, [this]() {
-		pendingReturnToMenu_ = true;
-		fade_->Start(Fade::Status::FadeOut, 1.0f);
+	// Top: next stage, or credits once the last stage has been cleared
+	victoryNextButton_ = AddMenuButton(victoryMenuInput_, assets_.victoryButtonTex[0], L, 0, HasNextStage() ? "Next Level" : "Credits", [this]() {
+		if (HasNextStage()) {
+			stageManager_->SetCurrentStageIndex(stageManager_->GetCurrentStageIndex() + 1);
+			restartRequested_ = true; // main.cpp clears the checkpoint and rebuilds GameScene on the new stage
+		} else {
+			creditsRequested_ = true;
+			BeginFadeToMenu(); // fade out, then main.cpp opens the credits
+		}
 	});
+	victoryRestartButton_ = AddMenuButton(victoryMenuInput_, assets_.victoryButtonTex[1], L, 1, "Play Again", [this]() { restartRequested_ = true; });
+	victoryMainMenuButton_ = AddMenuButton(victoryMenuInput_, assets_.victoryButtonTex[2], L, 2, "Back to Menu", [this]() { BeginFadeToMenu(); });
 }
 
 void GameScene::UpdatePauseMenu() {
@@ -654,16 +716,20 @@ GameScene::~GameScene() {
 }
                    
 void GameScene::CreateHitEffect(Vector3& spawnLocation, float rotationZ) {
-	HitEffect* newHitEffect = HitEffect::Create(assets_.hitEffectTex, spawnLocation, rotationZ);  
-	visualEffects_.push_back(std::unique_ptr<BaseEffect>(newHitEffect));
+	visualEffects_.push_back(std::unique_ptr<BaseEffect>(HitEffect::Create(assets_.effectSparkTex, spawnLocation, rotationZ)));
 }
 void GameScene::CreateGuardEffect(Vector3& spawnLocation) {
-	GuardEffect* newGuardEffect = GuardEffect::Create(assets_.guardEffectTex, spawnLocation);          
-	visualEffects_.push_back(std::unique_ptr<BaseEffect>(newGuardEffect));
+	visualEffects_.push_back(std::unique_ptr<BaseEffect>(GuardEffect::Create(assets_.effectSparkTex, spawnLocation)));
+}
+// successful block (player or enemy): spark + flash
+void GameScene::CreateBlockSparkEffect(Vector3& spawnLocation) {
+	CreateHitEffect(spawnLocation);
+	Vector3 flashPos = spawnLocation;
+	flashPos.z += kFxDepthOffset;
+	CreateBurstEffect(BurstType::kFlash, flashPos, {0.0f, 1.0f});
 }
 void GameScene::CreateMuzzleFlash(const Vector3& muzzlePos, const Vector2& aimDir, bool followPlayer) {
-	EffectMuzzleFlash* flash = EffectMuzzleFlash::Create(assets_.hitEffectTex, muzzlePos, aimDir, followPlayer);
-	visualEffects_.push_back(std::unique_ptr<BaseEffect>(flash));
+	visualEffects_.push_back(std::unique_ptr<BaseEffect>(EffectMuzzleFlash::Create(assets_.effectSparkTex, assets_.effectSmokeTex, muzzlePos, aimDir, followPlayer)));
 }
 void GameScene::CreateExplosion(const Vector3& position, float smokeLoopDuration) {
 	// 描画順は生成順。煙(奥) -> 火の玉 -> 火花(手前)
@@ -679,18 +745,53 @@ void GameScene::CreateBulletImpact(const ProjectileBall& bullet, BurstType type)
 	CreateBurstEffect(type, bullet.GetWorldPosition(), dir);
 }
 
-void GameScene::CreateBlockSparkEffect(Vector3& spawnLocation) {
-	HitEffect* spark = HitEffect::Create(assets_.hitEffectTex, spawnLocation);
-	visualEffects_.push_back(std::unique_ptr<BaseEffect>(spark));
+uint32_t GameScene::BurstTexture(BurstType type) const {
+	switch (type) {
+	case BurstType::kJump:
+	case BurstType::kLand:
+	case BurstType::kSmoke:
+	case BurstType::kSmash:
+	case BurstType::kBlastSmoke:
+		return assets_.effectSmokeTex;
+	case BurstType::kExplosion:
+		return assets_.effectExplosionTex;
+	case BurstType::kBlockDamage:
+		return assets_.effectFragmentsTex; // only block debris uses the fragments art
+	case BurstType::kFlash:
+		return assets_.effectFlashTex;
+	default:
+		return assets_.effectSparkTex; // hit, aura, bullets, trails, spawn, spike, fuse
+	}
 }
+
 void GameScene::CreateBurstEffect(BurstType type, const Vector3& position, const Vector2& dir, float loopDuration) {
-	EffectParticleBurst* burst = EffectParticleBurst::Create(assets_.hitEffectTex, type, position, dir, loopDuration);
-	visualEffects_.push_back(std::unique_ptr<BaseEffect>(burst));
+	visualEffects_.push_back(std::unique_ptr<BaseEffect>(EffectParticleBurst::Create(BurstTexture(type), type, position, dir, loopDuration)));
 }
+
+void GameScene::CreateBlockDebris(const Vector3& cellPos, bool broke) {
+	Vector3 fx = cellPos;
+	fx.z += kFxDepthOffset;
+	CreateBurstEffect(BurstType::kBlockDamage, fx, {0.0f, 1.0f});
+	if (broke) {
+		CreateObjectSparkler(cellPos);
+	}
+}
+// 差し替え
 void GameScene::CreateEnemyDeathParticles(const Vector3& position) {
-	auto particles = std::make_unique<DeathParticles>();
-	particles->Initialize(assets_.deathParticleModel.get(), assets_.deathParticleTex, &camera_, position);    
-	enemyDeathParticles_.push_back(std::move(particles));
+	Vector3 p = position;
+	p.z += kFxDepthOffset;
+	CreateBurstEffect(BurstType::kSparkler, p, {0.0f, 1.0f});
+}
+void GameScene::CreateObjectSparkler(const Vector3& position) {
+	Vector3 p = position;
+	p.z += kFxDepthOffset;
+	CreateBurstEffect(BurstType::kSparklerAggressive, p, {0.0f, 1.0f});
+}
+// ゴール専用: loopDuration の間、紙吹雪を出し続ける
+void GameScene::CreateGoalConfetti(const Vector3& position, float loopDuration) {
+	Vector3 p = position;
+	p.z += kFxDepthOffset;
+	CreateBurstEffect(BurstType::kConfetti, p, {0.0f, 1.0f}, loopDuration);
 }
 void GameScene::CreateFirearmProjectile(Owner owner, const Vector3& position, const Vector2& aimDirection, int damage, int32_t lifeFrames, const Vector3* sweepFrom) {
 	auto projectile = std::make_unique<ProjectileBall>();
@@ -708,11 +809,10 @@ void GameScene::CreateFirearmProjectile(Owner owner, const Vector3& position, co
 }
 void GameScene::CreateGrenade(const Vector3& position, const Vector3& velocity, Owner owner) {
 	auto grenade = std::make_unique<Grenade>();
-	// reuses the firearm ball assets
-	grenade->Initialize(assets_.modelProjectileBall.get(), assets_.firearmBallTex, &camera_, mapChipField_.get(), position, velocity, owner);
+	// reuses the firearm ball assets; the flash uses the shared quad + effectFlash
+	grenade->Initialize(assets_.modelProjectileBall.get(), assets_.firearmBallTex, &camera_, mapChipField_.get(), position, velocity, owner, assets_.hitEffectModel.get(), assets_.effectFlashTex);
 	grenades_.push_back(std::move(grenade));
 }
-
 void GameScene::UpdateGrenades() {
 	if (phase_ != Phase::kPlay)
 		return;
@@ -781,10 +881,10 @@ void GameScene::ChangePhase() {
 			player_->Update();
 		} else {
 			phase_ = Phase::kDeath;
-			const Vector3& deathParticlesPosition = player_->GetWorldPosition();
-			if (deathParticles_) {
-				deathParticles_->Initialize(assets_.deathParticleModel.get(), assets_.deathParticleTex, &camera_, deathParticlesPosition);
-			}
+			deathSceneTimer_ = 0.0f;
+			if (cameraController_)
+				cameraController_->BeginDeathCloseUp();
+			CreateEnemyDeathParticles(player_->GetModelWorldPosition()); // 紙吹雪
 		}
 
 		for (std::unique_ptr<BaseEnemy>& enemy : enemies_) {
@@ -882,11 +982,11 @@ void GameScene::ChangePhase() {
 				continue;
 			enemy->Update();
 		}
-		if (deathParticles_)
-			deathParticles_->Update();
 		UpdateParticles();
-		if (deathParticles_ && deathParticles_->IsFinished())
+		deathSceneTimer_ += 1.0f / 60.0f;
+		if (deathSceneTimer_ >= kDeathSceneDuration) {
 			phase_ = Phase::kRetry;
+		}
 		cameraController_->Update();
 		for (std::vector<BlockInstance>& line : worldTransformBlocks_) {
 			for (BlockInstance& block : line) {
@@ -898,10 +998,25 @@ void GameScene::ChangePhase() {
 		break;
 	case Phase::kGoalSequence: {
 		fade_->Update();
-		if (player_)
-			player_->Update(); // runs the goal sequence
-		if (goal_)
+		if (player_) {
+			player_->Update(); // ゴール演出を進める
+			// ゴールに着いたら、ゴールブロックを頭上で持ち上げて紙吹雪を出す
+			if (goal_ && player_->IsGoalSequenceArrived()) {
+				goal_->SetHeld(player_->GetModelWorldPosition(), player_->GetModelWorldTransform().rotation_.y);
+				if (!goalConfettiSpawned_) {
+					goalConfettiSpawned_ = true;
+					const Vector3 base = player_->GetModelWorldPosition() + Vector3(0.0f, 1.5f, 0.0f);
+					for (float dx : {-1.5f, 0.0f, 1.5f}) {
+						CreateGoalConfetti(base + Vector3(dx, 0.0f, 0.0f), kGoalConfettiDuration);
+					}
+				}
+			}
+		}
+		if ( goal_ )
+		{
 			goal_->Update();
+		}
+			
 
 			UpdateParticles();
 		for (std::vector<BlockInstance>& line : worldTransformBlocks_)
@@ -916,44 +1031,61 @@ void GameScene::ChangePhase() {
 		break;
 	}
 	case Phase::kRetry:
+		UpdateParticles();
 		break;
 	case Phase::kPause:
 		break;
 	case Phase::kVictory:
+		UpdateParticles();
 		break;
 	}
 }
 
-void GameScene::TriggerCameraFx(CameraFx fx, float intensity) {
-	if (!cameraController_ || !GameSettings::IsScreenShakeEnabled())
+void GameScene::TriggerCameraFx(CameraFx fx, float intensity, const Vector3* focus) {
+	if (!cameraController_)
 		return;
+	const bool shakeOn = GameSettings::IsScreenShakeEnabled(); // gates shakes only, never the zoom
+	auto shake = [&](float amp, float duration, float frequency) {
+		if (shakeOn)
+			cameraController_->Shake(amp * intensity, duration, frequency);
+	};
+
 	switch (fx) {
 	case CameraFx::kDamage:
-		cameraController_->Shake(kShakeDamageAmp * intensity, kShakeDamageDuration, 40.0f);
+		shake(kShakeDamageAmp, kShakeDamageDuration, 40.0f);
 		break;
 	case CameraFx::kDeath:
-		cameraController_->Shake(kShakeDeathAmp * intensity, kShakeDeathDuration, 45.0f);
+		shake(kShakeDeathAmp, kShakeDeathDuration, 45.0f);
+		cameraController_->BeginDeathZoom(); // pull back a little; the close-up starts when the death scene does
 		break;
 	case CameraFx::kExplosion:
-		cameraController_->Shake(kShakeExplosionAmp * intensity, kShakeExplosionDuration, 40.0f);
+		shake(kShakeExplosionAmp, kShakeExplosionDuration, 40.0f);
 		break;
-	case CameraFx::kBlock:
-		cameraController_->ZoomPulse(kBlockZoomRatio * intensity, kBlockZoomIn, kBlockZoomOut);
+	case CameraFx::kBlock: {
+		// zoom in on whoever blocked (player or enemy); ignore blocks that happen far from the player
+		const Vector3 point = focus ? *focus : (player_ ? player_->GetModelWorldPosition() : Vector3{});
+		if (player_) {
+			const Vector3 pp = player_->GetWorldPosition();
+			if (std::hypot(point.x - pp.x, point.y - pp.y) > kBlockZoomMaxDistance)
+				break;
+		}
+		cameraController_->PunchZoom(point, kBlockZoomAmount * intensity, kBlockZoomIn, kBlockZoomHold, kBlockZoomOut);
 		break;
+	}
 	case CameraFx::kSwing:
-		cameraController_->Shake(kShakeSwingAmp * intensity, kShakeSwingDuration, 55.0f);
+		shake(kShakeSwingAmp, kShakeSwingDuration, 55.0f);
 		break;
 	case CameraFx::kSpecial:
-		cameraController_->Shake(kShakeSpecialAmp * intensity, kShakeSpecialDuration, 50.0f);
+		shake(kShakeSpecialAmp, kShakeSpecialDuration, 50.0f);
 		break;
 	case CameraFx::kHitEnemy:
-		cameraController_->Shake(kShakeHitAmp * intensity, kShakeHitDuration, 55.0f);
+		shake(kShakeHitAmp, kShakeHitDuration, 55.0f);
 		break;
 	case CameraFx::kShoot:
-		cameraController_->Shake(kShakeShootAmp * intensity, kShakeShootDuration, 60.0f);
+		shake(kShakeShootAmp, kShakeShootDuration, 60.0f);
 		break;
 	case CameraFx::kShootHeavy:
-		cameraController_->Shake(kShakeHeavyShootAmp * intensity, kShakeHeavyShootDuration, 38.0f); // lower frequency = a heavier thump
+		shake(kShakeHeavyShootAmp, kShakeHeavyShootDuration, 38.0f); // lower frequency = a heavier thump
 		break;
 	}
 }
@@ -978,13 +1110,6 @@ void GameScene::UpdateParticles() {
 			effect->Update();
 	}
 	visualEffects_.erase(std::remove_if(visualEffects_.begin(), visualEffects_.end(), [](const std::unique_ptr<BaseEffect>& e) { return !e || e->IsFinished(); }), visualEffects_.end());
-
-	for (auto& dp : enemyDeathParticles_) {
-		if (dp)
-			dp->Update();
-	}
-	enemyDeathParticles_.erase(
-	    std::remove_if(enemyDeathParticles_.begin(), enemyDeathParticles_.end(), [](const std::unique_ptr<DeathParticles>& dp) { return !dp || dp->IsFinished(); }), enemyDeathParticles_.end());
 }
 
 ArenaManager* GameScene::GetOrCreateArena(uint8_t arenaID) {
@@ -1091,7 +1216,7 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 				std::array<PartResources, 3> playerParts = {
 					{{assets_.modelPlayerBody.get(), assets_.playerBodyTex}, {assets_.modelPlayerHead.get(), assets_.playerHeadTex}, {assets_.modelPlayerHat.get(), assets_.playerHatTex}}
                 };
-				player_->Initialize(playerParts, assets_.modelSlashEffect.get(), assets_.slashEffectTex, &camera_, playerPosition);
+				player_->Initialize(playerParts, assets_.modelSlashEffect.get(), assets_.attackEffectTextures, &camera_, playerPosition);
 				player_->SetMusketModel(assets_.modelMusketLong.get(), assets_.musketLongTex);
 				player_->SetMeleeModel(assets_.modelSabreLight.get(), assets_.texSabreLight);
 				cameraController_->SetTarget(player_.get());
@@ -1246,9 +1371,11 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 				weaponSpawners_.push_back(sp);
 			} break;
 			case MapChipType::kTutorialBlock: {
-				uint8_t subID = mapChipField_->GetMapChipSubIDByIndex(j, i);
+				const uint8_t subID = mapChipField_->GetMapChipSubIDByIndex(j, i);
+				const uint8_t linkID = mapChipField_->GetMapChipLinkIDByIndex(j, i);
+				const uint8_t index = static_cast<uint8_t>(subID + linkID * 10); // U0-U9 = 0-9, U01 = 10, U11 = 11, U21 = 12
 				auto tutorial = std::make_unique<SpriteTutorial>();
-				tutorial->Initialize(assets_.modelTutorialBlock.get(), assets_.tutorialBlockTex, &camera_, mapChipField_->GetMapChipPositionByIndex(j, i), static_cast<TutorialTextureType>(subID));
+				tutorial->Initialize(assets_.modelTutorialBlock.get(), assets_.tutorialBlockTex, &camera_, mapChipField_->GetMapChipPositionByIndex(j, i), static_cast<TutorialTextureType>(index));
 				tutorials_.push_back(std::move(tutorial));
 			} break;
 			default:
@@ -1324,7 +1451,6 @@ void GameScene::Update() {
 	Player::ApplyGlobalVariables();
 	HitEffect::ApplyGlobalVariables();
 	GuardEffect::ApplyGlobalVariables();
-	DeathParticles::ApplyGlobalVariables();
 	WeaponSabre::ApplyGlobalVariables();
 	FirearmMusket::ApplyGlobalVariables();
 	DroppableItem::ApplyGlobalVariables();
@@ -1392,6 +1518,7 @@ void GameScene::Update() {
 	UpdateBanners();
 	UpdateResultButtons();
 	UpdateOfficerBuff();
+	UpdateSpawnSequence();
 	// 状態アイコン(standard / reactive)。ポーズ中は更新しない=タイマーも止まる
 	if (phase_ == Phase::kPlay || phase_ == Phase::kDeath)
 		statusIndicator_.UpdateStatus(player_.get(), enemies_, camera_, WinApp::kWindowWidth, WinApp::kWindowHeight);
@@ -1415,9 +1542,13 @@ void GameScene::Update() {
 	UpdateInteractionPrompt();
 	TryInteract();
 	UpdateArenaTriggers();
-	if (player_ && (phase_ == Phase::kPlay || phase_ == Phase::kDeath))
+	if (player_ && (phase_ == Phase::kPlay || phase_ == Phase::kDeath) && !spawnSequenceActive_)
 		cameraController_->UpdateZones(player_->GetAABB(), phase_ == Phase::kPlay && !player_->isDead());
 	UpdateArenas();
+	UpdateBossHealthBar();
+	if (phase_ == Phase::kPlay) {
+		switchPointer_.Update(camera_);
+	}
 	UpdateCheckpointTriggers();
 	UpdatePeriodicEnemySpawners();
 	UpdateHealthBlocks();
@@ -1864,6 +1995,8 @@ void GameScene::Draw() {
 		playerHealthUI_.Draw();
 		weaponStatusUI_.Draw();
 		playerBlockUI_.Draw();
+		bossHealthBar_.Draw();
+		switchPointer_.Draw();
 	}
 	for (auto& t : tutorials_)
 		if (t)
@@ -1871,13 +2004,6 @@ void GameScene::Draw() {
 	// 死亡演出中: 世界とHUDだけ暗くする(死亡パーティクルはこの後に描くので暗くならない)
 	if (phase_ == Phase::kDeath)
 		DrawMenuOverlay(deathOverlayFade_);
-	if (deathParticles_) {
-		deathParticles_->Draw();
-	}
-	for (auto& dp : enemyDeathParticles_) {
-		if (dp)
-			dp->Draw();
-	}
 	for (std::unique_ptr<BaseEffect>& effect : visualEffects_) {
 		if (!effect)
 			continue;
@@ -1910,117 +2036,69 @@ void GameScene::Draw() {
 	}
 }
 
+template<typename T> T* GameScene::SpawnEnemyOfType(const Vector3& position, const std::array<PartResources, 3>& parts, uint32_t hudIcon) {
+	auto enemy = std::make_unique<T>();
+	T* raw = enemy.get();
+	raw->SetMapChipField(mapChipField_.get());
+	raw->SetGameScene(this);
+	raw->Initialize(parts, &camera_, position);
+	raw->SetAttackEffect(assets_.modelSlashEffect.get(), assets_.attackEffectTextures);
+	raw->SetHUDIconTexture(hudIcon);
+	enemies_.push_back(std::move(enemy));
+	return raw;
+}
+
 BaseEnemy* GameScene::SpawnEnemyAt(const Vector3& position, uint8_t subID) {
 	const size_t enemyCountBefore = enemies_.size();
+	GameAssets& a = assets_;
+	const auto parts = [](Model* body, uint32_t bodyTex, Model* head, uint32_t headTex, Model* hat, uint32_t hatTex) -> std::array<PartResources, 3> {
+		return {
+		    {{body, bodyTex}, {head, headTex}, {hat, hatTex}}
+        };
+	};
+
 	switch (subID) {
-	case 0: { // Rifleman
-		std::array<PartResources, 3> parts = {
-		    {{assets_.modelRiflemanBody.get(), assets_.riflemanBodyTex}, {assets_.modelRiflemanHead.get(), assets_.riflemanHeadTex}, {assets_.modelRiflemanHat.get(), assets_.riflemanHatTex}}
-        };
-		auto newEnemy = std::make_unique<EnemyRifleman>();
-		newEnemy->SetMapChipField(mapChipField_.get());
-		newEnemy->SetGameScene(this);
-		newEnemy->Initialize(parts, &camera_, position);
-		newEnemy->SetMusketModel(assets_.modelMusketBayonet.get(), assets_.musketBayonetTex);
-		newEnemy->SetAttackEffect(assets_.modelSlashEffect.get(), assets_.slashEffectTex);
-		newEnemy->SetHUDIconTexture(assets_.enemyIconRiflemanTex);
-		enemies_.push_back(std::move(newEnemy));
-	} break;
-	case 1: { // Cuirassier
-		std::array<PartResources, 3> parts = {
-		    {{assets_.modelCuirassierBody.get(), assets_.cuirassierBodyTex},
-		     {assets_.modelCuirassierHead.get(), assets_.cuirassierHeadTex},
-		     {assets_.modelCuirassierHat.get(), assets_.cuirassierHatTex}}
-        };
-		auto newEnemy = std::make_unique<EnemyCuirassier>();
-		newEnemy->SetMapChipField(mapChipField_.get());
-		newEnemy->SetGameScene(this);
-		newEnemy->Initialize(parts, &camera_, position);
-		newEnemy->SetMeleeModel(assets_.modelSabreHeavy.get(), assets_.texSabreHeavy);
-		newEnemy->SetAttackEffect(assets_.modelSlashEffect.get(), assets_.slashEffectTex); // 斬撃エフェクト(プレイヤーと共通)
-		newEnemy->SetHUDIconTexture(assets_.enemyIconCuirassierTex);
-		enemies_.push_back(std::move(newEnemy));
-	} break;
-	case 2: { // Fighter
-		std::array<PartResources, 3> parts = {
-		    {{assets_.modelFighterBody.get(), assets_.fighterBodyTex}, {assets_.modelFighterHead.get(), assets_.fighterHeadTex}, {assets_.modelFighterHat.get(), assets_.fighterHatTex}}
-        };
-		auto newEnemy = std::make_unique<EnemyFighter>();
-		newEnemy->SetMapChipField(mapChipField_.get());
-		newEnemy->SetGameScene(this);
-		newEnemy->Initialize(parts, &camera_, position);
-		newEnemy->SetMeleeModel(assets_.modelSabreLight.get(), assets_.texSabreLight);
-		newEnemy->SetAttackEffect(assets_.modelSlashEffect.get(), assets_.slashEffectTex);
-		newEnemy->SetHUDIconTexture(assets_.enemyIconFighterTex);
-		enemies_.push_back(std::move(newEnemy));
-	} break;
-	case 3: { // Carabiner
-		std::array<PartResources, 3> parts = {
-		    {{assets_.modelCarabinierBody.get(), assets_.carabinierBodyTex}, {assets_.modelCarabinierHead.get(), assets_.carabinierHeadTex}, {assets_.modelCarabinierHat.get(), assets_.carabinierHatTex}}
-        };
-		auto newEnemy = std::make_unique<EnemyCarabinier>();
-		newEnemy->SetMapChipField(mapChipField_.get());
-		newEnemy->SetGameScene(this);
-		newEnemy->Initialize(parts, &camera_, position);
-		newEnemy->SetMusketModel(assets_.modelMusketBayonet.get(), assets_.musketBayonetTex);
-		newEnemy->SetAttackEffect(assets_.modelSlashEffect.get(), assets_.slashEffectTex);
-		newEnemy->SetHUDIconTexture(assets_.enemyIconRiflemanTex);
-		enemies_.push_back(std::move(newEnemy));
-	} break;
-	case 4: { // Shotgunner
-		// 仮: ボディ/HUDアイコンはライフルマンのものを流用(専用アセットができたら差し替える)
-		std::array<PartResources, 3> parts = {
-		    {{assets_.modelShotgunnerBody.get(), assets_.shotgunnerBodyTex}, {assets_.modelShotgunnerHead.get(), assets_.shotgunnerHeadTex}, {assets_.modelShotgunnerHat.get(), assets_.shotgunnerHatTex}}
-        };
-		auto newEnemy = std::make_unique<EnemyShotgunner>();
-		newEnemy->SetMapChipField(mapChipField_.get());
-		newEnemy->SetGameScene(this);
-		newEnemy->Initialize(parts, &camera_, position);
-		newEnemy->SetShotgunModel(assets_.modelMusketLong.get(), assets_.musketLongTex); // ResolveWeaponVisualのkShotgunと同じ見た目
-		newEnemy->SetAttackEffect(assets_.modelSlashEffect.get(), assets_.slashEffectTex);
-		newEnemy->SetHUDIconTexture(assets_.enemyIconRiflemanTex);
-		enemies_.push_back(std::move(newEnemy));
-	} break;
-	case 5: { // Grenadier
-		std::array<PartResources, 3> parts = {
-		    {{assets_.modelGrenadierBody.get(), assets_.grenadierBodyTex}, {assets_.modelGrenadierHead.get(), assets_.grenadierHeadTex}, {assets_.modelGrenadierHat.get(), assets_.grenadierHatTex}}
-        };
-		auto newEnemy = std::make_unique<EnemyGrenadier>();
-		newEnemy->SetMapChipField(mapChipField_.get());
-		newEnemy->SetGameScene(this);
-		newEnemy->Initialize(parts, &camera_, position);
-		newEnemy->SetMeleeModel(assets_.modelSabreLight.get(), assets_.texSabreLight);
-		newEnemy->SetAttackEffect(assets_.modelSlashEffect.get(), assets_.slashEffectTex);
-		newEnemy->SetHUDIconTexture(assets_.enemyIconFighterTex);
-		enemies_.push_back(std::move(newEnemy));
-	} break;
-	case 6: { // Officer
-		std::array<PartResources, 3> parts = {
-		    {{assets_.modelOfficerBody.get(), assets_.officerBodyTex}, {assets_.modelOfficerHead.get(), assets_.officerHeadTex}, {assets_.modelOfficerHat.get(), assets_.officerHatTex}}
-        };
-		auto newEnemy = std::make_unique<EnemyOfficer>();
-		newEnemy->SetMapChipField(mapChipField_.get());
-		newEnemy->SetGameScene(this);
-		newEnemy->Initialize(parts, &camera_, position);
-		newEnemy->SetMeleeModel(assets_.modelSpear.get(), assets_.texSpear);
-		newEnemy->SetAttackEffect(assets_.modelSlashEffect.get(), assets_.slashEffectTex);
-		newEnemy->SetHUDIconTexture(assets_.enemyIconFighterTex);
-		enemies_.push_back(std::move(newEnemy));
-	} break;
-	case 7: { // Sapper
-		// 仮: ボディはCuirassierのもの、斧はヘビーサーベルのモデルを流用
-		std::array<PartResources, 3> parts = {
-		    {{assets_.modelSapperBody.get(), assets_.sapperBodyTex}, {assets_.modelSapperHead.get(), assets_.sapperHeadTex}, {assets_.modelSapperHat.get(), assets_.sapperHatTex}}
-        };
-		auto newEnemy = std::make_unique<EnemySapper>();
-		newEnemy->SetMapChipField(mapChipField_.get());
-		newEnemy->SetGameScene(this);
-		newEnemy->Initialize(parts, &camera_, position);
-		newEnemy->SetMeleeModel(assets_.modelAxe.get(), assets_.texAxe);
-		newEnemy->SetAttackEffect(assets_.modelSlashEffect.get(), assets_.slashEffectTex);
-		newEnemy->SetHUDIconTexture(assets_.enemyIconCuirassierTex);
-		enemies_.push_back(std::move(newEnemy));
-	} break;
+	case 0: // Rifleman
+		SpawnEnemyOfType<EnemyRifleman>(
+		    position, parts(a.modelRiflemanBody.get(), a.riflemanBodyTex, a.modelRiflemanHead.get(), a.riflemanHeadTex, a.modelRiflemanHat.get(), a.riflemanHatTex), a.enemyIconRiflemanTex)
+		    ->SetMusketModel(a.modelMusketBayonet.get(), a.musketBayonetTex);
+		break;
+	case 1: // Cuirassier
+		SpawnEnemyOfType<EnemyCuirassier>(
+		    position, parts(a.modelCuirassierBody.get(), a.cuirassierBodyTex, a.modelCuirassierHead.get(), a.cuirassierHeadTex, a.modelCuirassierHat.get(), a.cuirassierHatTex),
+		    a.enemyIconCuirassierTex)
+		    ->SetMeleeModel(a.modelSabreHeavy.get(), a.texSabreHeavy);
+		break;
+	case 2: // Fighter
+		SpawnEnemyOfType<EnemyFighter>(
+		    position, parts(a.modelFighterBody.get(), a.fighterBodyTex, a.modelFighterHead.get(), a.fighterHeadTex, a.modelFighterHat.get(), a.fighterHatTex), a.enemyIconFighterTex)
+		    ->SetMeleeModel(a.modelSabreLight.get(), a.texSabreLight);
+		break;
+	case 3: // Carabinier
+		SpawnEnemyOfType<EnemyCarabinier>(
+		    position, parts(a.modelCarabinierBody.get(), a.carabinierBodyTex, a.modelCarabinierHead.get(), a.carabinierHeadTex, a.modelCarabinierHat.get(), a.carabinierHatTex), a.enemyIconRiflemanTex)
+		    ->SetMusketModel(a.modelMusketBayonet.get(), a.musketBayonetTex);
+		break;
+	case 4: // Shotgunner (placeholder art: Rifleman icon)
+		SpawnEnemyOfType<EnemyShotgunner>(
+		    position, parts(a.modelShotgunnerBody.get(), a.shotgunnerBodyTex, a.modelShotgunnerHead.get(), a.shotgunnerHeadTex, a.modelShotgunnerHat.get(), a.shotgunnerHatTex), a.enemyIconRiflemanTex)
+		    ->SetShotgunModel(a.modelMusketLong.get(), a.musketLongTex);
+		break;
+	case 5: // Grenadier
+		SpawnEnemyOfType<EnemyGrenadier>(
+		    position, parts(a.modelGrenadierBody.get(), a.grenadierBodyTex, a.modelGrenadierHead.get(), a.grenadierHeadTex, a.modelGrenadierHat.get(), a.grenadierHatTex), a.enemyIconFighterTex)
+		    ->SetMeleeModel(a.modelSabreLight.get(), a.texSabreLight);
+		break;
+	case 6: // Officer
+		SpawnEnemyOfType<EnemyOfficer>(
+		    position, parts(a.modelOfficerBody.get(), a.officerBodyTex, a.modelOfficerHead.get(), a.officerHeadTex, a.modelOfficerHat.get(), a.officerHatTex), a.enemyIconFighterTex)
+		    ->SetMeleeModel(a.modelSpear.get(), a.texSpear);
+		break;
+	case 7: // Sapper
+		SpawnEnemyOfType<EnemySapper>(
+		    position, parts(a.modelSapperBody.get(), a.sapperBodyTex, a.modelSapperHead.get(), a.sapperHeadTex, a.modelSapperHat.get(), a.sapperHatTex), a.enemyIconCuirassierTex)
+		    ->SetMeleeModel(a.modelAxe.get(), a.texAxe);
+		break;
 	default:
 		break;
 	}
@@ -2029,6 +2107,9 @@ BaseEnemy* GameScene::SpawnEnemyAt(const Vector3& position, uint8_t subID) {
 		return nullptr;
 
 	BaseEnemy* spawned = enemies_.back().get();
+	if (subID < enemyTypeMaxHP_.size() && enemyTypeMaxHP_[subID] <= 0) {
+		enemyTypeMaxHP_[subID] = std::max(1, spawned->GetHP()); // HP at spawn == max HP
+	}
 	spawned->GetBehaviorModule().SnapFacing(static_cast<int>(BaseEnemy::LRDirection::kRight));
 	return spawned;
 }
@@ -2333,9 +2414,18 @@ void GameScene::TriggerLevelClear() {
 
 	if (player_)
 		player_->BeginGoalSequence(goal_ ? goal_->GetWorldPosition() : player_->GetWorldPosition());
-
-	cameraController_->ReleaseActiveZone(); // a zone's focus shot would override the zoom
-	cameraController_->ZoomTo(kGoalZoomDelta, kGoalZoomDuration);
+	// ゴール到達: ゴール位置とプレイヤーの2か所から、ゴール演出の間ずっと紙吹雪を出す
+	goalConfettiSpawned_ = false;
+	cameraController_->ReleaseActiveZone();
+	if (goal_) {
+		// ゴールに固定したカメラ。プレイヤーの追従は使わない(ジャンプの軌道でずれるため)
+		CameraController::FocusShot shot;
+		shot.position = goal_->GetWorldPosition() + kGoalCameraOffset;
+		shot.enterDuration = kGoalCameraEnter;
+		shot.enterEase = CameraController::Ease::kOut;
+		shot.holdUntilReleased = true; // シーンが終わるまで保持
+		cameraController_->StartFocus(shot);
+	}
 
 	if (assets_.sfxGoalReached != 0) {
 		AudioSettings::PlaySfx(assets_.sfxGoalReached, false, 1.0f);
@@ -2418,14 +2508,18 @@ void GameScene::TryInteract() {
 		}
 		uint8_t buttonID = nearestInteractableSwitch_->GetButtonID();
 		pressedSwitchIDs_.insert(buttonID);
+		std::vector<Vector3> openedGates;
 		for (auto& gate : gates_) {
 			if (gate && !gate->IsArenaGate() && gate->GetButtonID() == buttonID) {
 				gate->Open();
-				if (assets_.sfxGateOpen != 0) {
-					AudioSettings::PlaySfx(assets_.sfxGateOpen, false, 1.0f); // 1.0f -> sSfxVolume_
-				}
+				const AABB g = gate->GetAABB();
+				openedGates.push_back({(g.min.x + g.max.x) * 0.5f, (g.min.y + g.max.y) * 0.5f, 0.0f});
+				if (assets_.sfxGateOpen != 0)
+					AudioSettings::PlaySfx(assets_.sfxGateOpen, false, 1.0f);
 			}
 		}
+		const AABB sa = nearestInteractableSwitch_->GetAABB(); // read BEFORE the pointer below is nulled
+		switchPointer_.Start({(sa.min.x + sa.max.x) * 0.5f, (sa.min.y + sa.max.y) * 0.5f, 0.0f}, openedGates);
 		nearestInteractableSwitch_ = nullptr;
 		interactionPrompt_.Hide();
 	}
@@ -2447,9 +2541,10 @@ void GameScene::UpdateArenaTriggers() {
 			trigger.consumed = true;
 			ArenaManager* arena = GetOrCreateArena(trigger.arenaID);
 			arena->Activate();
-			if (arena->GetState() == ArenaManager::State::kActive)
+			if (arena->GetState() == ArenaManager::State::kActive) {
 				banner_.Show(BannerUI::Kind::kArena, kArenaBannerHold);
 				musicManager_.StartArenaMusic();
+			}
 		}
 	}
 }
@@ -2755,10 +2850,14 @@ void GameScene::BreakGlassConnected(uint32_t xIndex, uint32_t yIndex) {
 	std::vector<MapChipField::IndexSet> cells = mapChipField_->CollectConnectedByType(xIndex, yIndex, MapChipType::kGlass);
 	if (cells.empty())
 		return;
-	for (const MapChipField::IndexSet& c : cells) {
-		Vector3 pos = mapChipField_->GetMapChipPositionByIndex(c.xIndex, c.yIndex);
-		RemoveBlockCell(c.xIndex, c.yIndex);
-		CreateEnemyDeathParticles(pos);
+	for (size_t i = 0; i < cells.size(); ++i) {
+		Vector3 pos = mapChipField_->GetMapChipPositionByIndex(cells[i].xIndex, cells[i].yIndex);
+		RemoveBlockCell(cells[i].xIndex, cells[i].yIndex);
+		if (i % 2 == 0) {
+			CreateBlockDebris(pos, true); // fragments + shards
+		} else {
+			CreateObjectSparkler(pos); // 間引き側
+		}
 	}
 	if (assets_.sfxGlassBreak != 0)
 		AudioSettings::PlaySfx(assets_.sfxGlassBreak, false, 1.0f);
@@ -2783,20 +2882,17 @@ void GameScene::DamageBreakableCell(uint32_t x, uint32_t y, int32_t amount) {
 	BreakableState& s = it->second;
 	s.hp -= amount;
 
-	Vector3 fx = pos;
-	fx.z += kFxDepthOffset;
 	if (s.hp <= 0) {
-		CreateBurstEffect(BurstType::kBlockDamage, fx, {0.0f, 1.0f});
 		RemoveBlockCell(x, y);
-		breakables_.erase(it);
-		CreateEnemyDeathParticles(pos);
+		breakables_.erase(it); // `s` is invalid from here
+		CreateBlockDebris(pos, true);
 		if (assets_.sfxBlockBreak != 0)
 			AudioSettings::PlaySfx(assets_.sfxBlockBreak, false, 1.0f);
 		return;
 	}
 
 	CreateHitEffect(pos);
-	CreateBurstEffect(BurstType::kBlockDamage, fx, {0.0f, 1.0f});
+	CreateBlockDebris(pos, false);
 	if (assets_.sfxBlockHit != 0)
 		AudioSettings::PlaySfx(assets_.sfxBlockHit, false, 1.0f);
 
@@ -2847,9 +2943,7 @@ bool GameScene::DamageExplosivesInAABB(const AABB& box, HitSource source) {
 		} else {
 			Vector3 p = mapChipField_->GetMapChipPositionByIndex(x, y);
 			CreateHitEffect(p);
-			Vector3 fx = p;
-			fx.z += kFxDepthOffset;
-			CreateBurstEffect(BurstType::kBlockDamage, fx, {0.0f, 1.0f});
+			CreateBlockDebris(p, false);
 			if (assets_.sfxBlockHit != 0)
 				AudioSettings::PlaySfx(assets_.sfxBlockHit, false, 1.0f);
 		}
@@ -2860,7 +2954,8 @@ bool GameScene::DamageExplosivesInAABB(const AABB& box, HitSource source) {
 void GameScene::QueueExplosion(uint32_t x, uint32_t y, float delay) {
 	if (!explosives_.erase(CellKey(x, y)))
 		return;
-	pendingExplosions_.push_back({x, y, delay});
+	// chain delay is the stagger between barrels; every barrel still flashes for kExplosionFuseTime before it blows
+	pendingExplosions_.push_back({x, y, delay + kExplosionFuseTime});
 }
 
 void GameScene::UpdateExplosions() {
@@ -2874,6 +2969,12 @@ void GameScene::UpdateExplosions() {
 	std::vector<PendingExplosion> ready;
 	for (auto it = pendingExplosions_.begin(); it != pendingExplosions_.end();) {
 		it->timer -= 1.0f / 60.0f;
+		if (!it->flashed && it->timer <= kExplosionFuseTime) {
+			it->flashed = true;
+			Vector3 pos = mapChipField_->GetMapChipPositionByIndex(it->x, it->y);
+			pos.z += kFxDepthOffset;
+			CreateBurstEffect(BurstType::kFlash, pos, {0.0f, 1.0f});
+		}
 		if (it->timer <= 0.0f) {
 			ready.push_back(*it);
 			it = pendingExplosions_.erase(it);
@@ -2936,7 +3037,7 @@ void GameScene::ExplodeAt(const Vector3& center, const ExplosionParams& p) {
 	debugBlasts_.push_back({center, p.fatalRadius, p.normalRadius, kDebugBlastShowTime});
 #endif
 
-	CreateEnemyDeathParticles(center);
+	CreateObjectSparkler(center); 
 	CreateExplosion(center);
 	if (player_) {
 		const Vector3 pp = player_->GetWorldPosition();
@@ -3153,9 +3254,9 @@ void GameScene::UpdateFragileBlocks() {
 		it->second -= 1.0f / 60.0f;
 		const Vector3 pos = mapChipField_->GetMapChipPositionByIndex(x, y);
 
-		if (it->second <= 0.0f) { // breaks for good
+		if (it->second <= 0.0f) {
 			RemoveBlockCell(x, y);
-			CreateEnemyDeathParticles(pos);
+			CreateBlockDebris(pos, true);
 			if (assets_.sfxBlockBreak != 0)
 				AudioSettings::PlaySfx(assets_.sfxBlockBreak, false, 1.0f);
 			it = fragileTimers_.erase(it);
@@ -3582,3 +3683,30 @@ void GameScene::UpdateMeleeTrails() {
 	for (auto it = meleeTrailPrev_.begin(); it != meleeTrailPrev_.end();)
 		it = active.count(it->first) ? std::next(it) : meleeTrailPrev_.erase(it);
 }
+void GameScene::UpdateBossHealthBar() {
+	ArenaManager* arena = FindActiveArena();
+	float current = 0.0f;
+	if (arena) {
+		for (const std::unique_ptr<BaseEnemy>& e : enemies_)
+			if (e && !e->IsDead() && e->GetArenaID() == arena->GetArenaID())
+				current += static_cast<float>(std::max(0, e->GetHP()));
+
+		int32_t fallback = 1; // type not seen yet: use the strongest known
+		for (int32_t hp : enemyTypeMaxHP_)
+			fallback = std::max(fallback, hp);
+		for (const ArenaManager::PendingSpawn& p : arena->GetPendingSpawns()) {
+			const int32_t hp = (p.enemyType < enemyTypeMaxHP_.size() && enemyTypeMaxHP_[p.enemyType] > 0) ? enemyTypeMaxHP_[p.enemyType] : fallback;
+			current += static_cast<float>(hp * p.count);
+		}
+		bossBarMaxHP_ = std::max(bossBarMaxHP_, current); // the peak is "100%"
+	}
+	bossHealthBar_.Update(current, bossBarMaxHP_, arena != nullptr);
+	if (!arena && !bossHealthBar_.IsVisible())
+		bossBarMaxHP_ = 0.0f; // reset for the next arena
+}
+void GameScene::BeginFadeToMenu() {
+	pendingReturnToMenu_ = true;
+	fade_->Start(Fade::Status::FadeOut, 1.0f);
+}
+
+bool GameScene::HasNextStage() const { return stageManager_ && stageManager_->GetCurrentStageIndex() + 1 < static_cast<int32_t>(stageManager_->GetStageCount()); }

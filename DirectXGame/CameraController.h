@@ -136,13 +136,19 @@ public:
 	void StopShake() { shakeTimer_ = 0.0f; }
 	bool IsShaking() const { return shakeTimer_ > 0.0f; }
 
-	// ---- Zoom pulse (block): zooms in by zoomRatio of the CURRENT camera distance, then eases back. Independent of ZoomTo(). ----
-	void ZoomPulse(float zoomRatio, float inDuration, float outDuration);
 
 	// Debug overlay (ImGui foreground): vertical dead-zone lines, return margin, player screen Y, HOLD/TRACK. Call once per frame inside the ImGui frame.
 	void DrawDebugLines() const;
 
 	bool IsTrackingVertically() const { return verticalMode_ == VerticalMode::kTrack; }
+
+		// ---- Focus zoom: moves the camera toward a world point by a fraction of the distance, so the point keeps its place on screen ----
+	// amount: 0.25 = 25% closer, negative = pull back. Used for block (zoom in on the blocker) and the death sequence.
+	void PunchZoom(const KamataEngine::Vector3& point, float amount, float inTime, float holdTime, float outTime);
+	void BeginDeathZoom();    // player just died: pull back a little (follows the player)
+	void BeginDeathCloseUp(); // death scene started: close-up on the player (stays until ClearFocusZoom)
+	void ClearFocusZoom(float settleTime = 0.4f);
+	float GetFocusZoomAmount() const { return fzAmount_; }
 
 private:
 	std::map<uint32_t, Zone> zones_; // key = creation order, not a map ID
@@ -205,13 +211,6 @@ private:
 	float shakeFrequency_ = 35.0f;
 	float shakeTime_ = 0.0f;
 
-	float pulsePeak_ = 0.0f;
-	float pulseIn_ = 0.1f;
-	float pulseOut_ = 0.4f;
-	float pulseTimer_ = 0.0f;
-	bool pulseActive_ = false;
-	float pulseDelta_ = 0.0f;
-
 	KamataEngine::Vector3 fxOffset_{}; // wanted this frame
 	float fxRoll_ = 0.0f;
 	KamataEngine::Vector3 appliedOffset_{}; // actually added to the camera (so it can be removed)
@@ -268,4 +267,32 @@ private:
 	static inline float kCatchUpPx = 120.0f;       // px beyond a line at which the spring is about twice as tight
 	static inline float kHardTopMargin = 40.0f;    // the player never goes closer than this to the top of the screen while tracking
 	static inline float kHardBottomMargin = 70.0f; // ...or the bottom
+
+	enum class FocusZoomStage { kIdle, kIn, kHold, kOut, kLatched };
+	FocusZoomStage fzStage_ = FocusZoomStage::kIdle;
+	KamataEngine::Vector3 fzPoint_{};
+	bool fzFollowsTarget_ = false; // death: the point is the player's current position
+	bool fzLocked_ = false;        // death sequence owns the zoom: punches are ignored
+	float fzAmount_ = 0.0f;
+	float fzTarget_ = 0.0f;
+	float fzVel_ = 0.0f;
+	float fzSmooth_ = 0.1f;
+	float fzPeak_ = 0.0f;
+	float fzInTime_ = 0.1f;
+	float fzHoldTime_ = 0.1f;
+	float fzOutTime_ = 0.4f;
+	float fzTimer_ = 0.0f;
+	void UpdateFocusZoom();
+
+	// subtle Z: the follow camera eases back when the player is moving fast and settles in when still
+	float speedZoom_ = 0.0f;
+	float speedZoomVel_ = 0.0f;
+	static inline float kSpeedZoomOut = 1.5f;  // world units pulled back at full speed
+	static inline float kSpeedZoomRef = 0.25f; // units/frame that count as full speed
+	static inline float kSpeedZoomTime = 0.6f; // seconds: slow on purpose, it should be felt, not seen
+
+	static inline float kDeathZoomOut = -0.18f; // fraction: pull back a little on death
+	static inline float kDeathZoomOutTime = 0.35f;
+	static inline float kDeathCloseUp = 0.6f; // fraction: close-up during the death scene
+	static inline float kDeathCloseUpTime = 0.6f;
 };

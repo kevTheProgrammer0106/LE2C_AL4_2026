@@ -80,6 +80,13 @@ Vector3 WorldToScreen(const Camera& camera, const Vector3& world) {
 	Matrix4x4 vp = MakeViewportMatrix(0.0f, 0.0f, static_cast<float>(WinApp::kWindowWidth), static_cast<float>(WinApp::kWindowHeight), 0.0f, 1.0f);
 	return TransformCoordinate(world, Multiply(camera.matView, Multiply(camera.matProjection, vp)));
 }
+Vector2 WorldToScreen(const Camera& camera, const Vector2& world) {
+	// ビューポート行列を作成する
+	Matrix4x4 vp = MakeViewportMatrix(0.0f, 0.0f, static_cast<float>(WinApp::kWindowWidth), static_cast<float>(WinApp::kWindowHeight), 0.0f, 1.0f);
+	// ワールド座標からスクリーン座標への変換行列を作成する
+	Matrix4x4 viewProjectionViewport = Multiply(camera.matView, Multiply(camera.matProjection, vp));
+	return TransformCoordinate(world, viewProjectionViewport);
+}
 AimFacing ComputeAimFacing(const Vector2& aimDir, bool currentFacingRight) {
 	float worldAngle = std::atan2(aimDir.y, aimDir.x); // 0 = +X, +pi/2 = up
 
@@ -268,6 +275,20 @@ Vector3 TransformCoordinate(const Vector3& vector, const Matrix4x4& m) {
 	result.x /= w;
 	result.y /= w;
 	result.z /= w;
+	return result;
+}
+Vector2 TransformCoordinate(const Vector2& vector, const Matrix4x4& m) {
+	Vector2 result{};
+	// Vector2 は Z = 0 として座標変換する
+	result.x = vector.x * m.m[0][0] + vector.y * m.m[1][0] + m.m[3][0];
+	result.y = vector.x * m.m[0][1] + vector.y * m.m[1][1] + m.m[3][1];
+	// 透視投影に必要な同次座標 W を計算する
+	float w = vector.x * m.m[0][3] + vector.y * m.m[1][3] + m.m[3][3];
+	if (std::abs(w) < 1.0e-6f) {
+		return {};
+	}
+	result.x /= w;
+	result.y /= w;
 	return result;
 }
 Vector3 TransformNormal(const Vector3& vector, const Matrix4x4& m) {

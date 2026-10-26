@@ -14,7 +14,7 @@
 /// </summary>
 class TitleScene {
 public:
-	void Initialize(bool withScreenFadeIn = true);
+	void Initialize(bool withScreenFadeIn = true, bool openCredits = false);
 	void Update();
 	void Draw();
 
@@ -85,4 +85,6 @@ private:
 
 	MusicManager musicManager_;
 	uint32_t menuMusicSoundDataHandle_ = 0;
+
+	bool openCreditsOnStart_ = false;
 };

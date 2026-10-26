@@ -1,5 +1,6 @@
 #include "GameAssets.h"
 #include <algorithm>
+#include <fstream>
 #include <initializer_list>
 
 using namespace KamataEngine;
@@ -18,9 +19,9 @@ void GameAssets::LoadModelsAndTextures() {
 	modelPlayerHead.reset(Model::CreateFromOBJ("playerhead", true));
 	modelPlayerHat.reset(Model::CreateFromOBJ("playerhat", true));
 	modelPlayerBody.reset(Model::CreateFromOBJ("playerbody", true));
-	playerBodyTex = TextureManager::Load("./Resources/playerBody/tex.png");
-	playerHeadTex = TextureManager::Load("./Resources/playerHead/tex.png");
-	playerHatTex = TextureManager::Load("./Resources/playerHat/tex.png");
+	playerBodyTex = TextureManager::Load("./Resources/playerBody/playerBody.png");
+	playerHeadTex = TextureManager::Load("./Resources/playerHead/playerHead.png");
+	playerHatTex = TextureManager::Load("./Resources/playerHat/playerShako.png");
 
 	// --- Weapons ---
 	modelSabreLight.reset(Model::CreateFromOBJ("weaponSabre"));
@@ -68,52 +69,64 @@ void GameAssets::LoadModelsAndTextures() {
 	fighterHeadTex = TextureManager::Load("./Resources/fighterHead/fighterHead.png");
 	fighterHatTex = TextureManager::Load("./Resources/fighterHat/fighterShako.png");
 
-	// --- Enemy: Carabinier (placeholder: Cuirassier art) ---
+	// --- Enemy: Carabinier ---
 	modelCarabinierBody.reset(Model::CreateFromOBJ("cuirassierBody", true));
 	modelCarabinierHead.reset(Model::CreateFromOBJ("cuirassierHead", true));
-	modelCarabinierHat.reset(Model::CreateFromOBJ("cuirassierHat", true));
+	modelCarabinierHat.reset(Model::CreateFromOBJ("carabinierHat", true));
 	carabinierBodyTex = TextureManager::Load("./Resources/cuirassierBody/cuirassierTorso.png");
 	carabinierHeadTex = TextureManager::Load("./Resources/cuirassierHead/cuirassierHead.png");
-	carabinierHatTex = TextureManager::Load("./Resources/cuirassierHat/cuirassierHelmet.png");
+	carabinierHatTex = TextureManager::Load("./Resources/carabinierHat/carabinierHat.png");
 
-	// --- Enemy: Shotgunner (placeholder: Rifleman art) ---
-	modelShotgunnerBody.reset(Model::CreateFromOBJ("riflemanBody", true));
-	modelShotgunnerHead.reset(Model::CreateFromOBJ("riflemanHead", true));
-	modelShotgunnerHat.reset(Model::CreateFromOBJ("riflemanHat", true));
-	shotgunnerBodyTex = TextureManager::Load("./Resources/riflemanBody/riflemanTorso.png");
-	shotgunnerHeadTex = TextureManager::Load("./Resources/riflemanHead/riflemanHead.png");
-	shotgunnerHatTex = TextureManager::Load("./Resources/riflemanHat/riflemanShako.png");
+	// --- Enemy: Shotgunner  ---
+	modelShotgunnerBody.reset(Model::CreateFromOBJ("fighterBody", true));
+	modelShotgunnerHead.reset(Model::CreateFromOBJ("fighterHead", true));
+	modelShotgunnerHat.reset(Model::CreateFromOBJ("shotgunnerHat", true));
+	shotgunnerBodyTex = TextureManager::Load("./Resources/fighterBody/fighterTorso.png");
+	shotgunnerHeadTex = TextureManager::Load("./Resources/fighterHead/fighterHead.png");
+	shotgunnerHatTex = TextureManager::Load("./Resources/shotgunnerHat/shotgunnerHat.png");
 
-	// --- Enemy: Grenadier (placeholder) ---
-	modelGrenadierBody.reset(Model::CreateFromOBJ("fighterBody", true));
+	// --- Enemy: Grenadier ---
+	modelGrenadierBody.reset(Model::CreateFromOBJ("officerBody", true));
 	modelGrenadierHead.reset(Model::CreateFromOBJ("riflemanHead", true));
-	modelGrenadierHat.reset(Model::CreateFromOBJ("riflemanHat", true));
-	grenadierBodyTex = TextureManager::Load("./Resources/fighterBody/fighterTorso.png");
+	modelGrenadierHat.reset(Model::CreateFromOBJ("grenadierHat", true));
+	grenadierBodyTex = TextureManager::Load("./Resources/officerBody/grenadierTorso.png");
 	grenadierHeadTex = TextureManager::Load("./Resources/riflemanHead/riflemanHead.png");
-	grenadierHatTex = TextureManager::Load("./Resources/riflemanHat/riflemanShako.png");
+	grenadierHatTex = TextureManager::Load("./Resources/grenadierHat/grenadierHat.png");
 
-	// --- Enemy: Officer (placeholder) ---
-	modelOfficerBody.reset(Model::CreateFromOBJ("fighterBody", true));
-	modelOfficerHead.reset(Model::CreateFromOBJ("riflemanHead", true));
-	modelOfficerHat.reset(Model::CreateFromOBJ("riflemanHat", true));
-	officerBodyTex = TextureManager::Load("./Resources/fighterBody/fighterTorso.png");
-	officerHeadTex = TextureManager::Load("./Resources/riflemanHead/riflemanHead.png");
-	officerHatTex = TextureManager::Load("./Resources/riflemanHat/riflemanShako.png");
+	// --- Enemy: Officer ---
+	modelOfficerBody.reset(Model::CreateFromOBJ("officerBody", true));
+	modelOfficerHead.reset(Model::CreateFromOBJ("officerHead", true));
+	modelOfficerHat.reset(Model::CreateFromOBJ("officeHat", true));
+	officerBodyTex = TextureManager::Load("./Resources/officerBody/grenadierTorso.png");
+	officerHeadTex = TextureManager::Load("./Resources/officerHead/riflemanHead.png");
+	officerHatTex = TextureManager::Load("./Resources/officeHat/officerHat.png");
 
-	// --- Enemy: Sapper (placeholder: Cuirassier art) ---
-	modelSapperBody.reset(Model::CreateFromOBJ("cuirassierBody", true));
-	modelSapperHead.reset(Model::CreateFromOBJ("cuirassierHead", true));
-	modelSapperHat.reset(Model::CreateFromOBJ("cuirassierHat", true));
-	sapperBodyTex = TextureManager::Load("./Resources/cuirassierBody/cuirassierTorso.png");
-	sapperHeadTex = TextureManager::Load("./Resources/cuirassierHead/cuirassierHead.png");
-	sapperHatTex = TextureManager::Load("./Resources/cuirassierHat/cuirassierHelmet.png");
+	// --- Enemy: Sapper ---
+	modelSapperBody.reset(Model::CreateFromOBJ("sapperBody", true));
+	modelSapperHead.reset(Model::CreateFromOBJ("sapperHead", true));
+	modelSapperHat.reset(Model::CreateFromOBJ("sapperHat", true));
+	sapperBodyTex = TextureManager::Load("./Resources/sapperBody/sapperBody.png");
+	sapperHeadTex = TextureManager::Load("./Resources/sapperHead/riflemanHead.png");
+	sapperHatTex = TextureManager::Load("./Resources/sapperHat/sapperHat.png");
 
-	// --- Effects ---
-	slashEffectTex = TextureManager::Load("./Resources/spriteIngame/attackSlash.png");
+	// --- Effects (Resources/spriteIngame) ---
+	const auto fx = [](const char* file) { return TextureManager::Load(std::string("./Resources/spriteIngame/") + file); };
+
 	modelSlashEffect.reset(Model::CreateFromOBJ("hit_effect", true));
-	hitEffectTex = TextureManager::Load("./Resources/spriteIngame/effectExplosion.png");
+	attackEffectTextures.Set(AttackEffectType::kSlash, fx("attackSlash.png"));
+	attackEffectTextures.Set(AttackEffectType::kSlashOpposite, fx("attackSlashOpposite.png"));
+	attackEffectTextures.Set(AttackEffectType::kSlashDownward, fx("attackSlashDownward.png"));
+	attackEffectTextures.Set(AttackEffectType::kSlashAlt, fx("attackSlashAlt.png"));
+	attackEffectTextures.Set(AttackEffectType::kThrust, fx("attackThrust.png"));
+	attackEffectTextures.Set(AttackEffectType::kSmash, fx("attackSmash.png"));
+
+	effectExplosionTex = fx("effectExplosion.png");
+	effectFlashTex = fx("effectFlash.png");
+	effectFragmentsTex = fx("effectFragments.png");
+	effectSmokeTex = fx("effectSmoke.png");
+	effectSparkTex = fx("effectSpark.png");
+
 	hitEffectModel.reset(Model::CreateFromOBJ("particle"));
-	guardEffectTex = TextureManager::Load("./Resources/spriteIngame/effectSpark.png");
 	guardEffectModel.reset(Model::CreateFromOBJ("ring"));
 	deathParticleTex = TextureManager::Load("./Resources/deathParticle/white1x1.png");
 	deathParticleModel.reset(Model::CreateFromOBJ("deathParticle", true));
@@ -215,11 +228,19 @@ void GameAssets::LoadModelsAndTextures() {
 	retryButtonTex[0] = TextureManager::Load("./Resources/UserInterface/buttonRetry.png");
 	retryButtonTex[1] = TextureManager::Load("./Resources/UserInterface/buttonRestart.png");
 	retryButtonTex[2] = TextureManager::Load("./Resources/UserInterface/buttonBack.png");
-	victoryButtonTex[0] = TextureManager::Load("./Resources/UserInterface/buttonRestart.png");
-	victoryButtonTex[1] = TextureManager::Load("./Resources/UserInterface/buttonBack.png");
+
+	// Next-level button. Uses buttonNext.png if you have drawn it, otherwise the Play icon.
+	{
+		const char* nextPath = "./Resources/UserInterface/buttonPlay.png";
+		victoryButtonTex[0] = TextureManager::Load(std::ifstream(nextPath).good() ? nextPath : "./Resources/UserInterface/buttonPlay.png");
+	}
+	victoryButtonTex[1] = TextureManager::Load("./Resources/UserInterface/buttonRestart.png");
+	victoryButtonTex[2] = TextureManager::Load("./Resources/UserInterface/buttonBack.png");
+
 	inGamePauseButtonTex = TextureManager::Load("./Resources/UserInterface/buttonIngamePause.png");
 	cursorTex[0] = TextureManager::Load("./Resources/UserInterface/iconDirectionCrosshair.png");
 	cursorTex[1] = TextureManager::Load("./Resources/UserInterface/iconCursor.png");
+	screenFlashTex = TextureManager::Load("./Resources/UserInterface/flashScreen.png");
 	// --- Banner(2048x512) ---
 	bannerTex[0] = TextureManager::Load("./Resources/UserInterface/bannerObjective.png");
 	bannerTex[1] = TextureManager::Load("./Resources/UserInterface/bannerArena.png");
