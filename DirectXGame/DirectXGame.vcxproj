@@ -183,6 +183,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClCompile Include="AnimationUI.cpp" />
     <ClCompile Include="ArenaManager.cpp" />
     <ClCompile Include="AudioSettings.cpp" />
+    <ClCompile Include="BackgroundModel.cpp" />
     <ClCompile Include="BannerUI.cpp" />
     <ClCompile Include="BaseEffect.cpp" />
     <ClCompile Include="BaseEnemy.cpp" />
@@ -269,6 +270,7 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     <ClInclude Include="AnimationUI.h" />
     <ClInclude Include="ArenaManager.h" />
     <ClInclude Include="AudioSettings.h" />
+    <ClInclude Include="BackgroundModel.h" />
     <ClInclude Include="BannerUI.h" />
     <ClInclude Include="BaseEffect.h" />
     <ClInclude Include="BaseEnemy.h" />

@@ -1,12 +1,14 @@
 #pragma once
 
+#include "Global.h"
 #include "KamataEngine.h"
 #include "MapChipField.h"
-#include "Global.h"
 #include <cstdint>
 #include <memory>
 
+/// <summary>
 /// 1つのタイルを描くためのモデル+テクスチャ
+/// </summary>
 struct TileVisual {
 	KamataEngine::Model* model = nullptr;
 	uint32_t tex = 0;
@@ -22,6 +24,14 @@ public:
 	// --- Skydome ---
 	std::unique_ptr<KamataEngine::Model> modelSkyDome;
 	uint32_t skyDomeTex = 0;
+
+	// --- Background Models --
+	std::unique_ptr<KamataEngine::Model> modelBackgroundHill;
+	std::unique_ptr<KamataEngine::Model> modelBackgroundTown;
+	std::unique_ptr<KamataEngine::Model> modelBackgroundTrees;
+	uint32_t hillTex = 0;
+	uint32_t townTex = 0;
+	uint32_t treesTex = 0;
 
 	// --- Player ---
 	std::unique_ptr<KamataEngine::Model> modelPlayerBody;
@@ -129,52 +139,90 @@ public:
 	std::unique_ptr<KamataEngine::Model> deathParticleModel;
 	uint32_t deathParticleTex = 0;
 
-	// --- Blocks ---
-	std::unique_ptr<KamataEngine::Model> blockModel; // generic cube: slow, glass, spikes, barrel, breakable, fragile
-	std::unique_ptr<KamataEngine::Model> blockPlatformModel;
+	// --- 'B' blocks: each block has its OWN model and texture ---
+	// linkID 0 grass, 1 dirt, 2 stone, 3 cobblestone, 4 leaves,
+	// 5 crate, 6 iron, 7 wood planks, 8 wood support
+	std::unique_ptr<KamataEngine::Model> modelBlockGrass;
+	std::unique_ptr<KamataEngine::Model> modelBlockDirt;
+	std::unique_ptr<KamataEngine::Model> modelBlockStone;
+	std::unique_ptr<KamataEngine::Model> modelBlockCobblestone;
+	std::unique_ptr<KamataEngine::Model> modelBlockLeaves;
+	std::unique_ptr<KamataEngine::Model> modelBlockCrate;
+	std::unique_ptr<KamataEngine::Model> modelBlockIron;
+	std::unique_ptr<KamataEngine::Model> modelBlockWoodPlanks;
+	std::unique_ptr<KamataEngine::Model> modelBlockWoodSupport;
 
-	// mapChip B models, picked by linkID
-	std::unique_ptr<KamataEngine::Model> modelBlockTypeOne;    // linkID 0
-	std::unique_ptr<KamataEngine::Model> modelBlockTypeTwo;    // linkID 1
-	std::unique_ptr<KamataEngine::Model> modelBlockTypeThree;  // linkID 2
-	std::unique_ptr<KamataEngine::Model> modelBlockTypeFour;   // linkID 3
-	std::unique_ptr<KamataEngine::Model> modelBlockWoodPlanks; // linkID 4
-	std::unique_ptr<KamataEngine::Model> modelBlockSupport;    // linkID 5
-	std::unique_ptr<KamataEngine::Model> modelBlockTest;       // linkID 6
+	uint32_t blockGrassTex = 0;
+	uint32_t blockDirtTex = 0;
+	uint32_t blockStoneTex = 0;
+	uint32_t blockCobblestoneTex = 0;
+	uint32_t blockLeavesTex = 0;
+	uint32_t blockCrateTex = 0;
+	uint32_t blockIronTex = 0;
+	uint32_t blockWoodPlanksTex = 0;
+	uint32_t blockWoodSupportTex = 0;
 
-	// TypeOne (subID 0-5)
-	uint32_t blockGrassTex = 0, blockDirtTex = 0, blockStoneTex = 0, blockCobblestoneTex = 0, blockLeavesTex = 0, blockSandTex = 0;
-	// TypeTwo (subID 0-1)
-	uint32_t blockCrateTex = 0, blockIronTex = 0;
-	// TypeThree (subID 0-2)
-	uint32_t blockShinglesTex = 0, blockThatchTex = 0, blockTilesTex = 0;
-	// TypeFour / WoodPlanks / Support / Test
-	uint32_t blockWoodTex = 0, blockWoodPlanksTex = 0, blockSupportTex = 0, blockTestTex = 0;
+	// --- 'T' platforms: each platform has its OWN model and texture ---
+	// linkID 0 leaves, 1 dirt, 2 wood, 3 iron
+	std::unique_ptr<KamataEngine::Model> modelBlockPlatformLeaves;
+	std::unique_ptr<KamataEngine::Model> modelBlockPlatformDirt;
+	std::unique_ptr<KamataEngine::Model> modelBlockPlatformWood;
+	std::unique_ptr<KamataEngine::Model> modelBlockPlatformIron;
 
-	// platform (subID 0-3)
-	uint32_t blockPlatformLeavesTex = 0, blockPlatformDirtTex = 0, blockPlatformWoodTex = 0, blockPlatformIronTex = 0;
-	// slow block (subID 0-2)
-	uint32_t blockMudTex = 0, blockGravelTex = 0, blockHeavySandTex = 0;
+	uint32_t blockPlatformLeavesTex = 0;
+	uint32_t blockPlatformDirtTex = 0;
+	uint32_t blockPlatformWoodTex = 0;
+	uint32_t blockPlatformIronTex = 0;
 
-	// same mapChips as before, renamed
-	uint32_t blockSpikesTex = 0, blockGateTex = 0, blockGlassTex = 0, blockBarrelTex = 0, blockHealthTex = 0;
+	// --- 'M' slow blocks: each slow block has its OWN model and texture ---
+	// linkID 0 mud, 1 gravel
+	std::unique_ptr<KamataEngine::Model> modelBlockSlowMud;
+	std::unique_ptr<KamataEngine::Model> modelBlockSlowGravel;
 
-	uint32_t breakableTex[3] = {0, 0, 0}; // intact, cracked, nearly broken (placeholder: all the same)
-	uint32_t fragileTex = 0;
+	uint32_t blockSlowMudTex = 0;
+	uint32_t blockSlowGravelTex = 0;
 
-	// B / T / M chips -> model + texture
-	TileVisual ResolveTile(MapChipType type, uint8_t subID, uint8_t linkID) const;
+	// --- Special blocks: each has its OWN model, never shared with block types ---
+	std::unique_ptr<KamataEngine::Model> modelGlass;     // 'Y'
+	std::unique_ptr<KamataEngine::Model> modelBreakable; // 'V'
+	std::unique_ptr<KamataEngine::Model> modelExplosive; // 'Z'
+	std::unique_ptr<KamataEngine::Model> modelSpike;     // 'I'
+	std::unique_ptr<KamataEngine::Model> modelFragile;   // '9'
 
+	// モデルとテクスチャを別々に取得する。
+	// linkIDから個別のモデルとテクスチャを選択する。
+	KamataEngine::Model* ResolveTileModel(MapChipType type, uint8_t linkID) const;
+	uint32_t ResolveTileTexture(MapChipType type, uint8_t linkID) const;
+
+	// special blocks only: Y, V, Z, I, 9. stage is used by 'V' (0..2 damage stage)
+	TileVisual ResolveSpecial(MapChipType type, int stage = 0) const;
+
+	// --- Single-texture chips ---
+	uint32_t blockSpikesTex = 0; // 'I' spike
+	uint32_t blockGateTex = 0;   // '1'-'4' gates and '5'-'8' arena gates
+	uint32_t blockGlassTex = 0;  // 'Y' glass
+	uint32_t blockBarrelTex = 0; // 'Z' explosive
+	uint32_t blockHealthTex = 0; // 'H' health block
+
+	// --- 'V' breakable / '9' fragile (placeholders until real art exists) ---
+	uint32_t breakableTex[3] = {0, 0, 0}; // 'V': [0] intact, [1] cracked, [2] nearly broken
+	uint32_t fragileTex = 0;              // '9'
+
+	// --- 'U' tutorial sign ---
 	std::unique_ptr<KamataEngine::Model> modelTutorialBlock;
 	uint32_t tutorialBlockTex = 0;
 
-	// --- Goal / Gate / HealthBlock ---
+	// --- 'X' goal ---
 	std::unique_ptr<KamataEngine::Model> modelGoal;
 	uint32_t goalTex = 0;
+
+	// --- '1'-'8' gates (model only; texture is blockGateTex above) ---
 	std::unique_ptr<KamataEngine::Model> modelGate;
+
+	// --- 'H' health block (model only; texture is blockHealthTex above) ---
 	std::unique_ptr<KamataEngine::Model> modelHealthBlock;
 
-	// --- Lever system (handle + support base) ---
+	// --- 'W' switch = lever system (handle swings, support stays) ---
 	std::unique_ptr<KamataEngine::Model> modelLever;
 	std::unique_ptr<KamataEngine::Model> modelLeverSupport;
 	uint32_t blockLeverTex = 0;
@@ -208,11 +256,12 @@ public:
 	uint32_t interactionPromptTex = 0;
 
 	// --- Menus / cursor ---
-	uint32_t pauseButtonTex[3] = {0, 0, 0}; // play, retry, back
-	uint32_t retryButtonTex[3] = {0, 0, 0}; // retry, restart, back
+	uint32_t pauseButtonTex[3] = {0, 0, 0};   // play, retry, back
+	uint32_t retryButtonTex[3] = {0, 0, 0};   // retry, restart, back
 	uint32_t victoryButtonTex[3] = {0, 0, 0}; // next, restart, back
 	uint32_t inGamePauseButtonTex = 0;
 	uint32_t cursorTex[2] = {0, 0}; // [0] aim (play), [1] arrow (menus)
+
 	// --- Banner(画面上部の文字)。順番は BannerUI::Kind: start, arena, paused, defeat, victory ---
 	uint32_t bannerTex[6] = {0, 0, 0, 0, 0, 0};
 	uint32_t screenFlashTex = 0;

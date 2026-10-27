@@ -318,6 +318,7 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	BannerUI::RegisterGlobalVariables();
 	ProjectileBall::RegisterGlobalVariables();
 
+
 	buffOfficer_ = nullptr;
 	OfficerBuff::gActive = false;
 
@@ -337,8 +338,8 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	mapChipField_->LoadChunkCsv(0, stageManager_->GetFieldChunkFileName(currentStageIndex, 0));
 	loadedChunkCount_ = 1;
 	oldestLoadedChunk_ = 0;
-	loadedTopChunkRow_ = MapChipField::kGroundChunkRow;
-	loadedBottomChunkRow_ = MapChipField::kGroundChunkRow;
+	loadedTopChunkRow_ = MapChipField::kMainChunkRow;
+	loadedBottomChunkRow_ = MapChipField::kMainChunkRow;
 	levelCleared_ = false;
 
 	backgroundMapChipField_ = std::make_unique<MapChipField>();
@@ -363,7 +364,12 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	BindAssets();
 
 	skyDome_ = std::make_unique<Skydome>();
-	skyDome_->Initialize(assets_.modelSkyDome.get(), assets_.skyDomeTex, &camera_);
+	skyDome_->Initialize({10.0f, 10.0f, 10.0f}, assets_.modelSkyDome.get(), assets_.skyDomeTex, &camera_, {0.0f, 0.0f, 0.0f});
+	skyDome_->RegisterGlobalVariables("Skydome");
+
+	background_ = std::make_unique<BackgroundModel>();
+	background_->Initialize(&camera_, assets_.modelBackgroundHill.get(), assets_.modelBackgroundTown.get(), assets_.modelBackgroundTrees.get(), assets_.hillTex, assets_.townTex, assets_.treesTex);
+	
 
 	HitEffect::SetModel(assets_.hitEffectModel.get());
 	HitEffect::SetCamera(&camera_);
@@ -408,7 +414,7 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	cameraController_->Initialize(&camera_);
 
 	GenerateChunkTileMap(0);
-	GenerateBackgroundChunkTileMap(0, MapChipField::kGroundChunkRow);
+	GenerateBackgroundChunkTileMap(0, MapChipField::kMainChunkRow);
 
 	if (stageManager_->HasCheckpoint() && player_) {
 		const StageManager::CheckpointData& cp = stageManager_->GetCheckpoint();
@@ -421,7 +427,7 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 				std::ifstream bgTest(bgPath);
 				if (bgTest.good())
 					backgroundMapChipField_->LoadChunkCsv(chunk, bgPath);
-				GenerateBackgroundChunkTileMap(chunk, MapChipField::kGroundChunkRow);
+				GenerateBackgroundChunkTileMap(chunk, MapChipField::kMainChunkRow);
 			}
 		}
 		loadedChunkCount_ = cp.loadedChunkCount;
@@ -430,7 +436,7 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 		loadedBottomChunkRow_ = cp.loadedBottomChunkRow;
 
 		for (uint32_t row = loadedTopChunkRow_; row <= loadedBottomChunkRow_; ++row) {
-			if (row == MapChipField::kGroundChunkRow)
+			if (row == MapChipField::kMainChunkRow)
 				continue;
 			LoadVerticalRow(row);
 		}
@@ -451,7 +457,7 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 
 		cameraController_->SetTarget(player_.get());
 		cameraController_->Reset();
-		cameraController_->SetWorldBounds(static_cast<float>(loadedChunkCount_) * kChunkWorldWidth, mapChipField_->GetWorldHeight());
+		UpdateCameraWorldBounds();
 	}
 	InitializeMenuOverlay();
 	InitializePauseMenu();
@@ -1158,7 +1164,7 @@ void GameScene::SetCheckpoint(const Vector3& position) {
 	stageManager_->SetCheckpoint(data);
 }
 
-void GameScene::GenerateChunkTileMap(uint32_t chunkIndex) { GenerateChunkTileMapRow(chunkIndex, MapChipField::kGroundChunkRow); }
+void GameScene::GenerateChunkTileMap(uint32_t chunkIndex) { GenerateChunkTileMapRow(chunkIndex, MapChipField::kMainChunkRow); }
 
 void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) {
 	auto key = std::make_pair(chunkIndex, chunkRow);
@@ -1174,7 +1180,7 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 		for (auto& row : worldTransformBlocks_)
 			row.resize(numHorizontalTotal);
 	}
-	cameraController_->SetWorldBounds(static_cast<float>(loadedChunkCount_) * kChunkWorldWidth, mapChipField_->GetWorldHeight());
+	UpdateCameraWorldBounds();
 
 	uint32_t jStart = chunkIndex * MapChipField::kChunkBlockSize;
 	uint32_t jEnd = std::min(jStart + MapChipField::kChunkBlockSize, numHorizontalTotal);
@@ -1195,14 +1201,25 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 			case MapChipType::kBlock:
 			case MapChipType::kSlowBlock:
 			case MapChipType::kPlatform: {
-				uint8_t subID = mapChipField_->GetMapChipSubIDByIndex(j, i);
-				uint8_t linkID = mapChipField_->GetMapChipLinkIDByIndex(j, i);
+				const uint8_t linkID = mapChipField_->GetMapChipLinkIDByIndex(j, i);
+
+				// モデルとテクスチャをlinkIDから独立して取得する。
+				Model* tileModel = assets_.ResolveTileModel(mapChipType, linkID);
+
+				uint32_t tileTexture = assets_.ResolveTileTexture(mapChipType, linkID);
+
 				delete worldTransformBlocks_[i][j].transform;
+				worldTransformBlocks_[i][j] = {};
+
+				if (!tileModel || tileTexture == 0) {
+					continue;
+				}
+
 				WorldTransform* worldTransform = new WorldTransform;
 				worldTransform->Initialize();
 				worldTransform->translation_ = mapChipField_->GetMapChipPositionByIndex(j, i);
-				TileVisual v = assets_.ResolveTile(mapChipType, subID, linkID);
-				worldTransformBlocks_[i][j] = {worldTransform, v.model, v.tex};
+
+				worldTransformBlocks_[i][j] = {worldTransform, tileModel, tileTexture};
 			} break;
 			case MapChipType::kArenaCamera: { // 'F': zoom point and trigger area. Sub ID = preset
 				uint8_t presetID = mapChipField_->GetMapChipSubIDByIndex(j, i);
@@ -1244,10 +1261,9 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 			case MapChipType::kArenaGateLeft:
 			case MapChipType::kArenaGateRight: {
 				uint8_t buttonID = mapChipField_->GetMapChipLinkIDByIndex(j, i);
-				uint8_t textureVariant = mapChipField_->GetMapChipSubIDByIndex(j, i);
 				Vector3 gatePosition = mapChipField_->GetMapChipPositionByIndex(j, i);
 				auto gate = std::make_unique<SlidingGate>();
-				gate->Initialize(assets_.modelGate.get(), assets_.blockGateTex, &camera_, gatePosition, mapChipType, textureVariant, buttonID);
+				gate->Initialize(assets_.modelGate.get(), assets_.blockGateTex, &camera_, gatePosition, mapChipType, buttonID);
 				if (!gate->IsArenaGate() && pressedSwitchIDs_.contains(buttonID))
 					gate->SnapOpen();
 				GetOrCreateArena(buttonID)->RegisterGate(gate.get());
@@ -1298,62 +1314,42 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 				healthBlock->Initialize(assets_.modelHealthBlock.get(), assets_.blockHealthTex, &camera_, healthBlockPos, mode);
 				healthBlocks_.push_back(std::move(healthBlock));
 			} break;
-			case MapChipType::kGlass: {
-				delete worldTransformBlocks_[i][j].transform;
-				WorldTransform* worldTransform = new WorldTransform;
-				worldTransform->Initialize();
-				worldTransform->translation_ = mapChipField_->GetMapChipPositionByIndex(j, i);
-				worldTransformBlocks_[i][j] = {worldTransform, assets_.blockModel.get(), assets_.blockGlassTex};
-			} break;
-
-			case MapChipType::kBreakable: {
-				uint8_t subID = mapChipField_->GetMapChipSubIDByIndex(j, i);
-				int32_t hits = (subID == 0) ? 3 : static_cast<int32_t>(subID);
-				int32_t hp = hits;
-				const uint64_t breakableKey = CellKey(j, i);
-				if (stageManager_->HasCheckpoint()) {
-					const auto& saved = stageManager_->GetCheckpoint().world.breakableHp;
-					auto it = saved.find(breakableKey);
-					if (it != saved.end())
-						hp = std::clamp(it->second, 1, hits);
-				}
-				breakables_[breakableKey] = {hp, hits};
-				delete worldTransformBlocks_[i][j].transform;
-				WorldTransform* worldTransform = new WorldTransform;
-				worldTransform->Initialize();
-				worldTransform->translation_ = mapChipField_->GetMapChipPositionByIndex(j, i);
-				worldTransformBlocks_[i][j] = {worldTransform, assets_.blockModel.get(), assets_.breakableTex[BreakableStage(hp, hits)]};
-			} break;
-
-			case MapChipType::kExplosive: {
-				int32_t hits = kExplosiveHits;
-				if (stageManager_->HasCheckpoint()) {
-					const auto& saved = stageManager_->GetCheckpoint().world.explosiveHits;
-					auto it = saved.find(CellKey(j, i));
-					if (it != saved.end())
-						hits = std::clamp(it->second, 1, kExplosiveHits);
-				}
-				explosives_[CellKey(j, i)] = hits;
-				delete worldTransformBlocks_[i][j].transform;
-				WorldTransform* worldTransform = new WorldTransform;
-				worldTransform->Initialize();
-				worldTransform->translation_ = mapChipField_->GetMapChipPositionByIndex(j, i);
-				worldTransformBlocks_[i][j] = {worldTransform, assets_.blockModel.get(), assets_.blockBarrelTex};
-			} break;
-			case MapChipType::kSpike: {
-				delete worldTransformBlocks_[i][j].transform;
-				WorldTransform* worldTransform = new WorldTransform;
-				worldTransform->Initialize();
-				worldTransform->translation_ = mapChipField_->GetMapChipPositionByIndex(j, i);
-				worldTransformBlocks_[i][j] = {worldTransform, assets_.blockModel.get(), assets_.blockSpikesTex};
-			} break;
-
+			case MapChipType::kGlass:
+			case MapChipType::kBreakable:
+			case MapChipType::kExplosive:
+			case MapChipType::kSpike:
 			case MapChipType::kFragile: {
+				int stage = 0;
+				if (mapChipType == MapChipType::kBreakable) {
+					uint8_t subID = mapChipField_->GetMapChipSubIDByIndex(j, i);
+					int32_t hits = (subID == 0) ? 3 : static_cast<int32_t>(subID);
+					int32_t hp = hits;
+					const uint64_t breakableKey = CellKey(j, i);
+					if (stageManager_->HasCheckpoint()) {
+						const auto& saved = stageManager_->GetCheckpoint().world.breakableHp;
+						auto it = saved.find(breakableKey);
+						if (it != saved.end())
+							hp = std::clamp(it->second, 1, hits);
+					}
+					breakables_[breakableKey] = {hp, hits};
+					stage = BreakableStage(hp, hits);
+				} else if (mapChipType == MapChipType::kExplosive) {
+					int32_t hits = kExplosiveHits;
+					if (stageManager_->HasCheckpoint()) {
+						const auto& saved = stageManager_->GetCheckpoint().world.explosiveHits;
+						auto it = saved.find(CellKey(j, i));
+						if (it != saved.end())
+							hits = std::clamp(it->second, 1, kExplosiveHits);
+					}
+					explosives_[CellKey(j, i)] = hits;
+				}
+
+				TileVisual v = assets_.ResolveSpecial(mapChipType, stage);
 				delete worldTransformBlocks_[i][j].transform;
 				WorldTransform* worldTransform = new WorldTransform;
 				worldTransform->Initialize();
 				worldTransform->translation_ = mapChipField_->GetMapChipPositionByIndex(j, i);
-				worldTransformBlocks_[i][j] = {worldTransform, assets_.blockModel.get(), assets_.fragileTex};
+				worldTransformBlocks_[i][j] = {worldTransform, v.model, v.tex};
 			} break;
 
 			case MapChipType::kMeleeSpawner:
@@ -1411,20 +1407,33 @@ void GameScene::GenerateBackgroundChunkTileMap(uint32_t chunkX, uint32_t chunkY)
 				worldTransformBackgroundBlocks_[i][j] = {};
 				continue;
 			}
+			const uint8_t linkID = backgroundMapChipField_->GetMapChipLinkIDByIndex(j, i);
+
+			Model* tileModel = assets_.ResolveTileModel(type, linkID);
+			uint32_t tileTexture = assets_.ResolveTileTexture(type, linkID);
+
+			if (!tileModel || tileTexture == 0) {
+				if (worldTransformBackgroundBlocks_[i][j].transform) {
+					delete worldTransformBackgroundBlocks_[i][j].transform;
+				}
+				worldTransformBackgroundBlocks_[i][j] = {};
+				continue;
+			}
+
 			WorldTransform* worldTransform = worldTransformBackgroundBlocks_[i][j].transform;
+
 			if (!worldTransform) {
 				worldTransform = new WorldTransform;
 				worldTransform->Initialize();
 			}
+
 			worldTransform->translation_ = backgroundMapChipField_->GetMapChipPositionByIndex(j, i);
+
 			worldTransform->translation_.z += kBackgroundDepthOffset;
 
 			WorldTransformUpdate(*worldTransform);
 
-			uint8_t subID = backgroundMapChipField_->GetMapChipSubIDByIndex(j, i);
-			uint8_t linkID = backgroundMapChipField_->GetMapChipLinkIDByIndex(j, i);
-			TileVisual v = assets_.ResolveTile(type, subID, linkID);
-			worldTransformBackgroundBlocks_[i][j] = {worldTransform, v.model, v.tex};
+			worldTransformBackgroundBlocks_[i][j] = {worldTransform, tileModel, tileTexture};
 		}
 	}
 }
@@ -1478,6 +1487,7 @@ void GameScene::Update() {
 	SpriteTutorial::ApplyGlobalVariables();
 	BannerUI::ApplyGlobalVariables();
 	ProjectileBall::ApplyGlobalVariables();
+	skyDome_->ApplyGlobalVariables();
 
 	debugMenu();
 #ifdef _DEBUG
@@ -1512,6 +1522,9 @@ void GameScene::Update() {
 		cameraController_->Update();
 	} else
 		cameraController_->Update();
+
+	background_->Update();
+	skyDome_->Update();
 
 	ChangePhase();
 	UpdateDeathOverlay();
@@ -1904,6 +1917,7 @@ void GameScene::CheckAllCollisions() {
 
 void GameScene::Draw() {
 	skyDome_->Draw();
+	background_->Draw();
 
 	if (!worldTransformBackgroundBlocks_.empty()) {
 		static KamataEngine::ObjectColor backgroundTint;
@@ -1913,19 +1927,17 @@ void GameScene::Draw() {
 			backgroundTint.SetColor({0.55f, 0.55f, 0.6f, 1.0f});
 			backgroundTintInitialized = true;
 		}
-		std::unordered_map<Model*, std::vector<BlockInstance*>> byModelBg;
-		for (auto& line : worldTransformBackgroundBlocks_) {
-			for (auto& block : line) {
-				if (!block.transform)
+		// 背景ブロックも1個ずつ個別に描画する。
+		for (auto& row : worldTransformBackgroundBlocks_) {
+			for (auto& block : row) {
+				if (!block.transform || !block.model) {
 					continue;
-				byModelBg[block.model].push_back(&block);
+				}
+
+				block.model->PreDraw();
+				block.model->Draw(*block.transform, camera_, block.textureHandle, &backgroundTint);
+				block.model->PostDraw();
 			}
-		}
-		for (auto& [model, instances] : byModelBg) {
-			model->PreDraw();
-			for (BlockInstance* b : instances)
-				model->Draw(*b->transform, camera_, b->textureHandle);
-			model->PostDraw();
 		}
 	}
 
@@ -1966,25 +1978,22 @@ void GameScene::Draw() {
 		item->Draw();
 	}
 	DrawRegenGhosts();
-	std::unordered_map<Model*, std::vector<BlockInstance*>> byModel;
-	for (auto& line : worldTransformBlocks_) {
-		for (auto& block : line) {
-			if (!block.transform)
+	// ブロックを1個ずつ、個別のモデルとテクスチャで描画する。
+	for (auto& row : worldTransformBlocks_) {
+		for (auto& block : row) {
+			if (!block.transform || !block.model) {
 				continue;
-			byModel[block.model].push_back(&block);
+			}
+
+			block.model->PreDraw();
+			block.model->Draw(*block.transform, camera_, block.textureHandle);
+			block.model->PostDraw();
 		}
-	}
-	for (auto& [model, instances] : byModel) {
-		model->PreDraw();
-		for (BlockInstance* b : instances) {
-			model->Draw(*b->transform, camera_, b->textureHandle);
-		}
-		model->PostDraw();
 	}
 #ifdef _DEBUG
 	DrawCollisionDebug();
 #endif
-	if (!player_->isDead() )
+	if (!player_->isDead())
 	{
 		aimGuide_.Draw();
 		screenFlash_.Draw();
@@ -2224,7 +2233,25 @@ void GameScene::ApplyItemPickup(const DroppableItem& item) {
 		player_->SetWeaponMode(Player::WeaponMode::kFirearm);
 	}
 }
+void GameScene::UpdateCameraWorldBounds() {
+	if (!cameraController_ || !mapChipField_)
+		return;
 
+	if (loadedChunkCount_ <= oldestLoadedChunk_)
+		return;
+
+	// 読み込み済みチャンクのワールド境界を取得する
+	const float minX = static_cast<float>(oldestLoadedChunk_) * kChunkWorldWidth + mapChipField_->GetWorldMinX();
+
+	const float maxX = static_cast<float>(loadedChunkCount_) * kChunkWorldWidth + mapChipField_->GetWorldMinX();
+
+	const float minY = mapChipField_->GetChunkRowBottomY(loadedBottomChunkRow_);
+
+	const float maxY = mapChipField_->GetChunkRowTopY(loadedTopChunkRow_);
+
+	// カメラにはタイルの中心ではなく、チャンクの外側の境界を渡す
+	cameraController_->SetWorldBounds(minX, maxX, minY, maxY);
+}
 void GameScene::UpdateFieldStreaming() {
 	if (!player_ || phase_ != Phase::kPlay)
 		return;
@@ -2252,14 +2279,14 @@ void GameScene::UpdateFieldStreaming() {
 		if (std::ifstream(fgPath).good()) {
 			mapChipField_->LoadChunkCsv(nextChunk, fgPath);
 		}
-		GenerateChunkTileMapRow(nextChunk, MapChipField::kGroundChunkRow);
+		GenerateChunkTileMapRow(nextChunk, MapChipField::kMainChunkRow);
 
 		if (backgroundMapChipField_) {
 			std::string bgPath = stageManager_->GetBackgroundFieldChunkFileName(stageIndex, nextChunk);
 			if (std::ifstream(bgPath).good()) {
 				backgroundMapChipField_->LoadChunkCsv(nextChunk, bgPath);
 			}
-			GenerateBackgroundChunkTileMap(nextChunk, MapChipField::kGroundChunkRow);
+			GenerateBackgroundChunkTileMap(nextChunk, MapChipField::kMainChunkRow);
 		}
 
 		loadedChunkCount_ = nextChunk + 1;
@@ -2267,9 +2294,9 @@ void GameScene::UpdateFieldStreaming() {
 	}
 
 	if (loadedAny) {
-		cameraController_->SetWorldBounds(static_cast<float>(loadedChunkCount_) * kChunkWorldWidth, mapChipField_->GetWorldHeight());
+		UpdateCameraWorldBounds();
 		for (uint32_t row = loadedTopChunkRow_; row <= loadedBottomChunkRow_; ++row) {
-			if (row == MapChipField::kGroundChunkRow)
+			if (row == MapChipField::kMainChunkRow)
 				continue;
 			LoadVerticalRow(row);
 		}
@@ -2283,9 +2310,10 @@ void GameScene::UpdateFieldStreaming() {
 		++oldestLoadedChunk_;
 	}
 
-	float playerY = player_->GetWorldPosition().y;
-	float loadedTopWorldY = static_cast<float>(MapChipField::kMaxVerticalChunks - loadedTopChunkRow_) * kChunkWorldHeight;
-	float loadedBottomWorldY = static_cast<float>(MapChipField::kMaxVerticalChunks - 1 - loadedBottomChunkRow_) * kChunkWorldHeight;
+	const float playerY = player_->GetWorldPosition().y;
+	// row edges come from the field itself, so they stay correct wherever the base chunk row is
+	const float loadedTopWorldY = mapChipField_->GetChunkRowTopY(loadedTopChunkRow_);
+	const float loadedBottomWorldY = mapChipField_->GetChunkRowBottomY(loadedBottomChunkRow_);
 
 	if (loadedTopChunkRow_ > 0 && playerY >= loadedTopWorldY - kVerticalChunkLoadTriggerMargin) {
 		--loadedTopChunkRow_;
@@ -2295,19 +2323,26 @@ void GameScene::UpdateFieldStreaming() {
 		++loadedBottomChunkRow_;
 		LoadVerticalRow(loadedBottomChunkRow_);
 	}
+	UpdateCameraWorldBounds(); // the loaded rows may have changed
 }
 
 void GameScene::LoadVerticalRow(uint32_t row) {
 	int32_t stageIndex = stageManager_->GetCurrentStageIndex();
-	int32_t rowOffset = static_cast<int32_t>(MapChipField::kGroundChunkRow) - static_cast<int32_t>(row);
+	int32_t rowOffset = static_cast<int32_t>(MapChipField::kMainChunkRow) - static_cast<int32_t>(row);
 
 	for (uint32_t chunkX = oldestLoadedChunk_; chunkX < loadedChunkCount_; ++chunkX) {
-		std::string fgPath = stageManager_->GetVerticalFieldChunkFileName(stageIndex, chunkX, rowOffset);
+			// 生成済みのチャンク行は再読込しない
+			// 破壊済みブロックなどの実行中の状態を保持する
+			if (generatedChunkRows_.contains({chunkX, row}))
+				continue;
+
+			std::string fgPath = stageManager_->GetVerticalFieldChunkFileName(stageIndex, chunkX, rowOffset);
+
 		std::ifstream fgTest(fgPath);
 		if (fgTest.good()) {
 			mapChipField_->LoadChunkCsv(chunkX, row, fgPath);
 		}
-		GenerateChunkTileMapRow(chunkX, row); // [FIX] row-scoped, idempotent — was GenerateChunkTileMap(chunkX)
+		GenerateChunkTileMapRow(chunkX, row);
 
 		if (backgroundMapChipField_) {
 			std::string bgPath = stageManager_->GetBackgroundFieldChunkFileName(stageIndex, chunkX);
@@ -2835,15 +2870,51 @@ void GameScene::RemoveBlockCell(uint32_t x, uint32_t y) {
 }
 
 void GameScene::ForEachMapCellInAABB(const AABB& box, const std::function<void(uint32_t, uint32_t)>& fn) {
-	const float maxX = static_cast<float>(mapChipField_->GetNumBlockHorizontal() - 1) + 0.5f;
-	const float maxY = static_cast<float>(mapChipField_->GetNumBlockVertical() - 1) + 0.5f;
-	Vector3 lo = {std::clamp(box.min.x, 0.0f, maxX), std::clamp(box.min.y, 0.0f, maxY), 0.0f};
-	Vector3 hi = {std::clamp(box.max.x, 0.0f, maxX), std::clamp(box.max.y, 0.0f, maxY), 0.0f};
-	MapChipField::IndexSet a = mapChipField_->GetMapChipIndexSetByPosition(lo); // lowest y -> largest yIndex
-	MapChipField::IndexSet b = mapChipField_->GetMapChipIndexSetByPosition(hi);
-	for (uint32_t y = b.yIndex; y <= a.yIndex; ++y)
-		for (uint32_t x = a.xIndex; x <= b.xIndex; ++x)
+
+	if (!mapChipField_ || !fn)
+		return;
+
+	const float worldMinX = mapChipField_->GetWorldMinX();
+	const float worldMaxX = mapChipField_->GetWorldMaxX();
+	const float worldMinY = mapChipField_->GetWorldMinY();
+	const float worldMaxY = mapChipField_->GetWorldMaxY();
+
+	// マップの範囲外にあるAABBは処理しない
+	if (box.max.x < worldMinX || box.min.x > worldMaxX || box.max.y < worldMinY || box.min.y > worldMaxY) {
+		return;
+	}
+
+	// 最大境界は範囲外のインデックスにならないよう、内側へ少し戻す
+	const float maxXInside = std::nextafter(worldMaxX, worldMinX);
+	const float maxYInside = std::nextafter(worldMaxY, worldMinY);
+
+	const Vector3 lo = {std::clamp(box.min.x, worldMinX, maxXInside), std::clamp(box.min.y, worldMinY, maxYInside), 0.0f};
+
+	const Vector3 hi = {std::clamp(box.max.x, worldMinX, maxXInside), std::clamp(box.max.y, worldMinY, maxYInside), 0.0f};
+
+	// ワールドYが大きいほど、マップのYインデックスは小さくなる
+	const MapChipField::IndexSet a = mapChipField_->GetMapChipIndexSetByPosition(lo);
+
+	const MapChipField::IndexSet b = mapChipField_->GetMapChipIndexSetByPosition(hi);
+
+	const uint32_t numX = mapChipField_->GetNumBlockHorizontal();
+	const uint32_t numY = mapChipField_->GetNumBlockVertical();
+
+	const uint32_t xStart = std::min(a.xIndex, b.xIndex);
+	const uint32_t xEnd = std::max(a.xIndex, b.xIndex);
+	const uint32_t yStart = std::min(a.yIndex, b.yIndex);
+	const uint32_t yEnd = std::max(a.yIndex, b.yIndex);
+
+	// 不正なインデックスがループに入るのを防ぐ
+	if (xStart >= numX || yStart >= numY || xEnd >= numX || yEnd >= numY) {
+		return;
+	}
+
+	for (uint32_t y = yStart; y <= yEnd; ++y) {
+		for (uint32_t x = xStart; x <= xEnd; ++x) {
 			fn(x, y);
+		}
+	}
 }
 
 void GameScene::BreakGlassConnected(uint32_t xIndex, uint32_t yIndex) {
@@ -2993,7 +3064,7 @@ bool GameScene::IsBlastExposed(const Vector3& from, const Vector3& to, int64_t s
 	const int steps = static_cast<int>(std::ceil(dist / kStep));
 	for (int i = 1; i < steps; ++i) {
 		float t = static_cast<float>(i) / static_cast<float>(steps);
-		Vector3 p = {std::max(0.0f, from.x + dx * t), std::max(0.0f, from.y + dy * t), 0.0f};
+		Vector3 p = {from.x + dx * t, from.y + dy * t, 0.0f};
 		MapChipField::IndexSet idx = mapChipField_->GetMapChipIndexSetByPosition(p);
 		if (static_cast<int64_t>(idx.xIndex) == skipX && static_cast<int64_t>(idx.yIndex) == skipY)
 			continue;
@@ -3114,7 +3185,7 @@ void GameScene::ExplodeAt(const Vector3& center, const ExplosionParams& p) {
 	std::vector<MapChipField::IndexSet> glassCells, chainCells;
 	std::vector<BreakableHit> breakableHits;
 
-	const MapChipField::IndexSet centerIdx = mapChipField_->GetMapChipIndexSetByPosition(Vector3(std::max(0.0f, center.x), std::max(0.0f, center.y), 0.0f));
+	const MapChipField::IndexSet centerIdx = mapChipField_->GetMapChipIndexSetByPosition(Vector3(center.x, center.y, 0.0f));
 	const uint32_t cx = centerIdx.xIndex, cy = centerIdx.yIndex;
 
 	const int r = static_cast<int>(std::ceil(p.normalRadius));
@@ -3287,8 +3358,9 @@ void GameScene::QueueRegen(uint32_t x, uint32_t y, MapChipType type, uint8_t sub
 	cell.subID = subID;
 	cell.linkID = linkID;
 	cell.timer = (type == MapChipType::kExplosive) ? kExplosiveRegenDelay : kFragileRegenDelay;
-	cell.model = assets_.blockModel.get();
-	cell.tex = (type == MapChipType::kExplosive) ? assets_.blockBarrelTex : assets_.fragileTex;
+	TileVisual v = assets_.ResolveSpecial(type);
+	cell.model = v.model;
+	cell.tex = v.tex;
 
 	cell.transform = std::make_unique<WorldTransform>();
 	cell.transform->Initialize();
@@ -3473,7 +3545,7 @@ void GameScene::UpdateOfficerBuff() {
 
 // 弾が止まる場所か。ブロック/ガラス/壊せるブロック/閉じたゲート。一方通行の足場とバリアは通り抜ける
 bool GameScene::IsBulletBlockedAt(const Vector3& position) {
-	const Vector3 p = {std::max(0.0f, position.x), std::max(0.0f, position.y), 0.0f};
+	const Vector3 p = {position.x, position.y, 0.0f};
 	if (mapChipField_->IsSolidAtPosition(p, true) && !mapChipField_->IsOneWayAtPosition(p)) {
 		const MapChipField::IndexSet idx = mapChipField_->GetMapChipIndexSetByPosition(p);
 		if (mapChipField_->GetMapChipTypeByIndex(idx.xIndex, idx.yIndex) != MapChipType::kGlass)
@@ -3510,7 +3582,7 @@ bool GameScene::BulletHitsSolid(const ProjectileBall& bullet) {
 // Returns true if the bullet is consumed (breakable / explosive). Glass is shattered but the bullet flies on.
 bool GameScene::BulletHitsDestructible(const ProjectileBall& bullet) {
 	AnyAlongBulletPath(bullet, [this](const Vector3& p) {
-		const MapChipField::IndexSet idx = mapChipField_->GetMapChipIndexSetByPosition(Vector3{std::max(0.0f, p.x), std::max(0.0f, p.y), 0.0f});
+		const MapChipField::IndexSet idx = mapChipField_->GetMapChipIndexSetByPosition(Vector3{p.x, p.y, 0.0f});
 		if (mapChipField_->GetMapChipTypeByIndex(idx.xIndex, idx.yIndex) == MapChipType::kGlass)
 			BreakGlassConnected(idx.xIndex, idx.yIndex);
 		return false;

@@ -33,7 +33,7 @@ public:
 
 	Rect movableArea_ = {};
 	void SetMovableArea(Rect area) { movableArea_ = area; }
-	void SetWorldBounds(float worldWidth, float worldHeight);
+	void SetWorldBounds(float minX, float maxX, float minY, float maxY); // world-space edges
 
 	void Reset();
 	void DrawDebugControls(); // ImGui contents only; the caller owns the window

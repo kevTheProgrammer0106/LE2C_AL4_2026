@@ -16,8 +16,7 @@ class SlidingGate {
 public:
 	enum class SlideDirection { kUp, kDown, kLeft, kRight };
 
-	void Initialize(
-	    KamataEngine::Model* model, uint32_t textureHandle, KamataEngine::Camera* camera, const KamataEngine::Vector3& closedPosition, MapChipType gateType, uint8_t textureVariant, uint8_t buttonID);
+void Initialize(KamataEngine::Model* model, uint32_t textureHandle, KamataEngine::Camera* camera, const KamataEngine::Vector3& closedPosition, MapChipType gateType, uint8_t buttonID);
 	uint8_t GetButtonID() const { return buttonID_; }
 	void Update();
 	void Draw();
@@ -60,7 +59,6 @@ private:
 	KamataEngine::Model* model_ = nullptr;
 	KamataEngine::Camera* camera_ = nullptr;
 	uint32_t textureHandle_ = 0;
-	uint8_t textureVariant_ = 0; // 見た目のバリエーション(木/鉄扉等)。今のところ描画切り替えは未実装、拡張用に保持。
 
 	KamataEngine::Vector3 closedPosition_{};
 	SlideDirection direction_ = SlideDirection::kUp;

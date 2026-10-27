@@ -66,6 +66,7 @@
 #include "SpriteTutorial.h"
 
 #include "BannerUI.h"
+#include "BackgroundModel.h"
 
 class StageManager;
 
@@ -138,8 +139,9 @@ public:
 	void AlertNearbyEnemies(BaseEnemy* sourceEnemy, const KamataEngine::Vector3& alertPosition, float radius);
 
 	void GenerateChunkTileMap(uint32_t chunkIndex);
-	void GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow); // [NEW] row-scoped, idempotent
+	void GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow); 
 	void UpdateFieldStreaming();
+	void UpdateCameraWorldBounds(); // camera limits = the chunks/rows currently loaded
 	void UnloadChunkVisuals(uint32_t chunkIndex);
 	void TriggerLevelClear();
 	bool isLevelCleared() const { return levelCleared_; }
@@ -217,6 +219,7 @@ public:
 	enum class CameraFx { kDamage, kDeath, kExplosion, kBlock, kSwing, kSpecial, kHitEnemy, kShoot, kShootHeavy };
 	void TriggerCameraFx(CameraFx fx, float intensity = 1.0f, const KamataEngine::Vector3* focus = nullptr);
 
+
 private:
 	friend class DebugMenu;
 	GameAssets assets_;
@@ -250,6 +253,7 @@ private:
 	KamataEngine::WorldTransform originPoint{};
 
 	std::unique_ptr<Skydome> skyDome_ = nullptr;
+	std::unique_ptr<BackgroundModel> background_; // ステージごとの背景モデル
 
 	std::vector<std::unique_ptr<BaseEnemy>> enemies_;
 
@@ -373,8 +377,8 @@ private:
 	std::vector<std::vector<BlockInstance>> worldTransformBackgroundBlocks_;
 	static inline float kBackgroundDepthOffset = 2.0f;
 	void GenerateBackgroundChunkTileMap(uint32_t chunkX, uint32_t chunkY);
-	uint32_t loadedTopChunkRow_ = MapChipField::kGroundChunkRow;
-	uint32_t loadedBottomChunkRow_ = MapChipField::kGroundChunkRow;
+	uint32_t loadedTopChunkRow_ = MapChipField::kMainChunkRow;
+	uint32_t loadedBottomChunkRow_ = MapChipField::kMainChunkRow;
 	static inline float kVerticalChunkLoadTriggerMargin = 24.0f;
 	void LoadVerticalRow(uint32_t row);
 	bool usesVerticalRows_ = false;

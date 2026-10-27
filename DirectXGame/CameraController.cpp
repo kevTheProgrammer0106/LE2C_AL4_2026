@@ -434,14 +434,14 @@ void CameraController::Reset() {
 	camera_->UpdateMatrix();
 }
 
-void CameraController::SetWorldBounds(float worldWidth, float worldHeight) {
+void CameraController::SetWorldBounds(float minX, float maxX, float minY, float maxY) {
 	constexpr float kHalfScreenWidth = 10.5f;
 	constexpr float kHalfScreenHeight = 6.5f;
 
-	movableArea_.left = kHalfScreenWidth;
-	movableArea_.right = worldWidth - kHalfScreenWidth;
-	movableArea_.bottom = kHalfScreenHeight;
-	movableArea_.top = worldHeight - kHalfScreenHeight;
+	movableArea_.left = minX + kHalfScreenWidth;
+	movableArea_.right = maxX - kHalfScreenWidth;
+	movableArea_.bottom = minY + kHalfScreenHeight; // minY is negative when rows exist below the base chunk
+	movableArea_.top = maxY - kHalfScreenHeight;
 }
 
 

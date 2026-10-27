@@ -6,7 +6,11 @@
 #include "MusicManager.h"
 #include "UIMenu.h"
 #include "SettingsPanel.h"
+#include "BackgroundModel.h"
+#include "CameraController.h"
+#include "GameAssets.h"
 #include <memory>
+
 
 /// <summary>
 /// タイトルシーン(メインメニュー)
@@ -87,4 +91,7 @@ private:
 	uint32_t menuMusicSoundDataHandle_ = 0;
 
 	bool openCreditsOnStart_ = false;
+
+	std::unique_ptr<BackgroundModel> background_; // メニュー共通の背景(LevelSelectと同じもの)
+	GameAssets assets_;
 };

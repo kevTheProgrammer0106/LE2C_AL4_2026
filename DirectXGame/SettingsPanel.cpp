@@ -13,8 +13,6 @@ using namespace KamataEngine;
 namespace {
 // 画像の置き場所(ここだけ変えれば全部の画像パスが変わる)
 constexpr const char* kImageDir = "./Resources/UserInterface/Settings/";
-// 難易度ボタンの並び順(左から)
-constexpr GameSettings::Difficulty kDifficultyOrder[3] = {GameSettings::Difficulty::kEasy, GameSettings::Difficulty::kNormal, GameSettings::Difficulty::kHard};
 } // namespace
 
 bool SettingsPanel::LoadIfExists(const char* fileName, uint32_t& outTex) {
@@ -131,30 +129,6 @@ void SettingsPanel::Initialize(uint32_t whiteTexture, bool showDifficulty) {
 		MakeElement(c.boxOn, "iconButtonCheckmark.png", {gx + kIconSize + kIconGap, boxY, kBoxSize, kBoxSize}, {0.25f, 0.55f, 0.95f, 1.0f});
 		LoadTip(checks[i].tip, checks[i].tipFile);
 	}
-
-	// ---- 難易度(タイトルのみ): アイコン + Normal / Hard のボタン2つ ----
-	// ---- 難易度(タイトルのみ): アイコン + Easy / Normal / Hard のボタン3つ ----
-	if (showDifficulty_) {
-		const float rowW = kIconSize + kIconGap + kDiffButtonW * 3.0f + kDiffButtonGap * 2.0f;
-		const float startX = centerX - rowW * 0.5f;
-		const float centerY = kDiffRowY + kDiffButtonH * 0.5f;
-		MakeElement(difficultyIcon_, "iconDifficulty.png", {startX, centerY - kIconSize * 0.5f, kIconSize, kIconSize}, {0.9f, 0.9f, 0.5f, 1.0f});
-
-		const float bx = startX + kIconSize + kIconGap;
-		const char* files[3] = {"iconButtonEasy.png", "iconButtonNormal.png", "iconButtonHard.png"};
-		const Vector4 colors[3] = {
-		    {1.0f, 1.0f,  1.0f,  1.0f}, // Easy: 緑
-		    {1.0f, 1.0f,  1.0f,  1.0f}, // Normal: 黄
-		    {1.0f, 1.0f, 1.0f, 1.0f}, // Hard: 赤
-		};
-		for (int i = 0; i < 3; ++i)
-			MakeElement(difficultyButtons_[i], files[i], {bx + static_cast<float>(i) * (kDiffButtonW + kDiffButtonGap), kDiffRowY, kDiffButtonW, kDiffButtonH}, colors[i]);
-
-		LoadTip(kTipDifficulty, "tipDifficulty.png");
-		LoadTip(kTipEasy, "tipEasy.png");
-		LoadTip(kTipNormal, "tipNormal.png");
-		LoadTip(kTipHard, "tipHard.png");
-	}
 }
 
 void SettingsPanel::CancelDrag() {
@@ -221,29 +195,6 @@ void SettingsPanel::Update(float alpha, bool interactive) {
 		ApplyElement(c.boxOn, hover, alpha, 1.0f);
 	}
 
-	// ---- 難易度(タイトルのみ) ----
-	if (showDifficulty_) {
-		const bool iconHover = canUse && Inside(difficultyIcon_.rect, mx, my);
-		if (iconHover)
-			hoveredTip_ = kTipDifficulty;
-		ApplyElement(difficultyIcon_, iconHover, alpha, 1.0f);
-
-		for (int i = 0; i < 3; ++i) {
-			Element& b = difficultyButtons_[i];
-			const GameSettings::Difficulty d = kDifficultyOrder[i];
-			const bool hover = canUse && Inside(b.rect, mx, my);
-			if (hover)
-				hoveredTip_ = kTipEasy + i;
-			if (clicked && hover && d != GameSettings::GetDifficulty()) {
-				GameSettings::SetDifficulty(d);
-				GameSettings::SaveToFile();
-			}
-			// 選ばれている方だけ明るく表示する
-			const float brightness = (d == GameSettings::GetDifficulty()) ? 1.0f : kUnselectedBrightness;
-			ApplyElement(b, hover, alpha, brightness);
-		}
-	}
-
 	// ---- ホバー中の説明画像: カーソルの真下(画面下に収まらなければ上) ----
 	tipVisible_ = (hoveredTip_ != kTipNone && tipSprites_[hoveredTip_] != nullptr);
 	if (tipVisible_) {
@@ -271,11 +222,6 @@ void SettingsPanel::Draw() {
 		c.boxOff.sprite->Draw();
 		if (c.checked)
 			c.boxOn.sprite->Draw();
-	}
-	if (showDifficulty_) {
-		difficultyIcon_.sprite->Draw();
-		for (Element& b : difficultyButtons_)
-			b.sprite->Draw();
 	}
 	if (tipVisible_)
 		tipSprites_[hoveredTip_]->Draw(); // 最後に描いて一番手前に出す

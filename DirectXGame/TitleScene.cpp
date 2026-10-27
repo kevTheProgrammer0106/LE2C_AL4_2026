@@ -12,6 +12,9 @@ void TitleScene::Initialize(bool withScreenFadeIn, bool openCredits) {
 	fade_ = new Fade();
 	fade_->Initialize();
 	camera_.Initialize();
+	camera_.UpdateMatrix();
+	background_ = std::make_unique<BackgroundModel>();
+	background_->Initialize(&camera_, assets_.modelBackgroundHill.get(), assets_.modelBackgroundTown.get(), assets_.modelBackgroundTrees.get(), assets_.hillTex, assets_.townTex, assets_.treesTex);
 
 	whiteTex_ = TextureManager::Load("./Resources/white1x1.png");
 	buttonTex_[0] = TextureManager::Load("./Resources/UserInterface/buttonPlay.png");
@@ -83,8 +86,12 @@ void TitleScene::InitializePanels() {
 	creditsSprite_->SetSize({kCreditsWidth, kCreditsHeight});
 }
 
+// BeginExit を置き換え
 void TitleScene::BeginExit(NextDestination destination, bool screenFade) {
-	musicManager_.StopMenuMusic();
+	// LevelSelectへ行く時はメニューBGMを止めない(LevelSelect側で鳴らし続ける)。ゲーム開始時だけフェードアウト
+	if (destination == NextDestination::kGamePlay) {
+		musicManager_.StopMenuMusic();
+	}
 	nextDestination_ = destination;
 	if (screenFade) {
 		phase_ = Phase::kFadeOut;
@@ -111,6 +118,7 @@ void TitleScene::Update() {
 	menuInput_.UpdateCursor();
 	panelMenu_.UpdateCursor();
 	musicManager_.Update();
+	background_->Update();
 
 	if (openCreditsOnStart_ && phase_ == Phase::kMain) {
 		openCreditsOnStart_ = false;
@@ -205,6 +213,7 @@ void TitleScene::DrawPanel() {
 }
 
 void TitleScene::Draw() {
+	background_->Draw();
 	switch (phase_) {
 	case Phase::kMain:
 	case Phase::kButtonFadeIn:

@@ -734,6 +734,8 @@ void Player::UpdateBodyParts() {
 
 void Player::TakeDamage(int damage, const Vector3& hitDirection, float impactPower, BaseEnemy* attacker) {
 	attacker;
+	if (invulnTimer_ > 0.0f)
+		return; 
 	if (isDead_ || behavior_.IsDeathBehavior())
 		return;
 

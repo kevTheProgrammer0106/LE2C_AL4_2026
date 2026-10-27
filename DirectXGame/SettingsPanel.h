@@ -31,7 +31,7 @@ private:
 		KamataEngine::Vector4 placeholder{1.0f, 1.0f, 1.0f, 1.0f};
 	};
 
-	enum Tip : int { kTipMaster, kTipMusic, kTipSfx, kTipShake, kTipFlash, kTipDifficulty, kTipEasy, kTipNormal, kTipHard, kTipCount, kTipNone = -1 };
+	enum Tip : int { kTipMaster, kTipMusic, kTipSfx, kTipShake, kTipFlash, kTipDifficulty, kTipCount, kTipNone = -1 };
 
 	struct Slider {
 		float (*get)() = nullptr;
@@ -62,8 +62,6 @@ private:
 
 	std::array<Slider, 3> sliders_;
 	std::array<Checkbox, 2> checkboxes_;
-	Element difficultyIcon_;
-	std::array<Element, 3> difficultyButtons_; // [0]=Easy [1]=Normal [2]=Hard
 
 	std::array<std::unique_ptr<KamataEngine::Sprite>, kTipCount> tipSprites_; // 画像が無い項目は nullptr
 	int hoveredTip_ = kTipNone;

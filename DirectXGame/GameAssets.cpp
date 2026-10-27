@@ -15,6 +15,13 @@ void GameAssets::LoadModelsAndTextures() {
 	modelSkyDome.reset(Model::CreateFromOBJ("skydome", true));
 	skyDomeTex = TextureManager::Load("./Resources/skydome/skydome.png");
 
+	modelBackgroundHill.reset(Model::CreateFromOBJ("backgroundPlain"));
+	modelBackgroundTown.reset(Model::CreateFromOBJ("backgroundTown"));
+	modelBackgroundTrees.reset(Model::CreateFromOBJ("backgroundTrees"));
+	hillTex = TextureManager::Load("./Resources/backgroundPlain/grassTexture.png");
+	townTex = TextureManager::Load("./Resources/backgroundTown/grayTex.png");
+	treesTex = TextureManager::Load("./Resources/backgroundTrees/trees.png");
+
 	// --- Player ---
 	modelPlayerHead.reset(Model::CreateFromOBJ("playerhead", true));
 	modelPlayerHat.reset(Model::CreateFromOBJ("playerhat", true));
@@ -112,7 +119,7 @@ void GameAssets::LoadModelsAndTextures() {
 	// --- Effects (Resources/spriteIngame) ---
 	const auto fx = [](const char* file) { return TextureManager::Load(std::string("./Resources/spriteIngame/") + file); };
 
-	modelSlashEffect.reset(Model::CreateFromOBJ("hit_effect", true));
+	modelSlashEffect.reset(Model::CreateFromOBJ("attackQuad", true));
 	attackEffectTextures.Set(AttackEffectType::kSlash, fx("attackSlash.png"));
 	attackEffectTextures.Set(AttackEffectType::kSlashOpposite, fx("attackSlashOpposite.png"));
 	attackEffectTextures.Set(AttackEffectType::kSlashDownward, fx("attackSlashDownward.png"));
@@ -126,69 +133,125 @@ void GameAssets::LoadModelsAndTextures() {
 	effectSmokeTex = fx("effectSmoke.png");
 	effectSparkTex = fx("effectSpark.png");
 
-	hitEffectModel.reset(Model::CreateFromOBJ("particle"));
-	guardEffectModel.reset(Model::CreateFromOBJ("ring"));
-	deathParticleTex = TextureManager::Load("./Resources/deathParticle/white1x1.png");
-	deathParticleModel.reset(Model::CreateFromOBJ("deathParticle", true));
+	hitEffectModel.reset(Model::CreateFromOBJ("quad"));
+	guardEffectModel.reset(Model::CreateFromOBJ("quad"));
+	deathParticleModel.reset(Model::CreateFromOBJ("quad", true));
 
-	// --- Blocks ---
-	blockModel.reset(Model::CreateFromOBJ("blockNormal"));
-	blockPlatformModel.reset(Model::CreateFromOBJ("blockPlatform"));
+		// --- Individual block models: B ---
+	// OBJファイル名とテクスチャファイル名を同じ名前にする。
+	modelBlockGrass.reset(Model::CreateFromOBJ("blockGrass"));
+	blockGrassTex = TextureManager::Load("./Resources/blockGrass/blockGrass.png");
 
-	modelBlockTypeOne.reset(Model::CreateFromOBJ("blockTypeOne"));
-	modelBlockTypeTwo.reset(Model::CreateFromOBJ("blockTypeTwo"));
-	modelBlockTypeThree.reset(Model::CreateFromOBJ("blockTypeThree"));
-	modelBlockTypeFour.reset(Model::CreateFromOBJ("blockTypeFour"));
+	modelBlockDirt.reset(Model::CreateFromOBJ("blockDirt"));
+	blockDirtTex = TextureManager::Load("./Resources/blockDirt/blockDirt.png");
+
+	modelBlockStone.reset(Model::CreateFromOBJ("blockStone"));
+	blockStoneTex = TextureManager::Load("./Resources/blockStone/blockStone.png");
+
+	modelBlockCobblestone.reset(Model::CreateFromOBJ("blockCobblestone"));
+	blockCobblestoneTex = TextureManager::Load("./Resources/blockCobblestone/blockCobblestone.png");
+
+	modelBlockLeaves.reset(Model::CreateFromOBJ("blockLeaves"));
+	blockLeavesTex = TextureManager::Load("./Resources/blockLeaves/blockLeaves.png");
+
+	modelBlockCrate.reset(Model::CreateFromOBJ("blockCrate"));
+	blockCrateTex = TextureManager::Load("./Resources/blockCrate/blockCrate.png");
+
+	modelBlockIron.reset(Model::CreateFromOBJ("blockIron"));
+	blockIronTex = TextureManager::Load("./Resources/blockIron/blockIron.png");
+
 	modelBlockWoodPlanks.reset(Model::CreateFromOBJ("blockWoodPlanks"));
-	modelBlockSupport.reset(Model::CreateFromOBJ("blockWoodSupport"));
-
-	blockGrassTex = TextureManager::Load("./Resources/blockTypeOne/blockGrass.png");
-	blockDirtTex = TextureManager::Load("./Resources/blockTypeOne/blockDirt.png");
-	blockStoneTex = TextureManager::Load("./Resources/blockTypeOne/blockStone.png");
-	blockCobblestoneTex = TextureManager::Load("./Resources/blockTypeOne/blockCobblestone.png");
-	blockLeavesTex = TextureManager::Load("./Resources/blockTypeOne/blockLeaves.png");
-	blockSandTex = TextureManager::Load("./Resources/blockTypeOne/blockSand.png");
-
-	blockCrateTex = TextureManager::Load("./Resources/blockTypeTwo/blockCrate.png");
-	blockIronTex = TextureManager::Load("./Resources/blockTypeTwo/blockIron.png");
-
-	blockShinglesTex = TextureManager::Load("./Resources/blockTypeThree/blockShingles.png");
-	blockThatchTex = TextureManager::Load("./Resources/blockTypeThree/blockThatch.png");
-	blockTilesTex = TextureManager::Load("./Resources/blockTypeThree/blockTiles.png");
-
-	blockWoodTex = TextureManager::Load("./Resources/blockTypeFour/blockWood.png");
 	blockWoodPlanksTex = TextureManager::Load("./Resources/blockWoodPlanks/blockWoodPlanks.png");
-	blockSupportTex = TextureManager::Load("./Resources/blockWoodSupport/blockWoodSupport.png");
 
-	blockPlatformLeavesTex = TextureManager::Load("./Resources/blockPlatform/blockPlatformLeaves.png");
-	blockPlatformDirtTex = TextureManager::Load("./Resources/blockPlatform/blockPlatformDirt.png");
-	blockPlatformWoodTex = TextureManager::Load("./Resources/blockPlatform/blockPlatformWood.png");
-	blockPlatformIronTex = TextureManager::Load("./Resources/blockPlatform/blockPlatformIron.png");
+	modelBlockWoodSupport.reset(Model::CreateFromOBJ("blockWoodSupport"));
+	blockWoodSupportTex = TextureManager::Load("./Resources/blockWoodSupport/blockWoodSupport.png");
 
-	blockMudTex = TextureManager::Load("./Resources/blockSlow/blockMud.png");
-	blockGravelTex = TextureManager::Load("./Resources/blockSlow/blockGravel.png");
-	blockHeavySandTex = TextureManager::Load("./Resources/blockSlow/blockSandHeavy.png");
+	// --- Individual platform models: T ---
+	modelBlockPlatformLeaves.reset(Model::CreateFromOBJ("blockPlatformLeaves"));
+	blockPlatformLeavesTex = TextureManager::Load("./Resources/blockPlatformLeaves/blockPlatformLeaves.png");
 
-	blockSpikesTex = TextureManager::Load("./Resources/blockSpikes/blockSpikes.png");
-	blockGateTex = TextureManager::Load("./Resources/blockGate/blockGate.png");
-	blockGlassTex = TextureManager::Load("./Resources/blockGlass/blockGlass.png");
-	blockBarrelTex = TextureManager::Load("./Resources/blockBarrel/blockBarrel.png");
-	blockHealthTex = TextureManager::Load("./Resources/blockHealth/blockHealth.png");
+	modelBlockPlatformDirt.reset(Model::CreateFromOBJ("blockPlatformDirt"));
+	blockPlatformDirtTex = TextureManager::Load("./Resources/blockPlatformDirt/blockPlatformDirt.png");
 
-	// placeholders until destructible art exists
-	breakableTex[0] = breakableTex[1] = breakableTex[2] = blockCrateTex;
-	fragileTex = blockWoodPlanksTex;
+	modelBlockPlatformWood.reset(Model::CreateFromOBJ("blockPlatformWood"));
+	blockPlatformWoodTex = TextureManager::Load("./Resources/blockPlatformWood/blockPlatformWood.png");
 
+	modelBlockPlatformIron.reset(Model::CreateFromOBJ("blockPlatformIron"));
+	blockPlatformIronTex = TextureManager::Load("./Resources/blockPlatformIron/blockPlatformIron.png");
+
+	// --- Individual slow-block models: M ---
+	modelBlockSlowMud.reset(Model::CreateFromOBJ("blockSlowMud"));
+	blockSlowMudTex = TextureManager::Load("./Resources/blockSlowMud/blockSlowMud.png");
+
+	modelBlockSlowGravel.reset(Model::CreateFromOBJ("blockSlowGravel"));
+	blockSlowGravelTex = TextureManager::Load("./Resources/blockSlowGravel/blockSlowGravel.png");
+
+	// ===== Single-texture chips =====
+	blockSpikesTex = TextureManager::Load("./Resources/blockSpikes/blockSpikes.png"); // 'I' spike
+	blockGateTex = TextureManager::Load("./Resources/blockGate/blockGate.png");       // '1'-'8' gates
+	blockGlassTex = TextureManager::Load("./Resources/blockGlass/blockGlass.png");    // 'Y' glass
+	blockBarrelTex = TextureManager::Load("./Resources/blockBarrel/blockBarrel.png"); // 'Z' explosive
+	blockHealthTex = TextureManager::Load("./Resources/blockHealth/blockHealth.png"); // 'H' health block
+
+	// Special blocks: separate Model instances. Swap the OBJ names when you have dedicated art
+	// (e.g. "blockGlass", "blockBreakable", "blockBarrel", "blockSpikes", "blockFragile").
+	modelGlass.reset(Model::CreateFromOBJ("blockGlass"));
+	modelBreakable.reset(Model::CreateFromOBJ("blockCrate"));
+	modelExplosive.reset(Model::CreateFromOBJ("blockBarrel"));
+	modelSpike.reset(Model::CreateFromOBJ("blockSpikes"));
+	modelFragile.reset(Model::CreateFromOBJ("blockLeaves"));
+
+	// ===== 'V' breakable / '9' fragile (placeholders: crate / wood planks) =====
+	breakableTex[0] = breakableTex[1] = breakableTex[2] = blockCrateTex; // 'V'
+	fragileTex = blockLeavesTex; // '9'
+
+	// ===== 'U' tutorial sign =====
 	modelTutorialBlock.reset(Model::CreateFromOBJ("blockSign", true));
 	tutorialBlockTex = TextureManager::Load("./Resources/blockSign/blockSign.png");
 
-	// --- Goal / Gate / HealthBlock ---
+	// ===== 'X' goal =====
 	modelGoal.reset(Model::CreateFromOBJ("blockGoal", true));
 	goalTex = TextureManager::Load("./Resources/blockGoal/blockGoal.png");
+
+	// ===== '1'-'8' gates (texture = blockGateTex) =====
 	modelGate.reset(Model::CreateFromOBJ("blockGate", true));
+
+	// ===== 'H' health block (texture = blockHealthTex) =====
 	modelHealthBlock.reset(Model::CreateFromOBJ("blockHealth"));
 
-	// --- Lever (handle + support) ---
+	// ===== 'W' switch: lever handle + support base =====
+	modelLever.reset(Model::CreateFromOBJ("blockLever"));
+	modelLeverSupport.reset(Model::CreateFromOBJ("blockLeverSupport"));
+	blockLeverTex = TextureManager::Load("./Resources/blockLever/blockLever.png");
+	blockLeverSupportTex = TextureManager::Load("./Resources/blockLeverSupport/blockLeverSupport.png");
+
+	// Special blocks: separate Model instances. Swap the OBJ names when you have dedicated art
+	// (e.g. "blockGlass", "blockBreakable", "blockBarrel", "blockSpikes", "blockFragile").
+	modelGlass.reset(Model::CreateFromOBJ("blockGlass"));
+	modelBreakable.reset(Model::CreateFromOBJ("blockTypeTwo"));
+	modelExplosive.reset(Model::CreateFromOBJ("blockBarrel"));
+	modelSpike.reset(Model::CreateFromOBJ("blockSpikes"));
+	modelFragile.reset(Model::CreateFromOBJ("blockTypeOne"));
+
+	// ===== 'V' breakable / '9' fragile (placeholders: crate / wood planks) =====
+	breakableTex[0] = breakableTex[1] = breakableTex[2] = blockCrateTex; // 'V'
+	fragileTex = blockLeavesTex;                                         // '9'
+
+	// ===== 'U' tutorial sign =====
+	modelTutorialBlock.reset(Model::CreateFromOBJ("blockSign", true));
+	tutorialBlockTex = TextureManager::Load("./Resources/blockSign/blockSign.png");
+
+	// ===== 'X' goal =====
+	modelGoal.reset(Model::CreateFromOBJ("blockGoal", true));
+	goalTex = TextureManager::Load("./Resources/blockGoal/blockGoal.png");
+
+	// ===== '1'-'8' gates (texture = blockGateTex) =====
+	modelGate.reset(Model::CreateFromOBJ("blockGate", true));
+
+	// ===== 'H' health block (texture = blockHealthTex) =====
+	modelHealthBlock.reset(Model::CreateFromOBJ("blockHealth"));
+
+	// ===== 'W' switch: lever handle + support base =====
 	modelLever.reset(Model::CreateFromOBJ("blockLever"));
 	modelLeverSupport.reset(Model::CreateFromOBJ("blockLeverSupport"));
 	blockLeverTex = TextureManager::Load("./Resources/blockLever/blockLever.png");
@@ -303,35 +366,132 @@ void GameAssets::LoadAudio() {
 	sfxArenaClear = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
 }
 
-// B / T / M chips -> model + texture. Out-of-range subID falls back to the last entry of the group.
-TileVisual GameAssets::ResolveTile(MapChipType type, uint8_t subID, uint8_t linkID) const {
-	auto pick = [subID](std::initializer_list<uint32_t> list) {
-		const size_t i = std::min<size_t>(subID, list.size() - 1);
-		return *(list.begin() + i);
-	};
-
+// CSVのlinkIDから個別のブロックモデルを選択する。
+Model* GameAssets::ResolveTileModel(MapChipType type, uint8_t linkID) const {
 	switch (type) {
-	case MapChipType::kBlock:
+	case MapChipType::kBlock: // 'B'
 		switch (linkID) {
-		default:
 		case 0:
-			return {modelBlockTypeOne.get(), pick({blockGrassTex, blockDirtTex, blockStoneTex, blockCobblestoneTex, blockLeavesTex, blockSandTex})};
+			return modelBlockGrass.get();
 		case 1:
-			return {modelBlockTypeTwo.get(), pick({blockCrateTex, blockIronTex})};
+			return modelBlockDirt.get();
 		case 2:
-			return {modelBlockTypeThree.get(), pick({blockShinglesTex, blockThatchTex, blockTilesTex})};
+			return modelBlockStone.get();
 		case 3:
-			return {modelBlockTypeFour.get(), blockWoodTex};
+			return modelBlockCobblestone.get();
 		case 4:
-			return {modelBlockWoodPlanks.get(), blockWoodPlanksTex};
+			return modelBlockLeaves.get();
 		case 5:
-			return {modelBlockSupport.get(), blockSupportTex};
+			return modelBlockCrate.get();
+		case 6:
+			return modelBlockIron.get();
+		case 7:
+			return modelBlockWoodPlanks.get();
+		case 8:
+			return modelBlockWoodSupport.get();
+		default:
+			return nullptr;
 		}
-	case MapChipType::kPlatform:
-		return {blockPlatformModel.get(), pick({blockPlatformLeavesTex, blockPlatformDirtTex, blockPlatformWoodTex, blockPlatformIronTex})};
-	case MapChipType::kSlowBlock:
-		return {blockModel.get(), pick({blockMudTex, blockGravelTex, blockHeavySandTex})};
+
+	case MapChipType::kPlatform: // 'T'
+		switch (linkID) {
+		case 0:
+			return modelBlockPlatformLeaves.get();
+		case 1:
+			return modelBlockPlatformDirt.get();
+		case 2:
+			return modelBlockPlatformWood.get();
+		case 3:
+			return modelBlockPlatformIron.get();
+		default:
+			return nullptr;
+		}
+
+	case MapChipType::kSlowBlock: // 'M'
+		switch (linkID) {
+		case 0:
+			return modelBlockSlowMud.get();
+		case 1:
+			return modelBlockSlowGravel.get();
+		default:
+			return nullptr;
+		}
+
 	default:
-		return {blockModel.get(), blockGrassTex};
+		return nullptr;
+	}
+}
+
+// CSVのlinkIDから個別のブロックテクスチャを選択する。
+uint32_t GameAssets::ResolveTileTexture(MapChipType type, uint8_t linkID) const {
+	switch (type) {
+	case MapChipType::kBlock: // 'B'
+		switch (linkID) {
+		case 0:
+			return blockGrassTex;
+		case 1:
+			return blockDirtTex;
+		case 2:
+			return blockStoneTex;
+		case 3:
+			return blockCobblestoneTex;
+		case 4:
+			return blockLeavesTex;
+		case 5:
+			return blockCrateTex;
+		case 6:
+			return blockIronTex;
+		case 7:
+			return blockWoodPlanksTex;
+		case 8:
+			return blockWoodSupportTex;
+		default:
+			return 0;
+		}
+
+	case MapChipType::kPlatform: // 'T'
+		switch (linkID) {
+		case 0:
+			return blockPlatformLeavesTex;
+		case 1:
+			return blockPlatformDirtTex;
+		case 2:
+			return blockPlatformWoodTex;
+		case 3:
+			return blockPlatformIronTex;
+		default:
+			return 0;
+		}
+
+	case MapChipType::kSlowBlock: // 'M'
+		switch (linkID) {
+		case 0:
+			return blockSlowMudTex;
+		case 1:
+			return blockSlowGravelTex;
+		default:
+			return 0;
+		}
+
+	default:
+		return 0;
+	}
+}
+
+// special blocks only: Y, V, Z, I, 9. stage is used by 'V' (0..2 damage stage)
+TileVisual GameAssets::ResolveSpecial(MapChipType type, int stage) const {
+	switch (type) {
+	case MapChipType::kGlass:
+		return {modelGlass.get(), blockGlassTex};
+	case MapChipType::kBreakable:
+		return {modelBreakable.get(), breakableTex[std::clamp(stage, 0, 2)]};
+	case MapChipType::kExplosive:
+		return {modelExplosive.get(), blockBarrelTex};
+	case MapChipType::kSpike:
+		return {modelSpike.get(), blockSpikesTex};
+	case MapChipType::kFragile:
+		return {modelFragile.get(), fragileTex};
+	default:
+		return {nullptr, 0};
 	}
 }

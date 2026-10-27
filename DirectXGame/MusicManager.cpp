@@ -50,12 +50,18 @@ void MusicManager::Initialize(uint32_t ingameSoundDataHandle, uint32_t arenaSoun
 
 void MusicManager::InitializeMenuTrack(uint32_t menuSoundDataHandle) {
 	menuSoundDataHandle_ = menuSoundDataHandle;
-	menuVolumeCurrent_ = 0.0f;
-	menuVolumeTarget_ = 1.0f;
 
+	// 既に鳴っている場合は音量を0へ戻さず、今の音量から目標へフェードさせる(途切れ防止)
 	if (menuVoiceHandle_ == 0 && menuSoundDataHandle_ != 0) {
+		menuVolumeCurrent_ = 0.0f;
 		menuVoiceHandle_ = Audio::GetInstance()->PlayWave(menuSoundDataHandle_, true, 0.0f);
 	}
+	menuVolumeTarget_ = 1.0f;
+
+	// ゲーム側のBGMが残っていればメニューへ向けてフェードアウトさせる
+	ingameVolumeTarget_ = 0.0f;
+	arenaVolumeTarget_ = 0.0f;
+	arenaActive_ = false;
 
 	initialized_ = true;
 	ApplyVolumes();

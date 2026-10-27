@@ -8,7 +8,7 @@ namespace {
 constexpr const char* kGroupName = "SlidingGate";
 }
 
-void SlidingGate::Initialize(Model* model, uint32_t textureHandle, Camera* camera, const Vector3& closedPosition, MapChipType gateType, uint8_t textureVariant, uint8_t buttonID) {
+void SlidingGate::Initialize(Model* model, uint32_t textureHandle, Camera* camera, const Vector3& closedPosition, MapChipType gateType, uint8_t buttonID) {
 #ifdef _DEBUG
 	assert(model);
 	assert(camera);
@@ -19,7 +19,6 @@ void SlidingGate::Initialize(Model* model, uint32_t textureHandle, Camera* camer
 
 	closedPosition_ = closedPosition;
 	direction_ = DirectionFromType(gateType);
-	textureVariant_ = textureVariant;
 	kind_ = KindFromType(gateType);
 	buttonID_ = buttonID;
 

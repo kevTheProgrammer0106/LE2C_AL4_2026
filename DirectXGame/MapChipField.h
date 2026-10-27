@@ -73,7 +73,14 @@ public:
 	static inline const uint32_t kChunkBlockSize = 100;
 	static inline const uint32_t kMaxFieldChunks = 5;
 	static inline const uint32_t kMaxVerticalChunks = 3;
-	static inline const uint32_t kGroundChunkRow = 1;
+
+	// Base (ground) chunk row = the middle row, so rows exist above (_u1, _u2...) and below (_d1, _d2...).
+	// Change kMaxVerticalChunks only; this follows it.
+	static inline const uint32_t kMainChunkRow = kMaxVerticalChunks / 2;
+	static_assert(kMainChunkRow < kMaxVerticalChunks, "base chunk row must exist");
+
+	// The base chunk's bottom row sits at world y = 0, its first column at world x = 0
+	static inline const uint32_t kBaseWorldBlockHeight = kChunkBlockSize * (kMainChunkRow + 1);
 
 	static inline float kSlowSpeedFactor = 0.45f;
 
@@ -117,6 +124,14 @@ public:
 
 	float GetWorldWidth() const { return static_cast<float>(GetNumBlockHorizontal()) * kBlockWidth; }
 	float GetWorldHeight() const { return static_cast<float>(GetNumBlockVertical()) * kBlockHeight; }
+	// World-space EDGES (not block centres). Base chunk: first column starts at x = -0.5,
+	// its bottom row spans y = -0.5 .. 0.5.
+	float GetWorldMinX() const { return -kBlockWidth * 0.5f; }
+	float GetWorldMaxX() const { return GetWorldMinX() + GetWorldWidth(); }
+	float GetChunkRowTopY(uint32_t chunkRow) const { return kBlockHeight * (static_cast<float>(kBaseWorldBlockHeight) - static_cast<float>(chunkRow * kChunkBlockSize) - 0.5f); }
+	float GetChunkRowBottomY(uint32_t chunkRow) const { return GetChunkRowTopY(chunkRow) - kBlockHeight * static_cast<float>(kChunkBlockSize); }
+	float GetWorldMaxY() const { return GetChunkRowTopY(0); }
+	float GetWorldMinY() const { return GetWorldMaxY() - GetWorldHeight(); }
 
 static bool IsGroundType(MapChipType type) {
 		return type == MapChipType::kBlock || type == MapChipType::kPlatform || type == MapChipType::kSlowBlock || type == MapChipType::kGlass || type == MapChipType::kBreakable ||
@@ -137,4 +152,6 @@ private:
 	MapChipData mapChipData_;
 
 	void LoadCsvIntoRegion(const std::string& filePath, uint32_t xOffset, uint32_t width, uint32_t yOffset = 0, uint32_t height = kChunkBlockSize);
+	const MapChipDataUnit* GetUnit(uint32_t xIndex, uint32_t yIndex) const; // nullptr when out of range
+	bool IsInsideCell(const KamataEngine::Vector3& position, const IndexSet& index);
 };
