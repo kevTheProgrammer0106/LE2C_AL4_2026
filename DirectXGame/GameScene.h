@@ -671,4 +671,10 @@ private:
 
 	// private に追加(kSpawnCameraReturn の下)
 	static inline float kSpawnInvulnerability = 5.0f; // スポーン直後の無敵時間(秒)
+
+	// 操作説明スプライト
+	void InitializeControlSprites();
+	void DrawControlSprites();
+
+	std::array<std::unique_ptr<KamataEngine::Sprite>, 8> controlSprites_{};
 };

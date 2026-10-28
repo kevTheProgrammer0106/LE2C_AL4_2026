@@ -12,21 +12,41 @@ void LevelSelectScene::Initialize(StageManager* stageManager, bool withScreenFad
 	fade_ = new Fade();
 	fade_->Initialize();
 
+	// --- メニュー用アセット ---
+	assets_.Load();
+
+	// --- メニュー用カメラ ---
+	camera_.farZ = 10000.0f;
 	camera_.Initialize();
 
+	// プレイヤーを追従しないメニュー用カメラ
+	cameraController_ = std::make_unique<CameraController>();
+	cameraController_->Initialize(&camera_);
+
+	camera_.UpdateMatrix();
+
+	// --- Skydome ---
+	skyDome_ = std::make_unique<Skydome>();
+	skyDome_->Initialize({10.0f, 10.0f, 10.0f}, assets_.modelSkyDome.get(), assets_.skyDomeTex, &camera_, {0.0f, 0.0f, 0.0f});
+	skyDome_->RegisterGlobalVariables("Skydome");
+
+	// --- Background ---
+	background_ = std::make_unique<BackgroundModel>();
+	background_->Initialize(&camera_, assets_.modelBackgroundHill.get(), assets_.modelBackgroundTown.get(), assets_.modelBackgroundTrees.get(), assets_.hillTex, assets_.townTex, assets_.treesTex);
+
 	// レベルごとに別のボタンテクスチャを使用する。
-	buttonTex_[0] = TextureManager::Load("./Resources/UserInterface/buttonLevel1.png");
-	buttonTex_[1] = TextureManager::Load("./Resources/UserInterface/buttonLevel2.png");
-	buttonTex_[2] = TextureManager::Load("./Resources/UserInterface/buttonLevel3.png");
+	buttonTex_[0] = TextureManager::Load("./Resources/UserInterface/buttonLevelOne.png");
+	buttonTex_[1] = TextureManager::Load("./Resources/UserInterface/buttonLevelTwo.png");
+	buttonTex_[2] = TextureManager::Load("./Resources/UserInterface/buttonLevelThree.png");
 
 	buttonBackTex_ = TextureManager::Load("./Resources/UserInterface/buttonBack.png");
 
 	menuInput_.Initialize(buttonTex_, 3, &camera_);
 	menuInput_.SetButtonGroupAlpha(0.0f);
 
-	constexpr float kButtonWidth = 220.0f;
-	constexpr float kButtonHeight = 160.0f;
-	constexpr float kButtonSpacing = 90.0f;
+	constexpr float kButtonWidth = 204.8f;
+	constexpr float kButtonHeight = 51.2f;
+	constexpr float kButtonSpacing = 86.0f;
 
 	float centerX = static_cast<float>(WinApp::kWindowWidth) / 2.0f - kButtonWidth / 2.0f;
 
@@ -79,6 +99,19 @@ void LevelSelectScene::Initialize(StageManager* stageManager, bool withScreenFad
 }
 
 void LevelSelectScene::Update() {
+	// メニュー背景とスカイドームを更新する
+	if (skyDome_) {
+		skyDome_->ApplyGlobalVariables();
+		skyDome_->Update();
+	}
+
+	if (background_) {
+		background_->Update();
+	}
+
+	// 固定カメラの行列を更新する
+	camera_.UpdateMatrix();
+
 	menuInput_.UpdateCursor();
 
 	switch (phase_) {
@@ -99,7 +132,7 @@ void LevelSelectScene::Update() {
 		}
 		break;
 
-case Phase::kMain:
+	case Phase::kMain:
 		menuInput_.Update();
 		if (InputManager::GetInstance()->IsPauseTriggered()) {
 			returningToMenu_ = true;
@@ -125,14 +158,25 @@ case Phase::kMain:
 }
 
 void LevelSelectScene::Draw() {
+	// 空、背景、UIの順番で描画する
+	if (skyDome_) {
+		skyDome_->Draw();
+	}
+
+	if (background_) {
+		background_->Draw();
+	}
+
 	switch (phase_) {
 	case Phase::kMain:
 	case Phase::kButtonFadeIn:
 	case Phase::kButtonFadeOut:
 		menuInput_.Draw();
 		return;
+
 	default:
 		break;
 	}
+
 	fade_->Draw();
 }

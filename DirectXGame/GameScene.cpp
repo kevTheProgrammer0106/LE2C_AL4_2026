@@ -56,9 +56,10 @@ bool ResolveWeaponVisual(const GameAssets& a, DropWeaponKind kind, Model*& outMo
 		return false;
 	}
 }
-constexpr float kMenuButtonW = 220.0f;
-constexpr float kMenuButtonH = 160.0f;
-constexpr float kMenuSpacing = 100.0f;
+
+constexpr float kMenuButtonW = 204.8f;
+constexpr float kMenuButtonH = 51.2f;
+constexpr float kMenuSpacing = 86.0f;
 
 // Vertically centered column of `count` buttons.
 struct MenuLayout {
@@ -74,6 +75,19 @@ UIMenu::ButtonID AddMenuButton(UIMenu& menu, uint32_t tex, const MenuLayout& lay
 	menu.SetButtonOnClick(id, std::move(onClick));
 	return id;
 }
+
+constexpr size_t kControlSpriteCount = 8;
+
+constexpr float kControlSpriteWidth = 240.0f;
+constexpr float kControlSpriteHeight = 60.0f;
+constexpr float kControlSpriteGap = 8.0f;
+constexpr float kControlSpriteRightMargin = 16.0f;
+
+// 実際の画像ファイル名に合わせてパスを変更する
+constexpr std::array<const char*, kControlSpriteCount> kControlSpritePaths = {
+    "./Resources/UserInterface/controlADS.png",  "./Resources/UserInterface/controlSpacebar.png",   "./Resources/UserInterface/controlLeftClick.png",   "./Resources/UserInterface/controlLeftClickHold.png",
+    "./Resources/UserInterface/controlRightClick.png", "./Resources/UserInterface/controlQ12.png", "./Resources/UserInterface/controlF.png", "./Resources/UserInterface/controlEsc.png",
+};
 }
 
 void GameScene::RegisterGlobalVariables() {
@@ -465,6 +479,7 @@ void GameScene::Initialize(StageManager* stageDataManager) {
 	InitializeRetryMenu();
 	InitializeInGamePauseButton();
 	InitializeVictoryMenu();
+	InitializeControlSprites();
 	banner_.Initialize(assets_.healthBarBackgroundTex, assets_.bannerTex);
 	bannerPrevPhase_ = phase_;
 	resultTimer_ = 0.0f;
@@ -533,7 +548,7 @@ void GameScene::InitializePauseMenu() {
 	pauseMenuInput_.SetCursorVisible(false); // カーソルは GameScene::cursor_ が描く
 
 	// 設定ボタンはタイトルと同じ画像を流用(専用画像ができたらGameAssetsへ移す)
-	settingsButtonTex_ = TextureManager::Load("./Resources/UserInterface/buttonLevel2.png");
+	settingsButtonTex_ = TextureManager::Load("./Resources/UserInterface/buttonSettings.png");
 
 	const MenuLayout L = MakeMenuLayout(4);
 	pauseResumeButton_ = AddMenuButton(pauseMenuInput_, assets_.pauseButtonTex[0], L, 0, "Resume", [this]() { phase_ = phaseBeforePause_; });
@@ -567,8 +582,8 @@ void GameScene::InitializeSettingsPanel() {
 	settingsMenuInput_.SetCursorVisible(false);
 	settingsMenuInput_.SetButtonGroupAlpha(0.0f);
 
-	constexpr float kBackWidth = 200.0f;
-	constexpr float kBackHeight = 120.0f;
+	 constexpr float kBackWidth = 204.8f;
+	constexpr float kBackHeight = 51.2f;
 	const float centerX = static_cast<float>(WinApp::kWindowWidth) / 2.0f;
 	settingsBackButton_ =
 	    settingsMenuInput_.AddButton(assets_.pauseButtonTex[2], centerX - kBackWidth / 2.0f, static_cast<float>(WinApp::kWindowHeight) - kBackHeight - 30.0f, kBackWidth, kBackHeight, "Back");
@@ -618,7 +633,7 @@ void GameScene::InitializeInGamePauseButton() {
 	gameplayHUDInput_.Initialize(assets_.inGamePauseButtonTex, &camera_);
 	gameplayHUDInput_.SetCursorVisible(false); // カーソルは GameScene::cursor_ が描く
 
-	constexpr float kButtonSize = 44.0f;
+	constexpr float kButtonSize = 64.0f;
 	constexpr float kMargin = 16.0f;
 	float x = kMargin;
 	float y = kMargin;
@@ -684,8 +699,12 @@ void GameScene::DrawPauseMenu() {
 		DrawSettingsPanel();
 		return;
 	}
+
 	DrawMenuOverlay(pauseMenuInput_.GetButtonFadeAlpha());
 	pauseMenuInput_.Draw();
+
+	// 操作説明をメニューの右側に描画する
+	DrawControlSprites();
 }
 void GameScene::DrawRetryMenu() {
 	DrawMenuOverlay(deathOverlayFade_);
@@ -1380,7 +1399,39 @@ void GameScene::GenerateChunkTileMapRow(uint32_t chunkIndex, uint32_t chunkRow) 
 		}
 	}
 }
+void GameScene::InitializeControlSprites() {
+	const float screenWidth = static_cast<float>(WinApp::kWindowWidth);
+	const float screenHeight = static_cast<float>(WinApp::kWindowHeight);
 
+	// 8枚を右端にまとめ、画面の中央に縦方向で配置する
+	const float totalHeight = kControlSpriteCount * kControlSpriteHeight + (kControlSpriteCount - 1) * kControlSpriteGap;
+
+	const float startX = screenWidth - kControlSpriteRightMargin - kControlSpriteWidth;
+
+	const float startY = (screenHeight - totalHeight) * 0.5f;
+
+	for (size_t i = 0; i < kControlSpriteCount; ++i) {
+		const float y = startY + static_cast<float>(i) * (kControlSpriteHeight + kControlSpriteGap);
+
+		const uint32_t texture = TextureManager::Load(kControlSpritePaths[i]);
+
+		controlSprites_[i].reset(Sprite::Create(texture, {startX, y}));
+
+		if (controlSprites_[i]) {
+			// 元画像の縦横比 1024:256 を維持する
+			controlSprites_[i]->SetSize({kControlSpriteWidth, kControlSpriteHeight});
+		}
+	}
+}
+
+void GameScene::DrawControlSprites() {
+	// 初期化されていないスプライトは描画しない
+	for (const auto& sprite : controlSprites_) {
+		if (sprite) {
+			sprite->Draw();
+		}
+	}
+}
 void GameScene::GenerateBackgroundChunkTileMap(uint32_t chunkX, uint32_t chunkY) {
 	if (!backgroundMapChipField_)
 		return;
@@ -1832,7 +1883,7 @@ void GameScene::CheckAllCollisions() {
 		}
 		if (!IsCollisionAABB(attackBox, aabb1))
 			return false;
-		player_->TakeDamage(damage, dir, power, attacker);
+		player_->TakeDamage(damage, dir, power, attacker, false);
 		return true;
 	};
 
@@ -2091,7 +2142,7 @@ BaseEnemy* GameScene::SpawnEnemyAt(const Vector3& position, uint8_t subID) {
 	case 4: // Shotgunner (placeholder art: Rifleman icon)
 		SpawnEnemyOfType<EnemyShotgunner>(
 		    position, parts(a.modelShotgunnerBody.get(), a.shotgunnerBodyTex, a.modelShotgunnerHead.get(), a.shotgunnerHeadTex, a.modelShotgunnerHat.get(), a.shotgunnerHatTex), a.enemyIconRiflemanTex)
-		    ->SetShotgunModel(a.modelMusketLong.get(), a.musketLongTex);
+		    ->SetShotgunModel(a.modelShotgun.get(), a.shotgunTex);
 		break;
 	case 5: // Grenadier
 		SpawnEnemyOfType<EnemyGrenadier>(
@@ -2498,7 +2549,7 @@ void GameScene::UpdateInteractionPrompt() {
 		}
 	}
 	for (auto& sw : switches_) {
-		if (!sw || sw->IsPressed()) // [FIX] already-pressed switches stop prompting
+		if (!sw || sw->IsPressed())
 			continue;
 		AABB swAABB = sw->GetAABB();
 		Vector3 swPos = {(swAABB.min.x + swAABB.max.x) * 0.5f, (swAABB.min.y + swAABB.max.y) * 0.5f, 0.0f};
@@ -2669,32 +2720,35 @@ const std::vector<GameScene::ArenaFieldConfig>& GameScene::GetArenaFieldConfigs(
 	    ArenaFieldConfig{/*stageIndex*/ 1,
 	                     /*arenaID*/ 0,
 	                     {
-	                         {0, 2, 3.0f, EnemySpawner::SpawnMode::kLimited, 1},
-	                         {1, 2, 3.0f, EnemySpawner::SpawnMode::kLimited, 1},
-	                         {2, 2, 3.0f, EnemySpawner::SpawnMode::kLimited, 2},
-	                         {3, 1, 5.0f, EnemySpawner::SpawnMode::kLimited, 1},
+	                         {0, 0, 0.5f, EnemySpawner::SpawnMode::kLimited, 2},
+	                         {1, 2, 1.0f, EnemySpawner::SpawnMode::kLimited, 2},
+	                         {2, 5, 1.0f, EnemySpawner::SpawnMode::kLimited, 1},
+	                         {3, 4, 1.5f, EnemySpawner::SpawnMode::kLimited, 1},
+	                         {4, 1, 1.5f, EnemySpawner::SpawnMode::kLimited, 1},
 	                     }},
 	    ArenaFieldConfig{/*stageIndex*/ 2,
 	                     /*arenaID*/ 2,
 	                     {
-	                         {0, 0, 2.0f, EnemySpawner::SpawnMode::kLimited, 1},
-	                         {1, 2, 1.0f, EnemySpawner::SpawnMode::kLimited, 3},
-	                         {2, 0, 4.0f, EnemySpawner::SpawnMode::kLimited, 3},
-	                         {3, 2, 1.0f, EnemySpawner::SpawnMode::kLimited, 2},
-	                         {4, 2, 0.5f, EnemySpawner::SpawnMode::kLimited, 1},
-	                         {5, 0, 0.2f, EnemySpawner::SpawnMode::kLimited, 2},
+	                         {0, 4, 1.5f, EnemySpawner::SpawnMode::kLimited, 3},
+	                         {1, 2, 1.0f, EnemySpawner::SpawnMode::kLimited, 4},
+	                         {2, 1, 2.0f, EnemySpawner::SpawnMode::kLimited, 1},
+	                         {3, 7, 3.0f, EnemySpawner::SpawnMode::kLimited, 1},
+	                         {4, 1, 1.5f, EnemySpawner::SpawnMode::kLimited, 2},
+	                         {5, 0, 3.0f, EnemySpawner::SpawnMode::kLimited, 5},
 	                     }},
 	    ArenaFieldConfig{/*stageIndex*/ 2,
 	                     /*arenaID*/ 7,
 	                     {
-	                         {0, 2, 0.5f, EnemySpawner::SpawnMode::kLimited, 1},
-	                         {1, 0, 3.0f, EnemySpawner::SpawnMode::kLimited, 3},
-	                         {2, 1, 1.0f, EnemySpawner::SpawnMode::kLimited, 1},
-	                         {3, 2, 5.0f, EnemySpawner::SpawnMode::kLimited, 4},
-	                         {4, 0, 5.0f, EnemySpawner::SpawnMode::kLimited, 4},
-	                         {5, 2, 0.5f, EnemySpawner::SpawnMode::kLimited, 2},
-	                         {6, 0, 0.5f, EnemySpawner::SpawnMode::kLimited, 2},
-	                         {7, 1, 5.0f, EnemySpawner::SpawnMode::kLimited, 1},
+	                         {0, 4, 2.5f, EnemySpawner::SpawnMode::kLimited, 2},
+	                         {1, 0, 3.0f, EnemySpawner::SpawnMode::kLimited, 2},
+	                         {2, 6, 3.0f, EnemySpawner::SpawnMode::kLimited, 1},
+	                         {3, 3, 4.0f, EnemySpawner::SpawnMode::kLimited, 2},
+	                         {4, 2, 2.5f, EnemySpawner::SpawnMode::kLimited, 8},
+	                         {5, 0, 2.5f, EnemySpawner::SpawnMode::kLimited, 2},
+	                         {6, 7, 2.5f, EnemySpawner::SpawnMode::kLimited, 2},
+	                         {7, 5, 2.5f, EnemySpawner::SpawnMode::kLimited, 2},
+	                         {8, 0, 3.5f, EnemySpawner::SpawnMode::kLimited, 8},
+	                         {9, 1, 0.1f, EnemySpawner::SpawnMode::kLimited, 1},
 	                     }},
 	};
 	return configs;
@@ -3169,10 +3223,10 @@ void GameScene::ExplodeAt(const Vector3& center, const ExplosionParams& p) {
 		if (dist <= p.normalRadius && exposedTo(player_->GetAABB())) {
 			if (dist <= p.fatalRadius) {
 				player_->StartBlastSmoke(kBlastSmokeDuration);
-				player_->TakeDamage(player_->GetHP(), outward(pp), p.impact); // HPを0にして被弾フラッシュ+死亡
+				player_->TakeDamage(player_->GetHP(), outward(pp), p.impact, nullptr, true); // HPを0にして被弾フラッシュ+死亡
 			} else {
 				player_->StartBlastSmoke(kBlastSmokeDuration);
-				player_->TakeDamage(p.normalDamage, outward(pp), p.impact);
+				player_->TakeDamage(p.normalDamage, outward(pp), p.impact, nullptr, true);
 			}
 		}
 	}
@@ -3265,7 +3319,7 @@ void GameScene::UpdateSpikes() {
 
 	if (player_ && !player_->IsDefeated()) {
 		if (CheckSpikeHit(playerSpike_, player_->GetAABB(), player_->IsOnGround(), Player::GetLimitFallSpeed())) {
-			player_->TakeDamage(kSpikeDamage, {0.0f, 1.0f, 0.0f}, kSpikeLaunchPower);
+			player_->TakeDamage(kSpikeDamage, {0.0f, 1.0f, 0.0f}, kSpikeLaunchPower, nullptr, true);
 			player_->SetKnockback({0.0f, 1.0f, 0.0f}, kSpikeLaunchPower); // always launch, even if the damage was ignored
 			const AABB pb = player_->GetAABB();
 			CreateBurstEffect(BurstType::kSpike, {(pb.min.x + pb.max.x) * 0.5f, pb.min.y, kFxDepthOffset}, {0.0f, 1.0f});

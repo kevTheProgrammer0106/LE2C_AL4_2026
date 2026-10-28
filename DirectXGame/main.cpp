@@ -160,7 +160,7 @@ void DrawScene() {
 int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	using namespace KamataEngine;
 	std::srand(static_cast<unsigned int>(std::time(nullptr)));
-	KamataEngine::Initialize(L"歩兵ハリー");
+	KamataEngine::Initialize(L"LE2C_29_メンドーザ_ケビン_歩兵ハリー:セカンドアタック");
 
 	DirectXCommon* dxCommonPtr = DirectXCommon::GetInstance();
 	ImGuiManager* imguiManager = ImGuiManager::GetInstance();

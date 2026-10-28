@@ -10,15 +10,15 @@ void UIMenu::Initialize(uint32_t tex, KamataEngine::Camera* camera) {
 	buttonTextures_.clear();
 	buttonTextures_.push_back(tex);
 
-	barTexture_ = TextureManager::Load("./Resources/white1x1.png");
+	barTexture_ = TextureManager::Load("./Resources/UserInterface/buttonBorder.png");
 
 	worldTransform_.Initialize();
 
 	Vector2 targetPos = {worldTransform_.translation_.x, worldTransform_.translation_.y};
 
 	cursorSprite_.reset(Sprite::Create(tex, targetPos));
-	cursorSprite_->SetAnchorPoint({0.5f, 0.5f});
-	cursorSprite_->SetSize({32.0f, 32.0f});
+	cursorSprite_->SetAnchorPoint({0.0f, 0.0f});
+	cursorSprite_->SetSize({64.0f, 65.0f});
 
 	if (clickSoundDataHandle_ == 0) {
 		clickSoundDataHandle_ = Audio::GetInstance()->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
@@ -33,7 +33,7 @@ void UIMenu::Initialize(const uint32_t* textures, size_t textureCount, KamataEng
 		buttonTextures_.assign(textures, textures + textureCount);
 	}
 
-	barTexture_ = TextureManager::Load("./Resources/white1x1.png");
+	barTexture_ = TextureManager::Load("./Resources/UserInterface/buttonBorder.png");
 
 	worldTransform_.Initialize();
 

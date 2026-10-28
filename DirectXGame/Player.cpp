@@ -533,6 +533,12 @@ void Player::Update() {
 		if (Input::GetInstance()->TriggerKey(DIK_Q) && !behavior_.IsAttacking()) {
 			SetWeaponMode(weaponMode_ == WeaponMode::kMelee ? WeaponMode::kFirearm : WeaponMode::kMelee);
 			PlaySfxHandle(sWeaponSwitchSoundHandle_);
+		} else if (Input::GetInstance()->TriggerKey(DIK_1) && !behavior_.IsAttacking()) {
+			SetWeaponMode(weaponMode_ = WeaponMode::kFirearm);
+			PlaySfxHandle(sWeaponSwitchSoundHandle_);
+		} else if (Input::GetInstance()->TriggerKey(DIK_2) && !behavior_.IsAttacking()) {
+			SetWeaponMode(weaponMode_ = WeaponMode::kMelee);
+			PlaySfxHandle(sWeaponSwitchSoundHandle_);
 		}
 		bool isBlockingNow = Input::GetInstance()->IsPressMouse(1) && !blockBroken_;
 		if (isBlockingNow && !behavior_.IsAttacking()) {
@@ -732,10 +738,11 @@ void Player::UpdateBodyParts() {
 	WorldTransformUpdate(parts_[hat].transform);
 }
 
-void Player::TakeDamage(int damage, const Vector3& hitDirection, float impactPower, BaseEnemy* attacker) {
+void Player::TakeDamage(int damage, const Vector3& hitDirection, float impactPower, BaseEnemy* attacker, bool ignoreInvulnerability) {
 	attacker;
-	if (invulnTimer_ > 0.0f)
-		return; 
+	if (!ignoreInvulnerability && invulnTimer_ > 0.0f)
+		return;
+
 	if (isDead_ || behavior_.IsDeathBehavior())
 		return;
 
@@ -851,7 +858,7 @@ void Player::OnCollision(const BaseEnemy* enemy) {
 void Player::OnCollision() {
 	if (behavior_.IsKnockback() || behavior_.IsDeathBehavior())
 		return;
-	TakeDamage(hp_, {0.0f, 1.0f, 0.0f}, 1.0f);
+	TakeDamage(hp_, {0.0f, 1.0f, 0.0f}, 1.0f, nullptr, false);
 }
 void Player::ResetToPosition(const Vector3& position) {
 	const float baseRotationY = std::numbers::pi_v<float> / 2.0f; // same base as Initialize(): facing right

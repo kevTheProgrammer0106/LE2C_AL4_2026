@@ -294,8 +294,8 @@ void GameAssets::LoadModelsAndTextures() {
 
 	// Next-level button. Uses buttonNext.png if you have drawn it, otherwise the Play icon.
 	{
-		const char* nextPath = "./Resources/UserInterface/buttonPlay.png";
-		victoryButtonTex[0] = TextureManager::Load(std::ifstream(nextPath).good() ? nextPath : "./Resources/UserInterface/buttonPlay.png");
+		const char* nextPath = "./Resources/UserInterface/buttonLevelNext.png";
+		victoryButtonTex[0] = TextureManager::Load(std::ifstream(nextPath).good() ? nextPath : "./Resources/UserInterface/buttonCreditsBack.png");
 	}
 	victoryButtonTex[1] = TextureManager::Load("./Resources/UserInterface/buttonRestart.png");
 	victoryButtonTex[2] = TextureManager::Load("./Resources/UserInterface/buttonBack.png");
@@ -328,7 +328,7 @@ void GameAssets::LoadAudio() {
 	sfxBayonetLunge = audio->LoadWave("./Resources/sfx_bgm/swordLunge.wav");
 
 	sfxPlayerHurt = audio->LoadWave("./Resources/sfx_bgm/DefaultHit.wav");
-	sfxPlayerDeath = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
+	sfxPlayerDeath = audio->LoadWave("./Resources/sfx_bgm/deathScream1.wav");
 	sfxPlayerBlockStart = audio->LoadWave("./Resources/sfx_bgm/blockReady.wav");
 	sfxPlayerBlockImpact = audio->LoadWave("./Resources/sfx_bgm/blockSuccess.wav");
 	sfxWeaponSwitch = audio->LoadWave("./Resources/sfx_bgm/weaponSwitch.wav");
@@ -337,33 +337,35 @@ void GameAssets::LoadAudio() {
 	sfxEnemyDeath[1] = audio->LoadWave("./Resources/sfx_bgm/deathScream2.wav");
 	sfxEnemyDeath[2] = audio->LoadWave("./Resources/sfx_bgm/deathScream3.wav");
 
-	sfxCuirassierSwing = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
+	sfxCuirassierSwing = audio->LoadWave("./Resources/sfx_bgm/cuirassierSwing.wav");
 	sfxCuirassierLunge = audio->LoadWave("./Resources/sfx_bgm/swordLunge.wav");
 	sfxCuirassierMove = audio->LoadWave("./Resources/sfx_bgm/knightWalk.wav");
 	sfxCuirassierHurt = audio->LoadWave("./Resources/sfx_bgm/cuiHurt.wav");
-	for (int i = 0; i < 3; ++i) {
-		sfxCuirassierDeath[i] = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
-	}
+
+	sfxCuirassierDeath[1] = audio->LoadWave("./Resources/sfx_bgm/deathScream1.wav");
+	sfxCuirassierDeath[1] = audio->LoadWave("./Resources/sfx_bgm/deathScream2.wav");
+	sfxCuirassierDeath[2] = audio->LoadWave("./Resources/sfx_bgm/deathScream3.wav");
+	
 
 	sfxFootstep = audio->LoadWave("./Resources/sfx_bgm/FootStep.wav");
 	sfxJump = audio->LoadWave("./Resources/sfx_bgm/Jump.wav");
 	sfxLand = audio->LoadWave("./Resources/sfx_bgm/Landing.wav");
 	sfxHealthRestore = audio->LoadWave("./Resources/sfx_bgm/hpHeal.wav");
-	sfxSwitchPress = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
+	sfxSwitchPress = audio->LoadWave("./Resources/sfx_bgm/switch.wav");
 	sfxGateOpen = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
 	sfxGoalReached = audio->LoadWave("./Resources/sfx_bgm/victoryJingle.wav");
 
-	sfxGlassBreak = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
-	sfxBlockHit = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
-	sfxBlockBreak = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
-	sfxExplosion = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
-	sfxSpikeHit = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
+	sfxGlassBreak = audio->LoadWave("./Resources/sfx_bgm/GlassBreak.wav");
+	sfxBlockHit = audio->LoadWave("./Resources/sfx_bgm/smallExplosion.wav");
+	sfxBlockBreak = audio->LoadWave("./Resources/sfx_bgm/brickFall.wav");
+	sfxExplosion = audio->LoadWave("./Resources/sfx_bgm/bigExplosion.wav");
+	sfxSpikeHit = audio->LoadWave("./Resources/sfx_bgm/Spikes.wav");
 
 	// Arena SFX (placeholders; handle 0 = silent)
-	sfxArenaStart = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
+	sfxArenaStart = audio->LoadWave("./Resources/sfx_bgm/arenaStart.wav");
 	sfxWaveStart = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
 	sfxWaveEnd = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
-	sfxArenaClear = audio->LoadWave("./Resources/sfx_bgm/defaultSound.wav");
+	sfxArenaClear = audio->LoadWave("./Resources/sfx_bgm/arenaEnd.wav");
 }
 
 // CSVのlinkIDから個別のブロックモデルを選択する。

@@ -1,9 +1,17 @@
 #pragma once
 
+#include "BackgroundModel.h"
+#include "CameraController.h"
 #include "Fade.h"
+#include "GameAssets.h"
 #include "InputManager.h"
-#include "UIMenu.h"
 #include "KamataEngine.h"
+#include "Skydome.h"
+#include "UIMenu.h"
+
+#include <cstdint>
+#include <memory>
+#include <vector>
 
 class StageManager;
 
@@ -29,6 +37,7 @@ public:
 	};
 
 	bool isFinished() const { return finished_; }
+
 	// trueなら「戻る」でメインメニューへ、falseなら選択したステージでゲームプレイへ
 	bool isReturningToMenu() const { return returningToMenu_; }
 
@@ -40,7 +49,6 @@ private:
 	Phase phase_ = Phase::kFadeIn;
 
 	StageManager* stageManager_ = nullptr;
-
 
 	UIMenu menuInput_;
 
@@ -55,4 +63,12 @@ private:
 	static inline float kButtonFadeDuration = 0.25f;
 
 	KamataEngine::Camera camera_{};
+
+	// メニュー用アセット
+	GameAssets assets_;
+
+	// メニュー共通の背景とスカイドーム
+	std::unique_ptr<Skydome> skyDome_;
+	std::unique_ptr<BackgroundModel> background_;
+	std::unique_ptr<CameraController> cameraController_;
 };
