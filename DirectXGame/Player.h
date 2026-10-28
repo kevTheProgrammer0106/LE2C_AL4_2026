@@ -152,7 +152,7 @@ public:
 	static void SetJumpSoundHandle(uint32_t handle) { sJumpSoundHandle_ = handle; }
 	static void SetLandSoundHandle(uint32_t handle) { sLandSoundHandle_ = handle; }
 
-	void TakeDamage(int damage, const Vector3& hitDirection, float impactPower, BaseEnemy* attacker, bool ignoreInvulnerability);
+	void TakeDamage(int damage, const KamataEngine::Vector3& hitDirection, float impactPower, BaseEnemy* attacker = nullptr);
 
 	// 無敵状態: 被弾・ブロック・ジャンプ/着地で付与される。ノックバック中は常に無敵。
 	// 無敵中はノックバック/スタンなどの「リアクション」を受け付けない(ダメージ自体は通る)

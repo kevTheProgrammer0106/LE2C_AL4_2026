@@ -14,7 +14,7 @@ std::unique_ptr<Sprite> MakeFlatSprite(uint32_t texture, const Vector2& pos, con
 
 void InteractionPrompt::Initialize(uint32_t iconTextureHandle) {
 	BaseSprite::Initialize(iconTextureHandle, {kScreenAnchorX, kScreenAnchorY});
-	SetSize({128.0f, 32.0f});
+	SetSize({341.3f, 85.3f});
 	isVisible_ = false;
 }
 

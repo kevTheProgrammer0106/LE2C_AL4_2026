@@ -1883,7 +1883,7 @@ void GameScene::CheckAllCollisions() {
 		}
 		if (!IsCollisionAABB(attackBox, aabb1))
 			return false;
-		player_->TakeDamage(damage, dir, power, attacker, false);
+		player_->TakeDamage(damage, dir, power, attacker);
 		return true;
 	};
 
@@ -3223,10 +3223,10 @@ void GameScene::ExplodeAt(const Vector3& center, const ExplosionParams& p) {
 		if (dist <= p.normalRadius && exposedTo(player_->GetAABB())) {
 			if (dist <= p.fatalRadius) {
 				player_->StartBlastSmoke(kBlastSmokeDuration);
-				player_->TakeDamage(player_->GetHP(), outward(pp), p.impact, nullptr, true); // HPを0にして被弾フラッシュ+死亡
+				player_->TakeDamage(player_->GetHP(), outward(pp), p.impact); // HPを0にして被弾フラッシュ+死亡
 			} else {
 				player_->StartBlastSmoke(kBlastSmokeDuration);
-				player_->TakeDamage(p.normalDamage, outward(pp), p.impact, nullptr, true);
+				player_->TakeDamage(p.normalDamage, outward(pp), p.impact);
 			}
 		}
 	}
@@ -3319,7 +3319,7 @@ void GameScene::UpdateSpikes() {
 
 	if (player_ && !player_->IsDefeated()) {
 		if (CheckSpikeHit(playerSpike_, player_->GetAABB(), player_->IsOnGround(), Player::GetLimitFallSpeed())) {
-			player_->TakeDamage(kSpikeDamage, {0.0f, 1.0f, 0.0f}, kSpikeLaunchPower, nullptr, true);
+			player_->TakeDamage(kSpikeDamage, {0.0f, 1.0f, 0.0f}, kSpikeLaunchPower);
 			player_->SetKnockback({0.0f, 1.0f, 0.0f}, kSpikeLaunchPower); // always launch, even if the damage was ignored
 			const AABB pb = player_->GetAABB();
 			CreateBurstEffect(BurstType::kSpike, {(pb.min.x + pb.max.x) * 0.5f, pb.min.y, kFxDepthOffset}, {0.0f, 1.0f});

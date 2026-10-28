@@ -738,11 +738,10 @@ void Player::UpdateBodyParts() {
 	WorldTransformUpdate(parts_[hat].transform);
 }
 
-void Player::TakeDamage(int damage, const Vector3& hitDirection, float impactPower, BaseEnemy* attacker, bool ignoreInvulnerability) {
+void Player::TakeDamage(int damage, const Vector3& hitDirection, float impactPower, BaseEnemy* attacker) {
 	attacker;
-	if (!ignoreInvulnerability && invulnTimer_ > 0.0f)
-		return;
-
+	if (invulnTimer_ > 0.0f)
+		return; 
 	if (isDead_ || behavior_.IsDeathBehavior())
 		return;
 
@@ -858,7 +857,7 @@ void Player::OnCollision(const BaseEnemy* enemy) {
 void Player::OnCollision() {
 	if (behavior_.IsKnockback() || behavior_.IsDeathBehavior())
 		return;
-	TakeDamage(hp_, {0.0f, 1.0f, 0.0f}, 1.0f, nullptr, false);
+	TakeDamage(hp_, {0.0f, 1.0f, 0.0f}, 1.0f);
 }
 void Player::ResetToPosition(const Vector3& position) {
 	const float baseRotationY = std::numbers::pi_v<float> / 2.0f; // same base as Initialize(): facing right
