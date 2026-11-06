@@ -59,7 +59,7 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>$(ProjectDir)..\External\DirectXTex\include;$(ProjectDir)..\External\imgui;$(ProjectDir)..\External\KamataEngine\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)..\External\DirectXTex\include;$(ProjectDir)..\External\imgui;$(ProjectDir)..\External\KamataEngine\include;$(ProjectDir)..\External\nlohmann;$(IncludePath)</IncludePath>
     <LibraryPath>$(ProjectDir)..\External\KamataEngine\lib\$(Configuration);$(ProjectDir)..\External\DirectXTex\lib\$(Configuration);$(LibraryPath)</LibraryPath>
     <OutDir>$(ProjectDir)..\Generated\Outputs\$(Configuration)\</OutDir>
     <IntDir>$(ProjectDir)..\Generated\Obj\$(ProjectName)\$(Configuration)\</IntDir>
@@ -178,7 +178,28 @@ xcopy "$(ProjectDir)..\External\KamataEngine\shaders" "$(ProjectDir)Resources\En
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="BaseProjectile.cpp" />
+    <ClCompile Include="CameraController.cpp" />
+    <ClCompile Include="GameAssets.cpp" />
+    <ClCompile Include="GameScene.cpp" />
+    <ClCompile Include="Global.cpp" />
+    <ClCompile Include="GlobalVariables.cpp" />
+    <ClCompile Include="InputManager.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Player.cpp" />
+    <ClCompile Include="ProjectileBall.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="BaseProjectile.h" />
+    <ClInclude Include="CameraController.h" />
+    <ClInclude Include="DebugCollisionDraw.h" />
+    <ClInclude Include="GameAssets.h" />
+    <ClInclude Include="GameScene.h" />
+    <ClInclude Include="Global.h" />
+    <ClInclude Include="GlobalVariables.h" />
+    <ClInclude Include="InputManager.h" />
+    <ClInclude Include="Player.h" />
+    <ClInclude Include="ProjectileBall.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
